@@ -16,6 +16,9 @@ if(NOT EIGEN3_INCLUDE_DIR)
 	endif()
 endif()
 
+# include opencv
+find_package(OpenCV REQUIRED)
+
 # include sai2-model
 find_package(SAI2-MODEL REQUIRED)
 
@@ -31,6 +34,7 @@ SET(TASKS_SOURCE
 SET(PRIMITIVES_SOURCE 
 	${PROJECT_SOURCE_DIR}/src/primitives/RedundantArmMotion.cpp
 	${PROJECT_SOURCE_DIR}/src/primitives/SurfaceSurfaceAlignment.cpp
+	${PROJECT_SOURCE_DIR}/src/primitives/PickAndPlace.cpp
 	)
 
 # add header files
