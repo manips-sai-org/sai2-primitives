@@ -1,0 +1,16 @@
+newmtl aruco
+Ns 0
+Ka 0.000000 0.000000 0.000000
+Kd 0.8 0.8 0.8
+Ks 0.8 0.8 0.8
+d 1
+illum 1
+map_Kd marker0_bordered.png
+newmtl empty
+Ns 0
+Ka 0.000000 0.000000 0.000000
+Kd 0.8 0.8 0.8
+Ks 0.8 0.8 0.8
+d 1
+illum 1
+map_Kd empty.png

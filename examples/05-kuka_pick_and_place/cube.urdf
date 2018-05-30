@@ -1,8 +1,5 @@
 <?xml version="1.0" ?>
 <robot name="cube">
-    <material name="marker">
-        <texture filename="./resources/marker.jpg">./resources/marker.jpg</texture>
-    </material>
     <link name="base_link">
         <inertial>
             <origin xyz="0 0 0" rpy="0 0 0" />
@@ -20,9 +17,8 @@
             <origin xyz="0 0 0.05" rpy="0 0 0" />
             <geometry>
                 <!-- <box size="0.1 0.1 0.1"/> -->
-                <!-- <mesh filename="resources/cube.iges" scale="1 1 1" /> -->
+                <mesh filename="./cube.obj" scale="1 1 1" />
             </geometry>
-            <!-- <material name="marker"></material> -->
         </visual>
         <collision>
             <origin xyz="0 0 0" rpy="0 0 0" />

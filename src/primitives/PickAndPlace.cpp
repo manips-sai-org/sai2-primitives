@@ -19,7 +19,7 @@ PickAndPlace::PickAndPlace(Sai2Model::Sai2Model* robot,
 	_robot = robot;
 	_link_name = link_name;
 	_control_frame = control_frame;
-	_phase = PickAndPlace::Phase::PICK;
+	_state = PickAndPlace::State::PICK;
 
 	_redundant_arm_motion = new RedundantArmMotion(robot, link_name, control_frame);
 }
@@ -36,7 +36,7 @@ PickAndPlace::PickAndPlace(Sai2Model::Sai2Model* robot,
 	control_frame.linear() = rot_in_link;
 	control_frame.translation() = pos_in_link;
 	_control_frame = control_frame;
-	_phase = PickAndPlace::Phase::PICK;
+	_state = PickAndPlace::State::PICK;
 
 	_redundant_arm_motion = new RedundantArmMotion(robot, link_name, pos_in_link, rot_in_link);
 }
@@ -63,7 +63,7 @@ void PickAndPlace::start(const Eigen::Vector3d pos_pick,
 					   const Eigen::Vector3d pos_place,
 					   const Eigen::Matrix3d rot_place) {
 
-	_phase = PickAndPlace::Phase::PICK;
+	_state = PickAndPlace::State::PICK;
 	_iter = 0;
 	_pos_pick = pos_pick;
 	_rot_pick = rot_pick;
@@ -80,19 +80,19 @@ void PickAndPlace::step() {
 	Eigen::Vector3d step;
 	Eigen::Vector3d des_pos;
 
-	switch(_phase) {
-		case PickAndPlace::Phase::PICK:
+	switch(_state) {
+		case PickAndPlace::State::PICK:
 			pos_move_start = PickAndPlace::get_pos_move_start();
 			step = (pos_move_start - _pos_pick) / _pick_n_iters;
 			des_pos = _pos_pick + step * _iter;
 			_redundant_arm_motion->_desired_position = des_pos;
 
 			if (_iter >= _pick_n_iters) {
-				_phase = PickAndPlace::Phase::MOVE;
+				_state = PickAndPlace::State::MOVE;
 				_iter = 0;
 			}
 			break;
-		case PickAndPlace::Phase::MOVE:
+		case PickAndPlace::State::MOVE:
 			pos_move_start = PickAndPlace::get_pos_move_start();
 			pos_move_end = PickAndPlace::get_pos_move_end();
 			step = (pos_move_end - pos_move_start) / _pick_n_iters;
@@ -100,11 +100,11 @@ void PickAndPlace::step() {
 			_redundant_arm_motion->_desired_position = des_pos;
 
 			if (_iter >= _move_n_iters) {
-				_phase = PickAndPlace::Phase::PLACE;
+				_state = PickAndPlace::State::PLACE;
 				_iter = 0;
 			}
 			break;
-		case PickAndPlace::Phase::PLACE:
+		case PickAndPlace::State::PLACE:
 			pos_move_end = PickAndPlace::get_pos_move_end();
 			step = (_pos_place - pos_move_end) / _pick_n_iters;
 			des_pos = pos_move_end + step * _iter;

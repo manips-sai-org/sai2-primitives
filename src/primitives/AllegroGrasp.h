@@ -1,23 +1,23 @@
 /*
- * PickAndPlace.h
+ * AllegroGrasp.h
  *
  *      This class creates a motion primitive for a redundant arm using a posori task and a joint task in its nullspace
  *
  *      Author: Mikael Jorda
  */
 
-#ifndef SAI2_PRIMITIVES_PICK_AND_PLACE_H_
-#define SAI2_PRIMITIVES_PICK_AND_PLACE_H_
+#ifndef SAI2_PRIMITIVES_ALLEGRO_GRASP_H_
+#define SAI2_PRIMITIVES_ALLEGRO_GRASP_H_
 
+#include "redis/RedisClient.h"
 #include "tasks/PosOriTask.h"
 #include "tasks/JointTask.h"
-#include "primitives/PickAndPlace.h"
 #include "primitives/RedundantArmMotion.h"
 
 namespace Sai2Primitives
 {
 
-class PickAndPlace
+class AllegroGrasp
 {
 public:
 
@@ -28,7 +28,8 @@ public:
 	 * @param link_name      link to which are attached the control frame and the sensor frame (end effector link)
 	 * @param control_frame  Transformation matrix of the control frame description in link frame
 	 */
-	PickAndPlace(Sai2Model::Sai2Model* robot,
+	AllegroGrasp(RedisClient* redis_client,
+					   Sai2Model::Sai2Model* robot,
 					   const std::string link_name,
 	                   const Eigen::Affine3d control_frame = Eigen::Affine3d::Identity());
 	
@@ -40,7 +41,8 @@ public:
 	 * @param control_frame  Position of the control frame in link frame
 	 * @param control_frame  Rotation of the control frame in link frame
 	 */
-	PickAndPlace(Sai2Model::Sai2Model* robot,
+	AllegroGrasp(RedisClient* redis_client,
+					   Sai2Model::Sai2Model* robot,
 					   const std::string link_name,
 	                   const Eigen::Vector3d pos_in_link,
 	                   const Eigen::Matrix3d rot_in_link = Eigen::Matrix3d::Identity());
@@ -48,7 +50,7 @@ public:
 	/**
 	 * @brief destructor
 	 */
-	~PickAndPlace();
+	~AllegroGrasp();
 
 	/**
 	 * @brief Updates the primitive model (dynamic quantities for op space and kinematics of the control frame position). 
@@ -63,17 +65,11 @@ public:
 	 */
 	void computeTorques(Eigen::VectorXd& torques);
 
-	void start(const Eigen::Vector3d pos_pick,
-						   const Eigen::Matrix3d rot_pick,
-						   const double delta_z,
-						   const Eigen::Vector3d pos_place,
-						   const Eigen::Matrix3d rot_place);
-	
+	void start(const Eigen::Vector3d obj_pos_base,
+			   const Eigen::Matrix3d obj_rmat_base);
+
 	void step();
-
-	Eigen::Vector3d get_pos_move_start();
-	Eigen::Vector3d get_pos_move_end();
-
+	
 	/**
 	 * @brief Enable the gravity compensation at the primitive level (disabled by default)
 	 * @details Use with robots that do not handle their own gravity compensation
@@ -86,6 +82,7 @@ public:
 	 */
 	void disbleGravComp();
 
+	RedisClient* _redis_client;
 	Sai2Model::Sai2Model* _robot;
 	std::string _link_name;
 	Eigen::Affine3d _control_frame;
@@ -94,27 +91,24 @@ public:
 
 	// state
 	enum State {
-		PICK, 
-		MOVE, 
-		PLACE
+		APPROACH, 
+		PREGRASP,
+		LOWER,
+		GRASP,
+		FORCE_GRASP,
+		DONE
 	};
 
 	State _state;
 
 	// counter
 	int _iter;
-
-	// number of cycles for each step
-	int _pick_n_iters = 4000;
-	int _move_n_iters = 4000;
-	int _place_n_iters = 4000;
+	int _state_iter;
 
 	// pick and place parameters
-	Eigen::Vector3d _pos_pick;
-	Eigen::Matrix3d _rot_pick;
-	double _delta_z;
-	Eigen::Vector3d _pos_place;
-	Eigen::Matrix3d _rot_place;
+	Eigen::Vector3d _pos_pre_grasp;
+	Eigen::Vector3d _pos_grasp;
+	Eigen::Matrix3d _rot_obj;
 
 protected:
 	bool _gravity_compensation = false;
@@ -124,4 +118,4 @@ protected:
 
 } /* namespace Sai2Primitives */
 
-#endif /* SAI2_PRIMITIVES_PICK_AND_PLACE_H_ */
+#endif /* SAI2_PRIMITIVES_ALLEGRO_GRASP_H_ */

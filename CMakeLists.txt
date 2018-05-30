@@ -35,17 +35,24 @@ SET(PRIMITIVES_SOURCE
 	${PROJECT_SOURCE_DIR}/src/primitives/RedundantArmMotion.cpp
 	${PROJECT_SOURCE_DIR}/src/primitives/SurfaceSurfaceAlignment.cpp
 	${PROJECT_SOURCE_DIR}/src/primitives/PickAndPlace.cpp
+	${PROJECT_SOURCE_DIR}/src/primitives/AllegroGrasp.cpp
 	)
 
 # add header files
 SET(SAI2-PRIMITIVES_INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/src)
 
 
+# - SAI2-COMMON
+FIND_PACKAGE(SAI2-COMMON REQUIRED)
+include_directories(${SAI2-COMMON_INCLUDE_DIRS})
+add_definitions(${SAI2-COMMON_DEFINITIONS})
+
 # Add the include directory to the include paths
 INCLUDE_DIRECTORIES (
 	${SAI2-PRIMITIVES_INCLUDE_DIRS}
 	${EIGEN3_INCLUDE_DIR}
 	${SAI2-MODEL_INCLUDE_DIRS}
+	${SAI2-COMMON_LIBRARIES}
 	)
 
 # Create the library
