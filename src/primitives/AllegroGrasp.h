@@ -94,6 +94,7 @@ public:
 		APPROACH, 
 		PREGRASP,
 		LOWER,
+		PAUSE,
 		GRASP,
 		FORCE_GRASP,
 		DONE

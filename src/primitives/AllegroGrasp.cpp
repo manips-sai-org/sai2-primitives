@@ -167,6 +167,17 @@ void AllegroGrasp::step() {
 			// less than 1mm away from goal, advance to next state
 			if (delta_pos.norm() < 0.001) {
 				_state_iter = 0;
+				_state = AllegroGrasp::State::PAUSE;
+			}
+			break;
+		case AllegroGrasp::State::PAUSE:
+			if (_state_iter <= 0) {
+				cout << "state: pause" << endl;
+			}
+			_state_iter++;
+			// wait for two seconds
+			if (_state_iter >= control_freq * 2) {
+				_state_iter = 0;
 				_state = AllegroGrasp::State::GRASP;
 			}
 			break;
