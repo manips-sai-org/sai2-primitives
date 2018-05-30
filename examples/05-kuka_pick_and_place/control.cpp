@@ -106,28 +106,11 @@ int main (int argc, char** argv) {
 	// sensor_frame_in_link.translation() = ee_pos;
 
 	// Motion arm primitive
-	// Sai2Primitives::PickAndPlace* pnp_primitive = new Sai2Primitives::PickAndPlace(robot, ee_link, control_frame_in_link);
-	// Sai2Primitives::RedundantArmMotion* ram_primitive = new Sai2Primitives::RedundantArmMotion(robot, ee_link, control_frame_in_link);
 	Sai2Primitives::AllegroGrasp* grasp_primitive = new Sai2Primitives::AllegroGrasp(&redis_client, robot, ee_link, control_frame_in_link);
+	Sai2Primitives::PickAndPlace* pnp_primitive = new Sai2Primitives::PickAndPlace(robot, ee_link, control_frame_in_link);
 	Eigen::VectorXd torques;
+	bool pnp_started = false;
 	// pnp_primitive->enableGravComp();
-	
-	// ram_primitive->_desired_velocity = Eigen::Vector3d::Zero();
-	// ram_primitive->_desired_angular_velocity = Eigen::Vector3d::Zero();
-
-	// start pick and place
-	// const Eigen::Vector3d pos_pick = Eigen::Vector3d(0.0, -0.6, 0.05);
-	// const Eigen::Matrix3d rot_pick = Eigen::Matrix3d::Identity();
-	// const double delta_z = .2;
-	// const Eigen::Vector3d pos_place = Eigen::Vector3d(0.5, 0.2, 0.05);
-	// const Eigen::Matrix3d rot_place = Eigen::Matrix3d::Identity();
-	// const Eigen::Vector3d pos_pick = Eigen::Vector3d(0.0, -0.6, 0.25);
-	// const Eigen::Matrix3d rot_pick = Eigen::Matrix3d::Identity();
-	// const double delta_z = 0.;
-	// // const Eigen::Vector3d pos_place = Eigen::Vector3d(0.5, 0.2, 0.05);
-	// const Eigen::Vector3d pos_place = Eigen::Vector3d(0.0, -0.6, 0.25);
-	// const Eigen::Matrix3d rot_place = Eigen::Matrix3d::Identity();
-	// // pnp_primitive->start(pos_pick, rot_pick, delta_z, pos_place, rot_place);
 
 	// create a loop timer
 	double control_freq = 1000;
@@ -161,7 +144,7 @@ int main (int argc, char** argv) {
 	Eigen::Vector3d obj_base_pos = endeff_base_pos + endeff_base_rmat * obj_endeff_pos;
 	// cout << "obj_base_pos: " << obj_base_pos << endl;
 	grasp_primitive->start(obj_base_pos, obj_base_rmat);
-	
+
 	while (runloop) { //automatically set to false when simulation is quit
 		fTimerDidSleep = timer.waitForNextLoop();
 
@@ -174,12 +157,6 @@ int main (int argc, char** argv) {
 		redis_client.getEigenMatrixDerived(JOINT_VELOCITIES_KEY, robot->_dq);
 		robot->updateModel();
 
-		// update tasks model
-		// pnp_primitive->updatePrimitiveModel();
-		// ram_primitive->_desired_position = obj_base_pos;
-		// ram_primitive->_desired_orientation = obj_base_rmat;
-		grasp_primitive->updatePrimitiveModel();
-
 		// -------------------------------------------
 		////////////////////////////// Compute joint torques
 		double time = controller_counter / control_freq;
@@ -191,8 +168,23 @@ int main (int argc, char** argv) {
 		// pnp_primitive->updateSensedForceAndMoment(- R_sensor.transpose() * sensed_force, - R_sensor.transpose() * sensed_moment);
 
 		// torques
-		grasp_primitive->step();
-		grasp_primitive->computeTorques(torques);
+		if (!grasp_primitive->done()) {
+			grasp_primitive->updatePrimitiveModel();
+			grasp_primitive->step();
+			grasp_primitive->computeTorques(torques);
+		} else if (!pnp_started) {
+			// start pick and place
+			pnp_started = true;
+			const double delta_z = .2;
+			const Eigen::Vector3d place_pos = Eigen::Vector3d(0.5, 0.2, 0.2);
+			Eigen::Matrix3d place_rmat = Eigen::Matrix3d();
+			robot->rotation(place_rmat, ee_link);
+			pnp_primitive->start(delta_z, place_pos, place_rmat);
+		} else {
+			pnp_primitive->updatePrimitiveModel();
+			pnp_primitive->step();
+			pnp_primitive->computeTorques(torques);
+		}
 
 		//------ Final torques
 		command_torques = torques;

@@ -63,9 +63,7 @@ public:
 	 */
 	void computeTorques(Eigen::VectorXd& torques);
 
-	void start(const Eigen::Vector3d pos_pick,
-						   const Eigen::Matrix3d rot_pick,
-						   const double delta_z,
+	void start(const double delta_z,
 						   const Eigen::Vector3d pos_place,
 						   const Eigen::Matrix3d rot_place);
 	
@@ -96,13 +94,15 @@ public:
 	enum State {
 		PICK, 
 		MOVE, 
-		PLACE
+		PLACE,
+		DONE
 	};
 
 	State _state;
 
 	// counter
 	int _iter;
+	int _state_iter;
 
 	// number of cycles for each step
 	int _pick_n_iters = 4000;

@@ -71,12 +71,12 @@ void AllegroGrasp::computeTorques(Eigen::VectorXd& torques)
 void AllegroGrasp::start(const Eigen::Vector3d obj_pos_base,
 			   			 const Eigen::Matrix3d obj_rmat_base) {
 
-	_state = AllegroGrasp::State::APPROACH;
+	_state = AllegroGrasp::State::PREGRASP;
 	_iter = 0;
 	_state_iter = 0;
-	// TODO: move 0.2 meter in z axis
-	_pos_pre_grasp = obj_pos_base + obj_rmat_base * Eigen::Vector3d(0., 0., -0.25);
-	_pos_grasp = obj_pos_base + obj_rmat_base * Eigen::Vector3d(0., 0., -0.15);
+	// offset by 0.2 meter in z axis
+	_pos_pre_grasp = obj_pos_base + obj_rmat_base * Eigen::Vector3d(0., 0., 0.25);
+	_pos_grasp = obj_pos_base + obj_rmat_base * Eigen::Vector3d(0., 0., 0.15);
 	_rot_obj = obj_rmat_base;
 	
 	// set desired position, rotation to current position, rotation
@@ -101,9 +101,24 @@ void AllegroGrasp::step() {
 	Eigen::Vector3d direction;
 	Eigen::Vector3d delta_pos;
 	Eigen::Vector3d step_pos;
-	Eigen::Vector3d pos_to_goal;
+	Eigen::Vector3d delta_phi;
 
 	switch(_state) {
+		case AllegroGrasp::State::PREGRASP:
+			// set allegro::command 3 // cube
+			// set allegro::command 6 // cylinder
+			if (_state_iter <= 0) {
+				// first iteration
+				cout << "grasp state: pre-grasp" << endl;
+				_redis_client->set(ALLEGRO_COMMAND, ALLEGRO_PRE_GRASP);
+			}
+			_state_iter++;
+			// wait for two seconds
+			if (_state_iter >= control_freq * 2) {
+				_state_iter = 0;
+				_state = AllegroGrasp::State::APPROACH;
+			}
+			break;
 		case AllegroGrasp::State::APPROACH:
 			_robot->positionInWorld(pos_current, _link_name, _control_frame.translation());
 			_robot->rotationInWorld(rmat_current, _link_name);
@@ -118,28 +133,17 @@ void AllegroGrasp::step() {
 			step_pos = direction * velocity / control_freq;
 			_redundant_arm_motion->_desired_position += step_pos;
 			_redundant_arm_motion->_desired_velocity = Eigen::Vector3d::Zero();
+
+			// _robot->orientationError(delta_phi, rmat_goal, rmat_current);
+			// step_rmat = delta_phi / control_freq;
+			// _redundant_arm_motion->_desired_orientation 
 			
 			// less than 1mm away from goal, advance to next state
 			if (_state_iter <= 0) {
-				cout << "state: approach" << endl;
+				cout << "grasp state: approach" << endl;
 			}
 			_state_iter++;
 			if (delta_pos.norm() < 0.001) {
-				_state_iter = 0;
-				_state = AllegroGrasp::State::PREGRASP;
-			}
-			break;
-		case AllegroGrasp::State::PREGRASP:
-			// set allegro::command 3 // cube
-			// set allegro::command 6 // cylinder
-			if (_state_iter <= 0) {
-				// first iteration
-				cout << "state: pre-grasp" << endl;
-				_redis_client->set(ALLEGRO_COMMAND, ALLEGRO_PRE_GRASP);
-			}
-			_state_iter++;
-			// wait for two seconds
-			if (_state_iter >= control_freq * 2) {
 				_state_iter = 0;
 				_state = AllegroGrasp::State::LOWER;
 			}
@@ -161,7 +165,7 @@ void AllegroGrasp::step() {
 			
 			if (_state_iter <= 0) {
 				// first iteration
-				cout << "state: lower" << endl;
+				cout << "grasp state: lower" << endl;
 			}
 			_state_iter++;
 			// less than 1mm away from goal, advance to next state
@@ -172,7 +176,7 @@ void AllegroGrasp::step() {
 			break;
 		case AllegroGrasp::State::PAUSE:
 			if (_state_iter <= 0) {
-				cout << "state: pause" << endl;
+				cout << "grasp state: pause" << endl;
 			}
 			_state_iter++;
 			// wait for two seconds
@@ -186,7 +190,7 @@ void AllegroGrasp::step() {
 			// set allegro::command 7 // cylinder
 			if (_state_iter <= 0) {
 				// first iteration
-				cout << "state: grasp" << endl;
+				cout << "grasp state: grasp" << endl;
 				_redis_client->set(ALLEGRO_COMMAND, ALLEGRO_GRASP);
 			}
 			_state_iter++;
@@ -201,7 +205,7 @@ void AllegroGrasp::step() {
 			// set allegro::command 8 // cylinder
 			if (_state_iter <= 0) {
 				// first iteration
-				cout << "state: force grasp" << endl;
+				cout << "grasp state: force grasp" << endl;
 				_redis_client->set(ALLEGRO_COMMAND, ALLEGRO_FORCE_GRASP);
 			}
 			_state_iter++;
@@ -214,6 +218,10 @@ void AllegroGrasp::step() {
 		default:
 			break;
 	}
+}
+
+bool AllegroGrasp::done() {
+	return _state == AllegroGrasp::State::DONE;
 }
 
 void AllegroGrasp::enableGravComp()

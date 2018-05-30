@@ -8,6 +8,8 @@
 
 #include "PickAndPlace.h"
 
+using namespace std;
+
 namespace Sai2Primitives
 {
 
@@ -57,61 +59,90 @@ void PickAndPlace::computeTorques(Eigen::VectorXd& torques)
 	_redundant_arm_motion->computeTorques(torques);
 }
 
-void PickAndPlace::start(const Eigen::Vector3d pos_pick,
-					   const Eigen::Matrix3d rot_pick,
-					   const double delta_z,
+void PickAndPlace::start(const double delta_z,
 					   const Eigen::Vector3d pos_place,
 					   const Eigen::Matrix3d rot_place) {
 
 	_state = PickAndPlace::State::PICK;
-	_iter = 0;
-	_pos_pick = pos_pick;
-	_rot_pick = rot_pick;
+	_robot->position(_pos_pick, _link_name, _control_frame.translation());
+	_robot->rotation(_rot_pick, _link_name);
+	_redundant_arm_motion->_desired_position = _pos_pick;
+	_redundant_arm_motion->_desired_velocity = Eigen::Vector3d::Zero();
 	_delta_z = delta_z;
 	_pos_place = pos_place;
 	_rot_place = rot_place;
+	_iter = 0;
+	_state_iter = 0;
 }
 
 void PickAndPlace::step() {
 
+	double velocity = 0.05;
+	double control_freq = 1000;
 	_iter++;
-	Eigen::Vector3d pos_move_start;
-	Eigen::Vector3d pos_move_end;
+	Eigen::Vector3d pos_current;
+	Eigen::Vector3d pos_goal;
 	Eigen::Vector3d step;
-	Eigen::Vector3d des_pos;
+	Eigen::Vector3d direction;
+	Eigen::Vector3d delta_pos;
+	Eigen::Vector3d step_pos;
 
 	switch(_state) {
 		case PickAndPlace::State::PICK:
-			pos_move_start = PickAndPlace::get_pos_move_start();
-			step = (pos_move_start - _pos_pick) / _pick_n_iters;
-			des_pos = _pos_pick + step * _iter;
-			_redundant_arm_motion->_desired_position = des_pos;
+			_robot->positionInWorld(pos_current, _link_name, _control_frame.translation());
+			pos_goal = PickAndPlace::get_pos_move_start();
+			delta_pos = pos_goal - pos_current;
+			direction = delta_pos / delta_pos.norm();
+			step_pos = direction * velocity / control_freq;
+			// cout << "step_pos: " << step_pos << endl;
+			_redundant_arm_motion->_desired_position += step_pos;
+			// cout << "_redundant_arm_motion->_desired_position: " << _redundant_arm_motion->_desired_position << endl;
+			_redundant_arm_motion->_desired_velocity = Eigen::Vector3d::Zero();
+			// cout << "delta_pos: " << delta_pos << endl;
 
-			if (_iter >= _pick_n_iters) {
+			if (_state_iter <= 0) {
+				cout << "pnp state: pick" << endl;
+			}
+			_state_iter++;
+			if (delta_pos.norm() < 0.001) {
+				_state_iter = 0;
 				_state = PickAndPlace::State::MOVE;
-				_iter = 0;
 			}
 			break;
 		case PickAndPlace::State::MOVE:
-			pos_move_start = PickAndPlace::get_pos_move_start();
-			pos_move_end = PickAndPlace::get_pos_move_end();
-			step = (pos_move_end - pos_move_start) / _pick_n_iters;
-			des_pos = pos_move_start + step * _iter;
-			_redundant_arm_motion->_desired_position = des_pos;
+			_robot->positionInWorld(pos_current, _link_name, _control_frame.translation());
+			pos_goal = PickAndPlace::get_pos_move_end();
+			delta_pos = pos_goal - pos_current;
+			direction = delta_pos / delta_pos.norm();
+			step_pos = direction * velocity / control_freq;
+			_redundant_arm_motion->_desired_position += step_pos;
+			_redundant_arm_motion->_desired_velocity = Eigen::Vector3d::Zero();
 
-			if (_iter >= _move_n_iters) {
+			if (_state_iter <= 0) {
+				cout << "pnp state: move" << endl;
+			}
+			_state_iter++;
+			if (delta_pos.norm() < 0.001) {
+				_state_iter = 0;
 				_state = PickAndPlace::State::PLACE;
-				_iter = 0;
 			}
 			break;
 		case PickAndPlace::State::PLACE:
-			pos_move_end = PickAndPlace::get_pos_move_end();
-			step = (_pos_place - pos_move_end) / _pick_n_iters;
-			des_pos = pos_move_end + step * _iter;
-			_redundant_arm_motion->_desired_position = des_pos;
+			_robot->positionInWorld(pos_current, _link_name, _control_frame.translation());
+			pos_goal = _pos_place;
+			delta_pos = pos_goal - pos_current;
+			direction = delta_pos / delta_pos.norm();
+			step_pos = direction * velocity / control_freq;
+			_redundant_arm_motion->_desired_position += step_pos;
+			_redundant_arm_motion->_desired_velocity = Eigen::Vector3d::Zero();
 
-			if (_iter >= _place_n_iters) {
-				_iter = _place_n_iters;
+			if (_state_iter <= 0) {
+				cout << "pnp state: place" << endl;
+			}
+			_state_iter++;
+			if (delta_pos.norm() < 0.001) {
+				_state_iter = 0;
+				_state = PickAndPlace::State::DONE;
 			}
 			break;
 		default:

@@ -69,6 +69,8 @@ public:
 			   const Eigen::Matrix3d obj_rmat_base);
 
 	void step();
+
+	bool done();
 	
 	/**
 	 * @brief Enable the gravity compensation at the primitive level (disabled by default)
@@ -91,8 +93,8 @@ public:
 
 	// state
 	enum State {
-		APPROACH, 
 		PREGRASP,
+		APPROACH, 
 		LOWER,
 		PAUSE,
 		GRASP,

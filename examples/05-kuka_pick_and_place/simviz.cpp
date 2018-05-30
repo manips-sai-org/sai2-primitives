@@ -356,7 +356,9 @@ void simulation(Sai2Model::Sai2Model* robot, Sai2Model::Sai2Model* cube, Simulat
 	// read initial object position w.r.t. end-effector
 	robot->updateModel();
 	Eigen::Affine3d base_ee_transform;
+	Eigen::Matrix3d base_ee_rmat;
 	robot->transformInWorld(base_ee_transform, ee_link, ee_pos);
+	robot->rotationInWorld(base_ee_rmat, ee_link);
 
 	Eigen::Vector3d cube_pos;
 	Eigen::Matrix3d cube_rmat;
@@ -364,12 +366,15 @@ void simulation(Sai2Model::Sai2Model* robot, Sai2Model::Sai2Model* cube, Simulat
 	cube->positionInWorld(cube_pos, cube_ee_link, cube_ee_pos);
 	cube->rotationInWorld(cube_rmat, cube_ee_link);
 	Eigen::Vector3d cube_ee_pos = base_ee_transform.inverse() * cube_pos;
+	Eigen::Matrix3d cube_ee_rmat = base_ee_rmat.inverse() * cube_rmat;
+
 	// set cube position, rotation from model
 	mtx.lock();
 	// cout << "cube_pos: " << cube_pos << endl;
-	cout << "initial cube_ee_pos: " << cube_ee_pos << endl;
+	cout << "cube_ee_pos: " << cube_ee_pos << endl;
+	cout << "cube_ee_rmat: " << cube_ee_rmat << endl;
 	redis_client.setEigenMatrixDerived(OBJ_ENDEFF_POS, cube_ee_pos);
-	redis_client.setEigenMatrixDerived(OBJ_ENDEFF_RMAT, cube_rmat);
+	redis_client.setEigenMatrixDerived(OBJ_ENDEFF_RMAT, cube_ee_rmat);
 	mtx.unlock();
 
 	while (fSimulationRunning) {
