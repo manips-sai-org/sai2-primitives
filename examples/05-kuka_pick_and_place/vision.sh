@@ -1,0 +1,1 @@
+./vision -c=./resources/logitech_camera_params.txt -d=10 --ci=1 -l=0.071
