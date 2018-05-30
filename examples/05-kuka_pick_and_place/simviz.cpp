@@ -215,10 +215,10 @@ int main() {
         	Rodrigues(obj_rvec, obj_rmat);
 			
 			// calculate delta rotation in endeffector frame
-        	Mat delta_rmat = Mat(endeff_rmat.inv()) * obj_rmat;
+        	Mat delta_rmat_ee = Mat(endeff_rmat.inv()) * obj_rmat;
         	Mat delta_rvec;
-        	Rodrigues(delta_rmat, delta_rvec);
-        	// cout << "delta_rmat: " << delta_rmat << endl;
+        	Rodrigues(delta_rmat_ee, delta_rvec);
+        	// cout << "delta_rmat_ee: " << delta_rmat_ee << endl;
         	// cout << "delta_rvec: " << delta_rvec << endl;
         	// visualize delta rotation
         	Vec3d origin;
@@ -226,7 +226,7 @@ int main() {
         	aruco::drawAxis(cv_image, camera_matrix, dist_coef, delta_rvec, origin, marker_length * 2.0f);
         	// convert to eigen matrix
         	Eigen::Matrix3d delta_rmat_eigen; 
-        	cv2eigen(delta_rmat, delta_rmat_eigen);
+        	cv2eigen(delta_rmat_ee, delta_rmat_eigen);
         	// mtx.lock();
         	// cout << "delta_rmat_eigen: " << delta_rmat_eigen << endl;
         	// redis_client.setEigenMatrixDerived(OBJ_ENDEFF_RMAT, delta_rmat_eigen);
@@ -237,13 +237,13 @@ int main() {
         	// cout << "endeff_tvec: " << endeff_tvec << endl;
         	Vec3d delta_pos = obj_tvec - endeff_tvec;
         	// cout << "delta_pos: " << delta_pos << endl;
-			auto delta_pos_eff = Mat(endeff_rmat.inv()) * Mat(delta_pos);
-			// cout << "delta_pos_eff: " << delta_pos_eff << endl;
+			auto delta_pos_ee = Mat(endeff_rmat.inv()) * Mat(delta_pos);
+			// cout << "delta_pos_ee: " << delta_pos_ee << endl;
 			// convert to eigen matrix
         	Eigen::Vector3d delta_pos_eff_eigen; 
-        	cv2eigen(delta_pos_eff, delta_pos_eff_eigen);
+        	cv2eigen(delta_pos_ee, delta_pos_eff_eigen);
         	// mtx.lock();
-			// cout << "delta_pos_eff: " << delta_pos_eff << endl;
+			// cout << "delta_pos_ee: " << delta_pos_ee << endl;
         	// redis_client.setEigenMatrixDerived(OBJ_ENDEFF_POS, delta_pos_eff_eigen);
         	// mtx.unlock();
         }
