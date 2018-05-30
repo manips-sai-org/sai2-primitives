@@ -170,7 +170,7 @@
         </collision>
     </link>
 
-    <link name="gripper1">
+    <!-- <link name="gripper1">
       <inertial>
         <origin xyz="0 0 0" rpy="0 0 0"/>
         <mass value="0.2"/>
@@ -193,7 +193,7 @@
                 <material name="material_red">
                     <color rgba="0.6 0.1 0.1 1"/>
                 </material>
-        </visual>
+        </visual> -->
         <!--<visual>
             <origin xyz="0 0.01 -0.012" rpy="0 0 0" />
             <geometry>
@@ -216,15 +216,15 @@
             </geometry>
         </collision>-->
 
-        <collision>
+        <!-- <collision>
             <origin xyz="0 0.01 0" rpy="0 0 0" />
             <geometry>
                 <box size="0.03 0.01 0.07"/>
             </geometry>
         </collision>
-    </link>
+    </link> -->
 
-    <link name="gripper2">
+    <!-- <link name="gripper2">
       <inertial>
         <origin xyz="0 0 0" rpy="0 0 0"/>
         <mass value="0.2"/>
@@ -238,7 +238,7 @@
                 <material name="material_green">
                     <color rgba="0.1 0.6 0.1 1"/>
                 </material>
-        </visual>
+        </visual> -->
         <!--<visual>
             <origin xyz="0 0.01 0.0" rpy="0 0 0" />
             <geometry>
@@ -248,19 +248,19 @@
                     <color rgba="0.6 0.1 0.1 1"/>
                 </material>
         </visual>-->
-        <collision>
+        <!-- <collision>
             <origin xyz="0 0.01 0" rpy="0 0 0" />
             <geometry>
                 <box size="0.03 0.01 0.07"/>
             </geometry>
-        </collision>
+        </collision> -->
         <!--<collision>
             <origin xyz="0 0.01 0.0" rpy="0 0 0" />
             <geometry>
                 <sphere radius="0.01"/>
             </geometry>
         </collision>-->
-    </link>
+    <!-- </link> -->
 
 
     <joint name="j0" type="revolute">
@@ -317,7 +317,7 @@
         <limit lower="-3.0543" upper="3.0543" effort="40" velocity="3.1416" />
     </joint>
 
-    <joint name="jgripper1" type="prismatic">
+    <!-- <joint name="jgripper1" type="prismatic">
         <parent link="link6" />
         <child link="gripper1" />
         <origin xyz="0 0 0.17" rpy="0.000000 0.000000 0.000000" />
@@ -331,5 +331,5 @@
         <origin xyz="0 0 0.17" rpy="0.000000 0.000000 3.1415926535897" />
         <axis xyz="0 1 0" />
         <limit lower="-3.0543" upper="3.0543" effort="40" velocity="3.1416" />
-    </joint>
+    </joint> -->
 </robot>
