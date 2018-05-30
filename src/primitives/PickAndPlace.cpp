@@ -89,7 +89,7 @@ void PickAndPlace::step() {
 
 	switch(_state) {
 		case PickAndPlace::State::PICK:
-			_robot->positionInWorld(pos_current, _link_name, _control_frame.translation());
+			_robot->position(pos_current, _link_name, _control_frame.translation());
 			pos_goal = PickAndPlace::get_pos_move_start();
 			delta_pos = pos_goal - pos_current;
 			direction = delta_pos / delta_pos.norm();
@@ -110,7 +110,7 @@ void PickAndPlace::step() {
 			}
 			break;
 		case PickAndPlace::State::MOVE:
-			_robot->positionInWorld(pos_current, _link_name, _control_frame.translation());
+			_robot->position(pos_current, _link_name, _control_frame.translation());
 			pos_goal = PickAndPlace::get_pos_move_end();
 			delta_pos = pos_goal - pos_current;
 			direction = delta_pos / delta_pos.norm();
@@ -128,7 +128,7 @@ void PickAndPlace::step() {
 			}
 			break;
 		case PickAndPlace::State::PLACE:
-			_robot->positionInWorld(pos_current, _link_name, _control_frame.translation());
+			_robot->position(pos_current, _link_name, _control_frame.translation());
 			pos_goal = _pos_place;
 			delta_pos = pos_goal - pos_current;
 			direction = delta_pos / delta_pos.norm();

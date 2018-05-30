@@ -82,8 +82,8 @@ void AllegroGrasp::start(const Eigen::Vector3d obj_pos_base,
 	// set desired position, rotation to current position, rotation
 	Eigen::Vector3d pos_current;
 	Eigen::Matrix3d rmat_current;
-	_robot->positionInWorld(pos_current, _link_name, _control_frame.translation());
-	_robot->rotationInWorld(rmat_current, _link_name);
+	_robot->position(pos_current, _link_name, _control_frame.translation());
+	_robot->rotation(rmat_current, _link_name);
 	_redundant_arm_motion->_desired_position = pos_current;
 	_redundant_arm_motion->_desired_velocity = Eigen::Vector3d::Zero();
 	// TODO: set desired rotation
@@ -120,8 +120,8 @@ void AllegroGrasp::step() {
 			}
 			break;
 		case AllegroGrasp::State::APPROACH:
-			_robot->positionInWorld(pos_current, _link_name, _control_frame.translation());
-			_robot->rotationInWorld(rmat_current, _link_name);
+			_robot->position(pos_current, _link_name, _control_frame.translation());
+			_robot->rotation(rmat_current, _link_name);
 			
 			pos_goal = _pos_pre_grasp;
 			rmat_goal = _rot_obj;
@@ -149,8 +149,8 @@ void AllegroGrasp::step() {
 			}
 			break;
 		case AllegroGrasp::State::LOWER:
-			_robot->positionInWorld(pos_current, _link_name, _control_frame.translation());
-			_robot->rotationInWorld(rmat_current, _link_name);
+			_robot->position(pos_current, _link_name, _control_frame.translation());
+			_robot->rotation(rmat_current, _link_name);
 			
 			pos_goal = _pos_grasp;
 			rmat_goal = _rot_obj;
