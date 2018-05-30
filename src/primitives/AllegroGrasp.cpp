@@ -91,7 +91,7 @@ void AllegroGrasp::start(const Eigen::Vector3d obj_pos_base,
 
 void AllegroGrasp::step() {
 
-	double velocity = 0.1;
+	double velocity = 0.05;
 	double control_freq = 1000;
 	_iter++;
 	Eigen::Vector3d pos_current;
@@ -120,12 +120,11 @@ void AllegroGrasp::step() {
 			_redundant_arm_motion->_desired_velocity = Eigen::Vector3d::Zero();
 			
 			// less than 1mm away from goal, advance to next state
-			pos_to_goal = pos_goal - pos_current;
 			if (_state_iter <= 0) {
 				cout << "state: approach" << endl;
 			}
 			_state_iter++;
-			if (pos_to_goal.norm() < 0.001) {
+			if (delta_pos.norm() < 0.001) {
 				_state_iter = 0;
 				_state = AllegroGrasp::State::PREGRASP;
 			}
@@ -160,14 +159,13 @@ void AllegroGrasp::step() {
 			_redundant_arm_motion->_desired_position += step_pos;
 			_redundant_arm_motion->_desired_velocity = Eigen::Vector3d::Zero();
 			
-			// less than 1mm away from goal, advance to next state
-			pos_to_goal = pos_goal - pos_current;
 			if (_state_iter <= 0) {
 				// first iteration
 				cout << "state: lower" << endl;
 			}
 			_state_iter++;
-			if (pos_to_goal.norm() < 0.001) {
+			// less than 1mm away from goal, advance to next state
+			if (delta_pos.norm() < 0.001) {
 				_state_iter = 0;
 				_state = AllegroGrasp::State::GRASP;
 			}
