@@ -149,8 +149,8 @@
         <visual>
             <origin xyz="0 0 0.08" rpy="0 0 0" />
             <geometry>
-                <!-- <box size="0.08 0.08 0.08" /> -->
-                <mesh filename="./endeff.obj" scale="1 1 1" />
+                <box size="0.1 0.1 0.1" />
+                <!-- <mesh filename="./endeff.obj" scale="1 1 1" /> -->
             </geometry>
             <!-- <material name="material_ee">
                 <color rgba="0.1 0.1 0.5 1.0" />

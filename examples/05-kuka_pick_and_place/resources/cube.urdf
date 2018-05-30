@@ -51,7 +51,8 @@
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0" />
             <geometry>
-                <mesh filename="./cube.obj" scale="1 1 1" />
+                <box size="0.1 0.1 0.1" />
+                <!-- <mesh filename="./cube.obj" scale="1 1 1" /> -->
             </geometry>
         </visual>
         <collision>
