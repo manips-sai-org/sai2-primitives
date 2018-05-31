@@ -217,11 +217,11 @@ int main(int argc, char *argv[]) {
                                     markerLength * 0.5f);
             }
 
-            int i0 = 0;
-            int i1 = 1;
+            int i0 = 1;
+            int i1 = 0;
             if (ids[0] < ids[1]) {
-                i0 = 1;
-                i1 = 0;
+                i0 = 0;
+                i1 = 1;
             }
 
             // compute delta pos

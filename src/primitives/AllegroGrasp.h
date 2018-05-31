@@ -112,6 +112,8 @@ public:
 	Eigen::Vector3d _pos_pre_grasp;
 	Eigen::Vector3d _pos_grasp;
 	Eigen::Matrix3d _rot_obj;
+	Eigen::Vector3d _step_pos;
+	
 
 protected:
 	bool _gravity_compensation = false;

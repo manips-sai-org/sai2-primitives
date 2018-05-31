@@ -36,7 +36,7 @@ using namespace std;
 
 unsigned long long controller_counter = 0;
 
-const bool simulation = true;
+const bool simulation = false;
 // const bool simulation = false;
 
 std::string JOINT_TORQUES_COMMANDED_KEY;
@@ -50,7 +50,7 @@ const string robot_file = "resources/kuka_iiwa.urdf";
 
 // control link and position in link
 const string ee_link = "link6";
-const Eigen::Vector3d ee_pos = Eigen::Vector3d(0.0,0.0,0.08);
+const Eigen::Vector3d ee_pos = Eigen::Vector3d(0.088, 0., 0.02);
 const Eigen::Vector3d sensor_ee_pos = Eigen::Vector3d(0.0,0.0,0.05);
 Eigen::Vector3d sensed_force;
 Eigen::Vector3d sensed_moment;
@@ -71,6 +71,8 @@ int main (int argc, char** argv) {
 		JOINT_ANGLES_KEY  = "sai2::KUKA_IIWA::sensors::q";
 		JOINT_VELOCITIES_KEY = "sai2::KUKA_IIWA::sensors::dq";
 		EE_FORCE_SENSOR_KEY = "sai2::optoforceSensor::6Dsensor::force";
+		OBJ_ENDEFF_POS = "sai2::pnp::obj_endeff_pos";
+		OBJ_ENDEFF_RMAT = "sai2::pnp::obj_endeff_rmat";
 	}
 
 	// start redis client
@@ -107,7 +109,7 @@ int main (int argc, char** argv) {
 
 	// Motion arm primitive
 	Sai2Primitives::AllegroGrasp* grasp_primitive = new Sai2Primitives::AllegroGrasp(&redis_client, robot, ee_link, control_frame_in_link);
-	Sai2Primitives::PickAndPlace* pnp_primitive = new Sai2Primitives::PickAndPlace(robot, ee_link, control_frame_in_link);
+	Sai2Primitives::PickAndPlace* pnp_primitive = new Sai2Primitives::PickAndPlace(&redis_client, robot, ee_link, control_frame_in_link);
 	Eigen::VectorXd torques;
 	bool pnp_started = false;
 	// pnp_primitive->enableGravComp();
@@ -141,8 +143,20 @@ int main (int argc, char** argv) {
 	Eigen::Matrix3d obj_base_rmat = obj_endeff_rmat * endeff_base_rmat;
 	// cout << "obj_base_rmat: " << obj_base_rmat << endl;
 	// cout << "obj_endeff_pos: " << obj_endeff_pos << endl;
-	Eigen::Vector3d obj_base_pos = endeff_base_pos + endeff_base_rmat * obj_endeff_pos;
-	// cout << "obj_base_pos: " << obj_base_pos << endl;
+
+	// transform from endeffector to hand marker
+	Eigen::Affine3d marker_endeff_transform = Eigen::Affine3d::Identity();
+	Eigen::Matrix3d marker_endeff_rmat = Eigen::Matrix3d();
+	marker_endeff_rmat << 0., 1., 0., 1., 0., 0., 0., 0., -1.;
+	marker_endeff_transform.linear() = marker_endeff_rmat;
+	marker_endeff_transform.translation() = Eigen::Vector3d::Zero();
+
+	Eigen::Vector3d obj_base_pos = endeff_base_pos + endeff_base_rmat * marker_endeff_transform * obj_endeff_pos;
+	cout << "endeff_base_pos: " << endeff_base_pos << endl;
+	cout << "obj_endeff_pos: " << obj_endeff_pos << endl;
+	cout << "marker_endeff_transform * obj_endeff_pos: " << marker_endeff_transform * obj_endeff_pos << endl;
+	cout << "endeff_base_rmat * marker_endeff_transform * obj_endeff_pos: " << endeff_base_rmat * marker_endeff_transform * obj_endeff_pos << endl;
+	cout << "obj_base_pos: " << obj_base_pos << endl;
 	grasp_primitive->start(obj_base_pos, obj_base_rmat);
 
 	while (runloop) { //automatically set to false when simulation is quit
@@ -175,10 +189,14 @@ int main (int argc, char** argv) {
 		} else if (!pnp_started) {
 			// start pick and place
 			pnp_started = true;
-			const double delta_z = .2;
-			const Eigen::Vector3d place_pos = Eigen::Vector3d(0.5, 0.2, 0.2);
+			const double delta_z = .1;
 			Eigen::Matrix3d place_rmat = Eigen::Matrix3d();
 			robot->rotation(place_rmat, ee_link);
+			Eigen::Vector3d current_pos;
+			robot->position(current_pos, ee_link, ee_pos);
+			Eigen::Vector3d place_pos = Eigen::Vector3d(-0.2, 
+						grasp_primitive->_pos_grasp(1), 
+						grasp_primitive->_pos_grasp(2) - 0.005);
 			pnp_primitive->start(delta_z, place_pos, place_rmat);
 		} else {
 			pnp_primitive->updatePrimitiveModel();

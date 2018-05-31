@@ -9,6 +9,7 @@
 #ifndef SAI2_PRIMITIVES_PICK_AND_PLACE_H_
 #define SAI2_PRIMITIVES_PICK_AND_PLACE_H_
 
+#include "redis/RedisClient.h"
 #include "tasks/PosOriTask.h"
 #include "tasks/JointTask.h"
 #include "primitives/PickAndPlace.h"
@@ -28,7 +29,8 @@ public:
 	 * @param link_name      link to which are attached the control frame and the sensor frame (end effector link)
 	 * @param control_frame  Transformation matrix of the control frame description in link frame
 	 */
-	PickAndPlace(Sai2Model::Sai2Model* robot,
+	PickAndPlace(RedisClient* redis_client,
+					   Sai2Model::Sai2Model* robot,
 					   const std::string link_name,
 	                   const Eigen::Affine3d control_frame = Eigen::Affine3d::Identity());
 	
@@ -40,7 +42,8 @@ public:
 	 * @param control_frame  Position of the control frame in link frame
 	 * @param control_frame  Rotation of the control frame in link frame
 	 */
-	PickAndPlace(Sai2Model::Sai2Model* robot,
+	PickAndPlace(RedisClient* redis_client,
+					   Sai2Model::Sai2Model* robot,
 					   const std::string link_name,
 	                   const Eigen::Vector3d pos_in_link,
 	                   const Eigen::Matrix3d rot_in_link = Eigen::Matrix3d::Identity());
@@ -57,7 +60,7 @@ public:
 	void updatePrimitiveModel();
 
 	/**
-	 * @brief Computes the joint torques associated with the primitive
+	 * @brief Computes the joint torques Eigen::Vector3d _step_pos;associated with the primitive
 	 * 
 	 * @param torques   Vector that will be populated by the joint torques
 	 */
@@ -84,6 +87,7 @@ public:
 	 */
 	void disbleGravComp();
 
+	RedisClient* _redis_client;
 	Sai2Model::Sai2Model* _robot;
 	std::string _link_name;
 	Eigen::Affine3d _control_frame;
@@ -95,6 +99,8 @@ public:
 		PICK, 
 		MOVE, 
 		PLACE,
+		RELEASE,
+		UP,
 		DONE
 	};
 
@@ -115,6 +121,7 @@ public:
 	double _delta_z;
 	Eigen::Vector3d _pos_place;
 	Eigen::Matrix3d _rot_place;
+	Eigen::Vector3d _step_pos;
 
 protected:
 	bool _gravity_compensation = false;
