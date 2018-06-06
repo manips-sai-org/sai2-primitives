@@ -1,0 +1,5 @@
+aruco/aruco0.jpg
+aruco/aruco1.jpg
+aruco/aruco2.jpg
+aruco/aruco3.jpg
+aruco/aruco4.jpg
