@@ -1,0 +1,25 @@
+name: Build master and upload artifact
+
+on:
+  schedule:
+    - cron: "0 0 1 * *"
+      branches: [ "master" ]
+  workflow_dispatch:
+
+jobs:
+  build-and-archive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout-repo
+        uses: actions/checkout@v3
+
+      - name: build-repo
+        uses: ./.github/actions/build-repo
+        with: 
+          token: ${{ secrets.SAI2_TOKEN }}
+
+      - name: Archive Sai2-primitives Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: sai2-primitives-artifact
+          path: build/libsai2-primitives.a
