@@ -57,7 +57,7 @@ find_package(SAI2-MODEL REQUIRED)
 SET(TASKS_SOURCE 
 	# ${PROJECT_SOURCE_DIR}/src/tasks/PositionTask.cpp
 	# ${PROJECT_SOURCE_DIR}/src/tasks/OrientationTask.cpp
-	${PROJECT_SOURCE_DIR}/src/tasks/PosOriTask.cpp
+	${PROJECT_SOURCE_DIR}/src/tasks/MotionForceTask.cpp
 	${PROJECT_SOURCE_DIR}/src/tasks/JointTask.cpp
 	# ${PROJECT_SOURCE_DIR}/src/tasks/TwoHandTwoRobotsTask.cpp
 	)

@@ -9,7 +9,7 @@
 namespace Sai2Primitives
 {
 
-BilateralPassivityController::BilateralPassivityController(PosOriTask* posori_task, HapticController* haptic_task)
+BilateralPassivityController::BilateralPassivityController(MotionForceTask* posori_task, HapticController* haptic_task)
 {
 	_posori_task = posori_task;
 	_haptic_task = haptic_task;

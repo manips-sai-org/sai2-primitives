@@ -2,7 +2,7 @@
  * BilateralPassivityController.h
  *
  *      Implements time domain passivity approach for a bilateral teleoperation scheme 
- *      where the robot is controlled using a PosOriTask from Sai2 and the haptic device
+ *      where the robot is controlled using a MotionForceTask from Sai2 and the haptic device
  *      is controlled using a HapticController from Sai2.
  *      
  *      Author: Mikael Jorda
@@ -12,7 +12,7 @@
 #define SAI2_PRIMITIVES_BILATERALPASSIVITYCONTROLLER_TASK_H_
 
 
-#include "tasks/PosOriTask.h"
+#include "tasks/MotionForceTask.h"
 #include "HapticController.h"
 #include <Eigen/Dense>
 #include <string>
@@ -28,7 +28,7 @@ class BilateralPassivityController
 {
 public:
 
-	BilateralPassivityController(PosOriTask* posori_task, HapticController* haptic_task);
+	BilateralPassivityController(MotionForceTask* posori_task, HapticController* haptic_task);
 
 	~BilateralPassivityController();
 
@@ -43,7 +43,7 @@ public:
 	//         Member variables
 	//-----------------------------------------------
 
-	PosOriTask* _posori_task;
+	MotionForceTask* _posori_task;
 	HapticController* _haptic_task;
 
 	double _passivity_observer_force;

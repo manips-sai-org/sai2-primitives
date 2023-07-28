@@ -20,7 +20,7 @@
 #include "timer/LoopTimer.h"
 
 // control tasks from sai2-primitives
-#include "tasks/PosOriTask.h"
+#include "tasks/MotionForceTask.h"
 
 // for handling ctrl+c and interruptions properly
 #include <signal.h>
@@ -106,7 +106,7 @@ void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
 	string link_name = "end-effector";             // link where we attach the control frame
 	Vector3d pos_in_link = Vector3d(0.07,0.0,0.0); // location of the control frame in the link
 	Matrix3d rot_in_link = Matrix3d::Identity();   // orientation of the control frame with respect to the link frame
-	Sai2Primitives::PosOriTask* posori_task = new Sai2Primitives::PosOriTask(robot, link_name, pos_in_link, rot_in_link);
+	Sai2Primitives::MotionForceTask* posori_task = new Sai2Primitives::MotionForceTask(robot, link_name, pos_in_link, rot_in_link);
 	VectorXd posori_task_torques = VectorXd::Zero(dof);
 
 #ifdef USING_OTG

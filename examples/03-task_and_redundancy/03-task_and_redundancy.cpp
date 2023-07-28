@@ -16,7 +16,7 @@
 #include "Sai2Model.h"
 #include "Sai2Graphics.h"
 #include "Sai2Simulation.h"
-#include "tasks/PosOriTask.h"
+#include "tasks/MotionForceTask.h"
 #include "tasks/JointTask.h"
 #include "timer/LoopTimer.h"
 
@@ -88,7 +88,7 @@ void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
 	// Position plus orientation task
 	string link_name = "end-effector";
 	Vector3d pos_in_link = Vector3d(0.0,0.0,0.0);
-	Sai2Primitives::PosOriTask* posori_task = new Sai2Primitives::PosOriTask(robot, link_name, pos_in_link); // no orientation parameter, default is identity
+	Sai2Primitives::MotionForceTask* posori_task = new Sai2Primitives::MotionForceTask(robot, link_name, pos_in_link); // no orientation parameter, default is identity
 	VectorXd posori_task_torques = VectorXd::Zero(dof);
 
 #ifdef USING_OTG

@@ -340,7 +340,7 @@ void control(Sai2Simulation::Sai2Simulation* sim)
 
 	vector<Sai2Primitives::JointTask*> joint_tasks;
 	vector<VectorXd> joint_task_torques;
-	vector<Sai2Primitives::PosOriTask*> posori_tasks;
+	vector<Sai2Primitives::MotionForceTask*> posori_tasks;
 	vector<VectorXd> posori_task_torques;
 
 	for(int i=0 ; i<n_robots ; i++)
@@ -360,7 +360,7 @@ void control(Sai2Simulation::Sai2Simulation* sim)
 		// end effector tasks
 		string link_name = "link7";
 		Vector3d pos_in_link = Vector3d(0.0,0.0,0.2);
-		posori_tasks.push_back(new Sai2Primitives::PosOriTask(robots_control[i], link_name, pos_in_link));
+		posori_tasks.push_back(new Sai2Primitives::MotionForceTask(robots_control[i], link_name, pos_in_link));
 		posori_task_torques.push_back(VectorXd::Zero(dof[i]));
 
 		posori_tasks[i]->_kp_pos = 200.0;

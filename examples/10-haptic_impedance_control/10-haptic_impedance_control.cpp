@@ -457,8 +457,8 @@ void control(Simulation::Sai2Simulation* sim)
 	VectorXd goal_posture(robot->dof());
 	goal_posture = joint_task->_current_position;
 
-	// PosOriTask controller (manage the control in position of panda robot)
-	auto posori_task = new Sai2Primitives::PosOriTask(robot, link_name, pos_in_link);
+	// MotionForceTask controller (manage the control in position of panda robot)
+	auto posori_task = new Sai2Primitives::MotionForceTask(robot, link_name, pos_in_link);
 	VectorXd posori_task_torques = VectorXd::Zero(robot->dof());
 	// Controller gains
 	posori_task->_kp_pos = 150.0;

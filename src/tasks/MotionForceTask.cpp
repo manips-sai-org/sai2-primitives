@@ -1,10 +1,10 @@
 /*
- * PosOriTask.cpp
+ * MotionForceTask.cpp
  *
  *      Author: Mikael Jorda
  */
 
-#include "PosOriTask.h"
+#include "MotionForceTask.h"
 
 #include <stdexcept>
 
@@ -15,13 +15,13 @@ namespace Sai2Primitives
 {
 
 
-PosOriTask::PosOriTask(Sai2Model::Sai2Model* robot, 
+MotionForceTask::MotionForceTask(Sai2Model::Sai2Model* robot, 
 			const string link_name, 
 			const Affine3d control_frame,
 			const double loop_time) :
-	PosOriTask(robot, link_name, control_frame.translation(), control_frame.linear(), loop_time) {}
+	MotionForceTask(robot, link_name, control_frame.translation(), control_frame.linear(), loop_time) {}
 
-PosOriTask::PosOriTask(Sai2Model::Sai2Model* robot, 
+MotionForceTask::MotionForceTask(Sai2Model::Sai2Model* robot, 
 			const string link_name, 
 			const Vector3d pos_in_link, 
 			const Matrix3d rot_in_link,
@@ -109,7 +109,7 @@ PosOriTask::PosOriTask(Sai2Model::Sai2Model* robot,
 	reInitializeTask();
 }
 
-void PosOriTask::reInitializeTask()
+void MotionForceTask::reInitializeTask()
 {
 	int dof = _robot->dof();
 
@@ -174,15 +174,15 @@ void PosOriTask::reInitializeTask()
 #endif
 }
 
-void PosOriTask::updateTaskModel(const MatrixXd N_prec)
+void MotionForceTask::updateTaskModel(const MatrixXd N_prec)
 {
 	if(N_prec.rows() != N_prec.cols())
 	{
-		throw invalid_argument("N_prec matrix not square in PosOriTask::updateTaskModel\n");
+		throw invalid_argument("N_prec matrix not square in MotionForceTask::updateTaskModel\n");
 	}
 	if(N_prec.rows() != _robot->dof())
 	{
-		throw invalid_argument("N_prec matrix size not consistent with robot dof in PosOriTask::updateTaskModel\n");
+		throw invalid_argument("N_prec matrix size not consistent with robot dof in MotionForceTask::updateTaskModel\n");
 	}
 
 	_N_prec = N_prec;
@@ -255,7 +255,7 @@ void PosOriTask::updateTaskModel(const MatrixXd N_prec)
 
 }
 
-void PosOriTask::computeTorques(VectorXd& task_joint_torques)
+void MotionForceTask::computeTorques(VectorXd& task_joint_torques)
 {
 	_jacobian = _robot->J(_link_name, _control_frame.translation());
 	_projected_jacobian = _jacobian * _N_prec;
@@ -505,14 +505,14 @@ void PosOriTask::computeTorques(VectorXd& task_joint_torques)
 	_t_prev = _t_curr;
 }
 
-bool PosOriTask::goalPositionReached(const double tolerance, const bool verbose)
+bool MotionForceTask::goalPositionReached(const double tolerance, const bool verbose)
 {
 	double position_error = (_desired_position - _current_position).transpose() * ( _URange_pos * _sigma_position * _URange_pos.transpose()) * (_desired_position - _current_position);
 	position_error = sqrt(position_error);
 	bool goal_reached = position_error < tolerance;
 	if(verbose)
 	{
-		cout << "position error in PosOriTask : " << position_error << endl;
+		cout << "position error in MotionForceTask : " << position_error << endl;
 		cout << "Tolerance : " << tolerance << endl;
 		cout << "Goal reached : " << goal_reached << endl << endl;
 	}
@@ -520,14 +520,14 @@ bool PosOriTask::goalPositionReached(const double tolerance, const bool verbose)
 	return goal_reached;
 }
 
-bool PosOriTask::goalOrientationReached(const double tolerance, const bool verbose)
+bool MotionForceTask::goalOrientationReached(const double tolerance, const bool verbose)
 {
 	double orientation_error = _orientation_error.transpose() * _URange_ori * _sigma_orientation * _URange_ori.transpose() * _orientation_error;
 	orientation_error = sqrt(orientation_error);
 	bool goal_reached = orientation_error < tolerance;
 	if(verbose)
 	{
-		cout << "orientation error in PosOriTask : " << orientation_error << endl;
+		cout << "orientation error in MotionForceTask : " << orientation_error << endl;
 		cout << "Tolerance : " << tolerance << endl;
 		cout << "Goal reached : " << goal_reached << endl << endl;
 	}
@@ -535,32 +535,32 @@ bool PosOriTask::goalOrientationReached(const double tolerance, const bool verbo
 	return goal_reached;
 }
 
-void PosOriTask::setDynamicDecouplingFull()
+void MotionForceTask::setDynamicDecouplingFull()
 {
 	_dynamic_decoupling_type = FULL_DYNAMIC_DECOUPLING;
 }
 
-void PosOriTask::setDynamicDecouplingPartial()
+void MotionForceTask::setDynamicDecouplingPartial()
 {
 	_dynamic_decoupling_type = PARTIAL_DYNAMIC_DECOUPLING;
 }
 
-void PosOriTask::setDynamicDecouplingNone()
+void MotionForceTask::setDynamicDecouplingNone()
 {
 	_dynamic_decoupling_type = IMPEDANCE;
 }
 
-void PosOriTask::setDynamicDecouplingBIE()
+void MotionForceTask::setDynamicDecouplingBIE()
 {
 	_dynamic_decoupling_type = BOUNDED_INERTIA_ESTIMATES;
 }
 
-void PosOriTask::setNonIsotropicGainsPosition(const Matrix3d& frame, const Vector3d& kp, 
+void MotionForceTask::setNonIsotropicGainsPosition(const Matrix3d& frame, const Vector3d& kp, 
 	const Vector3d& kv, const Vector3d& ki)
 {
 	if( (Matrix3d::Identity() - frame.transpose()*frame).norm() > 1e-3 || frame.determinant() < 0)
 	{
-		throw invalid_argument("not a valid right hand frame in PosOriTask::setNonIsotropicGainsPosition\n");
+		throw invalid_argument("not a valid right hand frame in MotionForceTask::setNonIsotropicGainsPosition\n");
 	}
 
 	_use_isotropic_gains_position = false;
@@ -582,12 +582,12 @@ void PosOriTask::setNonIsotropicGainsPosition(const Matrix3d& frame, const Vecto
 
 }
 
-void PosOriTask::setNonIsotropicGainsOrientation(const Matrix3d& frame, const Vector3d& kp, 
+void MotionForceTask::setNonIsotropicGainsOrientation(const Matrix3d& frame, const Vector3d& kp, 
 	const Vector3d& kv, const Vector3d& ki)
 {
 	if( (Matrix3d::Identity() - frame.transpose()*frame).norm() > 1e-3 || frame.determinant() < 0)
 	{
-		throw invalid_argument("not a valid right hand frame in PosOriTask::setNonIsotropicGainsOrientation\n");
+		throw invalid_argument("not a valid right hand frame in MotionForceTask::setNonIsotropicGainsOrientation\n");
 	}
 
 	_use_isotropic_gains_orientation = false;
@@ -608,7 +608,7 @@ void PosOriTask::setNonIsotropicGainsOrientation(const Matrix3d& frame, const Ve
 	_ki_ori_mat = frame * ki_ori_mat_tmp * frame.transpose();	
 }
 
-void PosOriTask::setIsotropicGainsPosition(const double kp, const double kv, const double ki)
+void MotionForceTask::setIsotropicGainsPosition(const double kp, const double kv, const double ki)
 {
 	_use_isotropic_gains_position = true;
 
@@ -617,7 +617,7 @@ void PosOriTask::setIsotropicGainsPosition(const double kp, const double kv, con
 	_ki_pos = ki;
 }
 
-void PosOriTask::setIsotropicGainsOrientation(const double kp, const double kv, const double ki)
+void MotionForceTask::setIsotropicGainsOrientation(const double kp, const double kv, const double ki)
 {
 	_use_isotropic_gains_orientation = true;
 
@@ -626,16 +626,16 @@ void PosOriTask::setIsotropicGainsOrientation(const double kp, const double kv, 
 	_ki_ori = ki;	
 }
 
-void PosOriTask::setForceSensorFrame(const string link_name, const Affine3d transformation_in_link)
+void MotionForceTask::setForceSensorFrame(const string link_name, const Affine3d transformation_in_link)
 {
 	if(link_name != _link_name)
 	{
-		throw invalid_argument("The link to which is attached the sensor should be the same as the link to which is attached the control frame in PosOriTask::setForceSensorFrame\n");
+		throw invalid_argument("The link to which is attached the sensor should be the same as the link to which is attached the control frame in MotionForceTask::setForceSensorFrame\n");
 	}
 	_T_control_to_sensor = _control_frame.inverse() * transformation_in_link;
 }
 
-void PosOriTask::updateSensedForceAndMoment(const Vector3d sensed_force_sensor_frame, 
+void MotionForceTask::updateSensedForceAndMoment(const Vector3d sensed_force_sensor_frame, 
 							    		    const Vector3d sensed_moment_sensor_frame)
 {
 	// find the transform from base frame to control frame
@@ -651,7 +651,7 @@ void PosOriTask::updateSensedForceAndMoment(const Vector3d sensed_force_sensor_f
 	_sensed_moment = T_base_control.rotation() * _sensed_moment;
 }
 
-void PosOriTask::setForceAxis(const Vector3d force_axis)
+void MotionForceTask::setForceAxis(const Vector3d force_axis)
 {
 	Vector3d normalized_axis = force_axis.normalized();
 
@@ -664,7 +664,7 @@ void PosOriTask::setForceAxis(const Vector3d force_axis)
 #endif
 }
 
-void PosOriTask::updateForceAxis(const Vector3d force_axis)
+void MotionForceTask::updateForceAxis(const Vector3d force_axis)
 {
 	Vector3d normalized_axis = force_axis.normalized();
 
@@ -672,7 +672,7 @@ void PosOriTask::updateForceAxis(const Vector3d force_axis)
 	_sigma_position = Matrix3d::Identity() - _sigma_force;
 }
 
-void PosOriTask::setLinearMotionAxis(const Vector3d motion_axis)
+void MotionForceTask::setLinearMotionAxis(const Vector3d motion_axis)
 {
 	Vector3d normalized_axis = motion_axis.normalized();
 
@@ -685,7 +685,7 @@ void PosOriTask::setLinearMotionAxis(const Vector3d motion_axis)
 #endif
 }
 
-void PosOriTask::updateLinearMotionAxis(const Vector3d motion_axis)
+void MotionForceTask::updateLinearMotionAxis(const Vector3d motion_axis)
 {
 	Vector3d normalized_axis = motion_axis.normalized();
 
@@ -693,7 +693,7 @@ void PosOriTask::updateLinearMotionAxis(const Vector3d motion_axis)
 	_sigma_force = Matrix3d::Identity() - _sigma_position;	
 }
 
-void PosOriTask::setFullForceControl()
+void MotionForceTask::setFullForceControl()
 {
 	_sigma_force = Matrix3d::Identity();
 	_sigma_position.setZero();
@@ -704,7 +704,7 @@ void PosOriTask::setFullForceControl()
 #endif
 }
 
-void PosOriTask::setFullLinearMotionControl()
+void MotionForceTask::setFullLinearMotionControl()
 {
 	_sigma_position = Matrix3d::Identity();
 	_sigma_force.setZero();
@@ -715,7 +715,7 @@ void PosOriTask::setFullLinearMotionControl()
 #endif
 }
 
-void PosOriTask::setMomentAxis(const Vector3d moment_axis)
+void MotionForceTask::setMomentAxis(const Vector3d moment_axis)
 {
 	Vector3d normalized_axis = moment_axis.normalized();
 
@@ -725,7 +725,7 @@ void PosOriTask::setMomentAxis(const Vector3d moment_axis)
 	resetIntegratorsAngular();
 }
 
-void PosOriTask::updateMomentAxis(const Vector3d moment_axis)
+void MotionForceTask::updateMomentAxis(const Vector3d moment_axis)
 {
 	Vector3d normalized_axis = moment_axis.normalized();
 
@@ -733,7 +733,7 @@ void PosOriTask::updateMomentAxis(const Vector3d moment_axis)
 	_sigma_orientation = Matrix3d::Identity() - _sigma_moment;	
 }
 
-void PosOriTask::setAngularMotionAxis(const Vector3d motion_axis)
+void MotionForceTask::setAngularMotionAxis(const Vector3d motion_axis)
 {
 	Vector3d normalized_axis = motion_axis.normalized();
 
@@ -743,7 +743,7 @@ void PosOriTask::setAngularMotionAxis(const Vector3d motion_axis)
 	resetIntegratorsAngular();
 }
 
-void PosOriTask::updateAngularMotionAxis(const Vector3d motion_axis)
+void MotionForceTask::updateAngularMotionAxis(const Vector3d motion_axis)
 {
 	Vector3d normalized_axis = motion_axis.normalized();
 
@@ -751,7 +751,7 @@ void PosOriTask::updateAngularMotionAxis(const Vector3d motion_axis)
 	_sigma_moment = Matrix3d::Identity() - _sigma_orientation;
 }
 
-void PosOriTask::setFullMomentControl()
+void MotionForceTask::setFullMomentControl()
 {
 	_sigma_moment = Matrix3d::Identity();
 	_sigma_orientation.setZero();
@@ -759,7 +759,7 @@ void PosOriTask::setFullMomentControl()
 	resetIntegratorsAngular();
 }
 
-void PosOriTask::setFullAngularMotionControl()
+void MotionForceTask::setFullAngularMotionControl()
 {
 	_sigma_orientation = Matrix3d::Identity();
 	_sigma_moment.setZero();
@@ -767,39 +767,39 @@ void PosOriTask::setFullAngularMotionControl()
 	resetIntegratorsAngular();
 }
 
-void PosOriTask::setClosedLoopForceControl()
+void MotionForceTask::setClosedLoopForceControl()
 {
 	_closed_loop_force_control = true;
 	resetIntegratorsLinear();
 }
 
-void PosOriTask::setOpenLoopForceControl()
+void MotionForceTask::setOpenLoopForceControl()
 {
 	_closed_loop_force_control = false;
 }
 
-void PosOriTask::setClosedLoopMomentControl()
+void MotionForceTask::setClosedLoopMomentControl()
 {
 	_closed_loop_moment_control = true;
 	resetIntegratorsAngular();
 }
 
-void PosOriTask::setOpenLoopMomentControl()
+void MotionForceTask::setOpenLoopMomentControl()
 {
 	_closed_loop_moment_control = false;
 }
 
-void PosOriTask::enablePassivity()
+void MotionForceTask::enablePassivity()
 {
 	_passivity_enabled = true;
 }
 
-void PosOriTask::disablePassivity()
+void MotionForceTask::disablePassivity()
 {
 	_passivity_enabled = false;
 }
 
-void PosOriTask::resetIntegrators()
+void MotionForceTask::resetIntegrators()
 {
 	_integrated_orientation_error.setZero();
 	_integrated_position_error.setZero();
@@ -808,13 +808,13 @@ void PosOriTask::resetIntegrators()
 	_first_iteration = true;	
 }
 
-void PosOriTask::resetIntegratorsLinear()
+void MotionForceTask::resetIntegratorsLinear()
 {
 	_integrated_position_error.setZero();
 	_integrated_force_error.setZero();
 }
 
-void PosOriTask::resetIntegratorsAngular()
+void MotionForceTask::resetIntegratorsAngular()
 {
 	_integrated_orientation_error.setZero();
 	_integrated_moment_error.setZero();

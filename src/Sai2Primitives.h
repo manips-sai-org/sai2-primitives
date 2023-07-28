@@ -1,7 +1,7 @@
 #include "tasks/JointTask.h"
 #include "tasks/PositionTask.h"
 #include "tasks/OrientationTask.h"
-#include "tasks/PosOriTask.h"
+#include "tasks/MotionForceTask.h"
 #include "tasks/TwoHandTwoRobotsTask.h"
 
 #include "haptic_tasks/OpenLoopTeleop.h"

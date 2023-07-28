@@ -1,5 +1,5 @@
 /*
- * PosOriTask.h
+ * MotionForceTask.h
  *
  *      This class creates a 6Dof position + orientation hybrid controller for a robotic manipulator using operational space formulation and an underlying PID compensator.
  *      If used for hybrid position force control, assumes a force sensor is attached to the same link as the control frame and the force sensed values are given in sensor frame.
@@ -10,8 +10,8 @@
  *      Author: Mikael Jorda
  */
 
-#ifndef SAI2_PRIMITIVES_POSORI_TASK_H_
-#define SAI2_PRIMITIVES_POSORI_TASK_H_
+#ifndef SAI2_PRIMITIVES_MOTIONFORCETASK_TASK_H_
+#define SAI2_PRIMITIVES_MOTIONFORCETASK_TASK_H_
 
 #include "Sai2Model.h"
 #include "TemplateTask.h"
@@ -30,7 +30,7 @@ using namespace std;
 namespace Sai2Primitives
 {
 
-class PosOriTask : public TemplateTask
+class MotionForceTask : public TemplateTask
 {
 
 enum DynamicDecouplingType
@@ -61,7 +61,7 @@ public:
 	 * @param[in]  loop_time      time taken by a control loop. Used only in
 	 *                            trajectory generation
 	 */
-	PosOriTask(Sai2Model::Sai2Model* robot, 
+	MotionForceTask(Sai2Model::Sai2Model* robot, 
 		            const string link_name, 
 		            const Affine3d control_frame = Affine3d::Identity(),
 		            const double loop_time = 0.001);
@@ -82,7 +82,7 @@ public:
 	 * @param[in]  loop_time    time taken by a control loop. Used only in
 	 *                          trajectory generation
 	 */
-	PosOriTask(Sai2Model::Sai2Model* robot, 
+	MotionForceTask(Sai2Model::Sai2Model* robot, 
 		            const string link_name, 
 		            const Vector3d pos_in_link, 
 		            const Matrix3d rot_in_link = Matrix3d::Identity(),
@@ -560,5 +560,5 @@ public:
 
 } /* namespace Sai2Primitives */
 
-/* SAI2_PRIMITIVES_POSORI_TASK_H_ */
+/* SAI2_PRIMITIVES_MOTIONFORCETASK_TASK_H_ */
 #endif
