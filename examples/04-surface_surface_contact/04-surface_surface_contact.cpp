@@ -118,18 +118,20 @@ void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
 
 	// Position plus orientation task
 
-	Sai2Primitives::MotionForceTask* posori_task = new Sai2Primitives::MotionForceTask(robot, link_name, pos_in_link);
-	VectorXd posori_task_torques = VectorXd::Zero(dof);
-	// set the force snesor location for the contact part of the task
-	posori_task->setForceSensorFrame(link_name, Affine3d::Identity());
+	Sai2Primitives::MotionForceTask* motion_force_task = new Sai2Primitives::MotionForceTask(robot, link_name, pos_in_link);
+	motion_force_task->enablePassivity();
+	VectorXd motion_force_task_torques = VectorXd::Zero(dof);
+	// set the force sensor location for the contact part of the task
+	motion_force_task->setForceSensorFrame(link_name, Affine3d::Identity());
 
 #ifdef USING_OTG
 	// disable the interpolation
-	posori_task->_use_interpolation_flag = false;
+	motion_force_task->_use_interpolation_flag = false;
 #endif
 	// no gains setting here, using the default task values
-	Matrix3d initial_orientation = robot->rotation(posori_task->_link_name);
-	Vector3d initial_position = robot->position(posori_task->_link_name, posori_task->_control_frame.translation());
+	const Matrix3d initial_orientation = robot->rotation(link_name);
+	const Vector3d initial_position = robot->position(link_name, pos_in_link);
+	Vector3d desired_position = initial_position;
 
 	// joint task to control the redundancy
 	Sai2Primitives::JointTask* joint_task = new Sai2Primitives::JointTask(robot);
@@ -160,13 +162,13 @@ void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
 		robot->updateModel();
 
 		// update force sensor values (needs to be the force applied by the robot to the environment, in sensor frame)
-		posori_task->updateSensedForceAndMoment(-sensed_force, -sensed_moment);
+		motion_force_task->updateSensedForceAndMoment(-sensed_force, -sensed_moment);
 
 		// update tasks model. Order is important to define the hierarchy
 		N_prec = MatrixXd::Identity(dof,dof);
 
-		posori_task->updateTaskModel(N_prec);
-		N_prec = posori_task->_N;    
+		motion_force_task->updateTaskModel(N_prec);
+		N_prec = motion_force_task->getN();    
 		// after each task, need to update the nullspace 
 		// of the previous tasks in order to garantee 
 		// the dyamic consistency
@@ -175,48 +177,44 @@ void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
 
 		// -------- set task goals in the state machine and compute control torques
 		if(state == GO_TO_CONTACT) {
-			posori_task->_desired_position(2) -= 0.00003;  // go down at 30 cm/s until contact is detected
+			desired_position(2) -= 0.00003; // go down at 30 cm/s until contact is detected
+			motion_force_task->setDesiredPosition(desired_position);  
 		
-			if(posori_task->_sensed_force(2) <= -1.0) {
+			if(motion_force_task->getSensedForce()(2) <= -1.0) {
 				// switch the local z axis to be force controlled and the local x and y axis to be moment controlled
-				// Vector3d local_z = posori_task->_current_orientation.col(2);
+				// Vector3d local_z = motion_force_task->_current_orientation.col(2);
 				Vector3d local_z(0, 0, -1);
-				posori_task->setForceAxis(local_z);
-				posori_task->setAngularMotionAxis(local_z);
+				motion_force_task->setForceAxis(local_z);
+				motion_force_task->setAngularMotionAxis(local_z);
 
-				// posori_task->setClosedLoopForceControl();
-				posori_task->setClosedLoopMomentControl();
+				motion_force_task->setClosedLoopForceControl();
+				motion_force_task->setClosedLoopMomentControl();
 
 				// set the force and moment control set points and gains gains
-				posori_task->_desired_force = 5.0*local_z;
-				posori_task->_desired_moment = Vector3d::Zero();
+				motion_force_task->setDesiredForce(5.0*local_z);
+				motion_force_task->setDesiredMoment(Vector3d::Zero());
 
-				posori_task->_kp_force = 0.7;
-				posori_task->_ki_force = 1.3;
-				posori_task->_kv_force = 3.0;
-
-				posori_task->_kp_moment = 0.5;
-				posori_task->_ki_moment = 1.5;
-				posori_task->_kv_moment = 1.0;
+				motion_force_task->setForceControlGains(0.7, 3.0, 1.3);
+				motion_force_task->setMomentControlGains(0.5, 1.0, 1.5);
 
 				// change the state of the state machine
 				state = CONTACT_CONTROL;
 			}	
 		}
 		else if(state == CONTACT_CONTROL) {
-				// Vector3d local_z = posori_task->_current_orientation.col(2);
+				// Vector3d local_z = motion_force_task->_current_orientation.col(2);
 				Vector3d local_z(0, 0, -1);
-				posori_task->_desired_force = 10.0*local_z;
-				posori_task->updateForceAxis(local_z);
-				posori_task->updateAngularMotionAxis(local_z);			
+				motion_force_task->setDesiredForce(10.0*local_z);
+				motion_force_task->updateForceAxis(local_z);
+				motion_force_task->updateAngularMotionAxis(local_z);			
 		}
 
 		// compute torques for the different tasks
-		posori_task->computeTorques(posori_task_torques);
+		motion_force_task->computeTorques(motion_force_task_torques);
 		joint_task->computeTorques(joint_task_torques);
 
 		//------ compute the final torques
-		command_torques = posori_task_torques + joint_task_torques;
+		command_torques = motion_force_task_torques + joint_task_torques;
 
 		// send to simulation
 		sim->setJointTorques(robot_name, command_torques);

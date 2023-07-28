@@ -18,16 +18,17 @@ namespace Sai2Primitives
 MotionForceTask::MotionForceTask(Sai2Model::Sai2Model* robot, 
 			const string link_name, 
 			const Affine3d control_frame,
-			const double loop_time) :
-	MotionForceTask(robot, link_name, control_frame.translation(), control_frame.linear(), loop_time) {}
+			const double loop_timestep) :
+	MotionForceTask(robot, link_name, control_frame.translation(), control_frame.linear(), loop_timestep) {}
 
 MotionForceTask::MotionForceTask(Sai2Model::Sai2Model* robot, 
 			const string link_name, 
 			const Vector3d pos_in_link, 
 			const Matrix3d rot_in_link,
-			const double loop_time)
+			const double loop_timestep)
 {
 
+	_loop_timestep = loop_timestep;
 	Affine3d control_frame = Affine3d::Identity();
 	control_frame.linear() = rot_in_link;
 	control_frame.translation() = pos_in_link;
@@ -38,7 +39,10 @@ MotionForceTask::MotionForceTask(Sai2Model::Sai2Model* robot,
 
 	int dof = _robot->dof();
 
-	_T_control_to_sensor = Affine3d::Identity();  
+	_T_control_to_sensor = Affine3d::Identity();
+
+	// POPC force
+	_POPC_force.reset(new POPCExplicitForceControl(_loop_timestep));
 
 	// motion
 	_current_position = _robot->position(_link_name, _control_frame.translation());
@@ -91,12 +95,9 @@ MotionForceTask::MotionForceTask(Sai2Model::Sai2Model* robot,
 	_pos_dof = 3;
 	_ori_dof = 3;
 
-	_first_iteration = true;
-
 #ifdef USING_OTG
 	_use_interpolation_flag = true; 
-	_loop_time = loop_time;
-	_otg = new OTG_posori(_current_position, _current_orientation, _loop_time);
+	_otg = new OTG_posori(_current_position, _current_orientation, _loop_timestep);
 
 	_otg->setMaxLinearVelocity(0.3);
 	_otg->setMaxLinearAcceleration(1.0);
@@ -155,19 +156,8 @@ void MotionForceTask::reInitializeTask()
 	_closed_loop_force_control = false;
 	_closed_loop_moment_control = false;
 
-	_passivity_enabled = true;
-	_passivity_observer = 0;
-	_E_correction = 0;
-	_stored_energy_PO = 0;
-	_PO_buffer_window = queue<double>();
-	_PO_counter = _PO_max_counter;
-	_vc_squared_sum = 0;
-	_vc.setZero();
-	_Rc = 1.0;
-
 	_task_force.setZero(6);
 	_unit_mass_force.setZero(6);
-	_first_iteration = true;	
 
 #ifdef USING_OTG 
 	_otg->reInitialize(_current_position, _current_orientation);
@@ -260,15 +250,6 @@ void MotionForceTask::computeTorques(VectorXd& task_joint_torques)
 	_jacobian = _robot->J(_link_name, _control_frame.translation());
 	_projected_jacobian = _jacobian * _N_prec;
 
-	// get time since last call for the I term
-	_t_curr = chrono::high_resolution_clock::now();
-	if(_first_iteration)
-	{
-		_t_prev = _t_curr;
-		_first_iteration = false;
-	}
-	_t_diff = _t_curr - _t_prev;
-	
 	// update matrix gains
 	if(_use_isotropic_gains_position)
 	{
@@ -308,90 +289,21 @@ void MotionForceTask::computeTorques(VectorXd& task_joint_torques)
 	if(_closed_loop_force_control)
 	{
 		// update the integrated error
-		_integrated_force_error += (_sensed_force - _desired_force) * _t_diff.count();
+		_integrated_force_error += (_sensed_force - _desired_force) * _loop_timestep;
 
 		// compute the feedback term
 		Vector3d force_feedback_term = - _kp_force * (_sensed_force - _desired_force) - _ki_force * _integrated_force_error;
-		_vc = force_feedback_term;
-
-		// saturate the feedback term
-		if(_vc.norm() > 20.0)
+		if(force_feedback_term.norm() > 20.0)
 		{
-			_vc *= 20.0 / _vc.norm();
-		}
-
-		// implement passivity observer and controller
-		if(_passivity_enabled)
-		{
-			Vector3d vc_force_space = _sigma_force * _vc;
-			Vector3d vr_force_space = _sigma_force * _current_velocity;
-			Vector3d F_cmd = _k_ff * _desired_force + _Rc * _vc - _kv_force * vr_force_space;
-			double vc_squared = _vc.transpose() * _sigma_force * _vc;
-			Vector3d f_diff = _sensed_force - _desired_force;
-
-			// compute power input and output
-			double power_input_output = (f_diff.dot(vc_force_space) - F_cmd.dot(vr_force_space)) * _t_diff.count();
-
-			// compute stored energy (intentionally diabled)
-			// _stored_energy_PO = 0.5 * _ki_force * (double) (_integrated_force_error.transpose() * _sigma_force * _integrated_force_error);
-
-			// windowed PO
-			_passivity_observer += power_input_output;
-			_PO_buffer_window.push(power_input_output);
-
-			if(_passivity_observer + _stored_energy_PO + _E_correction > 0)
-			{
-				while(_PO_buffer_window.size() > _PO_window_size)
-				{
-					if(_passivity_observer + _E_correction + _stored_energy_PO > _PO_buffer_window.front())
-					{
-						if(_PO_buffer_window.front() > 0)
-						{
-							_passivity_observer -= _PO_buffer_window.front();
-						}
-						_PO_buffer_window.pop();
-					}
-					else
-					{
-						break;
-					}
-				}
-			}
-
-
-			// compute PC
-			if(_PO_counter <= 0)
-			{
-				_PO_counter = _PO_max_counter;
-
-				double old_Rc = _Rc;
-				if(_passivity_observer + _stored_energy_PO + _E_correction < 0)   // activity detected
-				{
-					_Rc = 1 + (_passivity_observer + _stored_energy_PO + _E_correction) / (_vc_squared_sum * _t_diff.count());
-
-					if(_Rc > 1){_Rc = 1;}
-					if(_Rc < 0){_Rc = 0;}
-
-				}
-				else    // no activity detected
-				{
-					_Rc = (1 + (0.1*_PO_max_counter-1)*_Rc)/(double)(0.1*_PO_max_counter);
-				}
-
-				_E_correction += (1 - old_Rc) * _vc_squared_sum * _t_diff.count();
-				_vc_squared_sum = 0;
-			}
-
-			_PO_counter--;
-			_vc_squared_sum += vc_squared;
-		}
-		else  // no passivity enabled
-		{
-			_Rc = 1;
+			force_feedback_term *= 20.0 / force_feedback_term.norm();
 		}
 
 		// compute the final contribution
-		force_feedback_related_force = _sigma_force * ( _Rc * _vc - _kv_force * _current_velocity);
+		force_feedback_related_force =
+			_POPC_force->computePassivitySaturatedForce(
+				_sigma_force * _desired_force, _sigma_force * _sensed_force,
+				_sigma_force * force_feedback_term,
+				_sigma_force * _current_velocity, _kv_force, _k_ff);
 	}
 	else // open loop force control
 	{
@@ -402,7 +314,7 @@ void MotionForceTask::computeTorques(VectorXd& task_joint_torques)
 	if(_closed_loop_moment_control)
 	{
 		// update the integrated error
-		_integrated_moment_error += (_sensed_moment - _desired_moment) * _t_diff.count();
+		_integrated_moment_error += (_sensed_moment - _desired_moment) * _loop_timestep;
 
 		// compute the feedback term
 		Vector3d moment_feedback_term = - _kp_moment * (_sensed_moment - _desired_moment) - _ki_moment * _integrated_moment_error;
@@ -436,7 +348,7 @@ void MotionForceTask::computeTorques(VectorXd& task_joint_torques)
 	
 	// linear motion
 	// update integrated error for I term
-	_integrated_position_error += (_current_position - _step_desired_position) * _t_diff.count();
+	_integrated_position_error += (_current_position - _step_desired_position) * _loop_timestep;
 
 	// final contribution
 	if(_use_velocity_saturation_flag)
@@ -456,7 +368,7 @@ void MotionForceTask::computeTorques(VectorXd& task_joint_torques)
 
 	// angular motion
 	// update integrated error for I term
-	_integrated_orientation_error += _step_orientation_error * _t_diff.count();
+	_integrated_orientation_error += _step_orientation_error * _loop_timestep;
 
 	// final contribution
 	if(_use_velocity_saturation_flag)
@@ -502,7 +414,6 @@ void MotionForceTask::computeTorques(VectorXd& task_joint_torques)
 
 	// update previous time
 	_prev_projected_jacobian = _projected_jacobian;
-	_t_prev = _t_curr;
 }
 
 bool MotionForceTask::goalPositionReached(const double tolerance, const bool verbose)
@@ -791,12 +702,12 @@ void MotionForceTask::setOpenLoopMomentControl()
 
 void MotionForceTask::enablePassivity()
 {
-	_passivity_enabled = true;
+	_POPC_force->enable();
 }
 
 void MotionForceTask::disablePassivity()
 {
-	_passivity_enabled = false;
+	_POPC_force->disable();
 }
 
 void MotionForceTask::resetIntegrators()
@@ -805,7 +716,6 @@ void MotionForceTask::resetIntegrators()
 	_integrated_position_error.setZero();
 	_integrated_force_error.setZero();
 	_integrated_moment_error.setZero();
-	_first_iteration = true;	
 }
 
 void MotionForceTask::resetIntegratorsLinear()

@@ -106,26 +106,24 @@ void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
 	string link_name = "end-effector";             // link where we attach the control frame
 	Vector3d pos_in_link = Vector3d(0.07,0.0,0.0); // location of the control frame in the link
 	Matrix3d rot_in_link = Matrix3d::Identity();   // orientation of the control frame with respect to the link frame
-	Sai2Primitives::MotionForceTask* posori_task = new Sai2Primitives::MotionForceTask(robot, link_name, pos_in_link, rot_in_link);
-	VectorXd posori_task_torques = VectorXd::Zero(dof);
+	Sai2Primitives::MotionForceTask* motion_force_task = new Sai2Primitives::MotionForceTask(robot, link_name, pos_in_link, rot_in_link);
+	VectorXd motion_force_task_torques = VectorXd::Zero(dof);
 
 #ifdef USING_OTG
 	// disable the interpolation for the first phase
-	posori_task->_use_interpolation_flag = false;
+	motion_force_task->_use_interpolation_flag = false;
 #endif
 
 	// gains for the position controller
-	posori_task->_kp_pos = 100.0;
-	posori_task->_kv_pos = 20.0;
-	posori_task->_ki_pos = 0.0;
+	motion_force_task->setPosControlGains(100.0, 20.0);
 	// gains for the orientation cotroller
-	posori_task->_kp_ori = 100.0;
-	posori_task->_kv_ori = 20.0;
-	posori_task->_ki_ori = 0.0;
+	motion_force_task->setOriControlGains(100.0, 20.0);
 
 	// initial position and orientation
-	Matrix3d initial_orientation = robot->rotation(posori_task->_link_name);
-	Vector3d initial_position = robot->position(posori_task->_link_name, posori_task->_control_frame.translation());
+	Matrix3d initial_orientation = robot->rotation(link_name);
+	Vector3d initial_position = robot->position(link_name, pos_in_link);
+	Vector3d desired_position = initial_position;
+	Matrix3d desired_orientation = initial_orientation;
 
 	// create a loop timer
 	double control_freq = 1000;
@@ -140,10 +138,6 @@ void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
 	while (fSimulationRunning) { //automatically set to false when simulation is quit
 		fTimerDidSleep = timer.waitForNextLoop();
 
-		// update time
-		double curr_time = timer.elapsedTime();
-		double loop_dt = curr_time - last_time;
-
 		// read joint positions, velocities, update model
 		robot->setQ(sim->getJointPositions(robot_name));
 		robot->setDq(sim->getJointVelocities(robot_name));
@@ -151,7 +145,7 @@ void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
 
 		// update tasks model
 		N_prec = MatrixXd::Identity(dof,dof);
-		posori_task->updateTaskModel(N_prec);
+		motion_force_task->updateTaskModel(N_prec);
 
 		// -------- set task goals and compute control torques
 		double time = controller_counter/control_freq;
@@ -163,51 +157,54 @@ void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
 	    	     0      ,      0     , 1;
 		if(controller_counter % 3000 == 2000)
 		{
-			posori_task->_desired_position(2) += 0.1;
-			posori_task->_desired_orientation = R*posori_task->_desired_orientation;
+			desired_position(2) += 0.1;
+			desired_orientation = R*desired_orientation;
+
 		}
 		else if(controller_counter % 3000 == 500)
 		{
-			posori_task->_desired_position(2) -= 0.1;
-			posori_task->_desired_orientation = R.transpose()*posori_task->_desired_orientation;
+			desired_position(2) -= 0.1;
+			desired_orientation = R.transpose()*desired_orientation;
 		}
-
+		motion_force_task->setDesiredPosition(desired_position);
+		motion_force_task->setDesiredOrientation(desired_orientation);
 		// enable interpolation after 6 seconds and set interpolation limits
 		#ifdef USING_OTG
 			if(controller_counter == 6500) {
-				posori_task->_use_interpolation_flag = true;
+				motion_force_task->_use_interpolation_flag = true;
 
-				posori_task->_otg->setMaxLinearVelocity(0.3);
-				posori_task->_otg->setMaxLinearAcceleration(1.0);
-				posori_task->_otg->setMaxLinearJerk(3.0);
+				motion_force_task->_otg->setMaxLinearVelocity(0.3);
+				motion_force_task->_otg->setMaxLinearAcceleration(1.0);
+				motion_force_task->_otg->setMaxLinearJerk(3.0);
 
-				posori_task->_otg->setMaxAngularVelocity(M_PI/3);
-				posori_task->_otg->setMaxAngularAcceleration(M_PI);
-				posori_task->_otg->setMaxAngularJerk(3*M_PI);
+				motion_force_task->_otg->setMaxAngularVelocity(M_PI/3);
+				motion_force_task->_otg->setMaxAngularAcceleration(M_PI);
+				motion_force_task->_otg->setMaxAngularJerk(3*M_PI);
 			}
 		#endif
 
 		// compute task torques
-		posori_task->computeTorques(posori_task_torques);
+		motion_force_task->computeTorques(motion_force_task_torques);
 		
 		//------ Final torques
-		control_torques = posori_task_torques;
+		control_torques = motion_force_task_torques;
 
 		// -------------------------------------------
-		if(controller_counter % 500 == 0)
-		{
-			cout << time << endl;
-			cout << "desired position : " << posori_task->_desired_position.transpose() << endl;
-			cout << "current position : " << posori_task->_current_position.transpose() << endl;
-			cout << "position error : " << (posori_task->_desired_position - posori_task->_current_position).norm() << endl;
-			cout << endl;
+		if (controller_counter % 500 == 0) {
+				cout << time << endl;
+				cout << "desired position : "
+					 << motion_force_task->getDesiredPosition().transpose() << endl;
+				cout << "current position : "
+					 << motion_force_task->getCurrentPosition().transpose() << endl;
+				cout << "position error : "
+					 << (motion_force_task->getDesiredPosition() -
+						 motion_force_task->getCurrentPosition())
+							.norm()
+					 << endl;
+				cout << endl;
 		}
 
 		controller_counter++;
-
-		// -------------------------------------------
-		// update last time
-		last_time = curr_time;
 	}
 
 	double end_time = timer.elapsedTime();

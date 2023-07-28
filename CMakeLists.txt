@@ -62,6 +62,11 @@ SET(TASKS_SOURCE
 	# ${PROJECT_SOURCE_DIR}/src/tasks/TwoHandTwoRobotsTask.cpp
 	)
 
+# add helper modules
+SET(HELPER_MODULES_SOURCE 
+	${PROJECT_SOURCE_DIR}/src/helper_modules/POPCExplicitForceControl.cpp
+	)
+
 # # add haptic_tasks
 # SET(HAPTIC_TASKS_SOURCE
 # 	${PROJECT_SOURCE_DIR}/src/haptic_tasks/OpenLoopTeleop.cpp
@@ -85,12 +90,14 @@ INCLUDE_DIRECTORIES (
 if(USE_OTG)
 	ADD_LIBRARY (sai2-primitives STATIC
 		${TASKS_SOURCE}
+		${HELPER_MODULES_SOURCE}
 		# ${HAPTIC_TASKS_SOURCE}
 		${OTG_SOURCE}
 		)
 else()
 	ADD_LIBRARY (sai2-primitives STATIC
 		${TASKS_SOURCE}
+		${HELPER_MODULES_SOURCE}
 		# ${HAPTIC_TASKS_SOURCE}
 		)
 endif()

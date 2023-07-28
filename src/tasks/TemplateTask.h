@@ -39,15 +39,11 @@ public:
 
 
 	Sai2Model::Sai2Model* _robot;
+	double _loop_timestep;
 
 	Eigen::VectorXd _task_force;
 
 	Eigen::MatrixXd _N_prec;
-
-	std::chrono::high_resolution_clock::time_point _t_prev;
-	std::chrono::high_resolution_clock::time_point _t_curr;
-	std::chrono::duration<double> _t_diff;
-	bool _first_iteration;
 };
 
 

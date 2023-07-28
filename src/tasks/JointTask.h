@@ -43,7 +43,7 @@ public:
 	 * @param[in]  loop_time  time taken by a control loop. Used only in trajectory generation
 	 */
 	JointTask(Sai2Model::Sai2Model* robot,
-			const double loop_time = 0.001);
+			const double loop_timestep = 0.001);
 
 	/**
 	 * @brief      update the task model (only _N_prec for a joint task)

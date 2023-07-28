@@ -14,8 +14,9 @@ namespace Sai2Primitives
 
 
 JointTask::JointTask(Sai2Model::Sai2Model* robot,
-			const double loop_time)
+			const double loop_timestep)
 {
+	_loop_timestep = loop_timestep;
 	_robot = robot;
 	int dof = _robot->dof();
 
@@ -64,7 +65,6 @@ void JointTask::reInitializeTask()
 
 	_task_force.setZero();
 	_integrated_position_error.setZero(dof);
-	_first_iteration = true;	
 
 #ifdef USING_OTG 
 	_otg->reInitialize(_current_position);
@@ -172,19 +172,6 @@ void JointTask::computeTorques(Eigen::VectorXd& task_joint_torques)
 {
 	int dof = _robot->dof();
 
-	// get time since last call for the I term
-	if(_first_iteration)
-	{
-		_t_prev = std::chrono::high_resolution_clock::now();
-		_t_curr = std::chrono::high_resolution_clock::now();
-		_first_iteration = false;
-	}
-	else
-	{
-		_t_curr = std::chrono::high_resolution_clock::now();
-	}
-	_t_diff = _t_curr - _t_prev;
-
 	// update matrix gains
 	if(_use_isotropic_gains)
 	{
@@ -210,7 +197,7 @@ void JointTask::computeTorques(Eigen::VectorXd& task_joint_torques)
 #endif
 
 	// compute error for I term
-	_integrated_position_error += (_current_position - _step_desired_position) * _t_diff.count();
+	_integrated_position_error += (_current_position - _step_desired_position) * _loop_timestep;
 
 	// compute task force (with velocity saturation if asked)
 	if(_use_velocity_saturation_flag)
@@ -238,9 +225,6 @@ void JointTask::computeTorques(Eigen::VectorXd& task_joint_torques)
 
 	// compute task torques
 	task_joint_torques = _N_prec.transpose() * _task_force;
-
-	// update previous time
-	_t_prev = _t_curr;
 }
 
 } /* namespace Sai2Primitives */
