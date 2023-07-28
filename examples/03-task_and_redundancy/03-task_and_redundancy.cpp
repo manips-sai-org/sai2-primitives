@@ -96,10 +96,8 @@ void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
 	posori_task->_use_interpolation_flag = false;
 #endif
 	// no gains setting here, using the default task values
-	Matrix3d initial_orientation;
-	Vector3d initial_position;
-	robot->rotation(initial_orientation, posori_task->_link_name);
-	robot->position(initial_position, posori_task->_link_name, posori_task->_control_frame.translation());
+	Matrix3d initial_orientation = robot->rotation(posori_task->_link_name);
+	Vector3d initial_position = robot->position(posori_task->_link_name, posori_task->_control_frame.translation());
 
 	// joint task to control the redundancy
 	// using default gains and interpolation settings

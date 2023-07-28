@@ -877,7 +877,7 @@ MatrixXd computeGInverseAtGeometricCenterExplicit(const Matrix3d Rg,
 		throw std::runtime_error("Rg not consistent with the contact locations given in computeGInverseAtGeometricCenterExplicit");
 	}
 
-	Matrix3d x_cross = Sai2Model::CrossProductOperator(x);
+	Matrix3d x_cross = Sai2Model::crossProductOperator(x);
 	Matrix3d x_cross_square = x_cross * x_cross;
 
 	MatrixXd Wbar = MatrixXd::Zero(12,6);

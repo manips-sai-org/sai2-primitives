@@ -55,31 +55,12 @@ find_package(SAI2-MODEL REQUIRED)
 
 # add tasks
 SET(TASKS_SOURCE 
-	${PROJECT_SOURCE_DIR}/src/tasks/PositionTask.cpp
-	${PROJECT_SOURCE_DIR}/src/tasks/OrientationTask.cpp
+	# ${PROJECT_SOURCE_DIR}/src/tasks/PositionTask.cpp
+	# ${PROJECT_SOURCE_DIR}/src/tasks/OrientationTask.cpp
 	${PROJECT_SOURCE_DIR}/src/tasks/PosOriTask.cpp
 	${PROJECT_SOURCE_DIR}/src/tasks/JointTask.cpp
-	${PROJECT_SOURCE_DIR}/src/tasks/TwoHandTwoRobotsTask.cpp
+	# ${PROJECT_SOURCE_DIR}/src/tasks/TwoHandTwoRobotsTask.cpp
 	)
-
-# # add primitives 
-# SET(PRIMITIVES_SOURCE 
-# 	${PROJECT_SOURCE_DIR}/src/primitives/RedundantArmMotion.cpp
-# 	${PROJECT_SOURCE_DIR}/src/primitives/SurfaceSurfaceAlignment.cpp
-# 	)
-
-# # add perception 
-# SET(PERCEPTION_SOURCE 
-# 	${PROJECT_SOURCE_DIR}/src/perception/ForceSpaceParticleFilter.cpp
-# 	${PROJECT_SOURCE_DIR}/src/perception/MomentumObserver.cpp
-# 	)
-
-# # add humanoid 
-# SET(HUMANOID_SOURCE 
-# 	${PROJECT_SOURCE_DIR}/src/humanoid/FloatingBaseContactModel.cpp
-# 	${PROJECT_SOURCE_DIR}/src/humanoid/InternalForceSelectionBarrierMethod.cpp
-# 	)
-
 
 # # add haptic_tasks
 # SET(HAPTIC_TASKS_SOURCE
@@ -104,18 +85,12 @@ INCLUDE_DIRECTORIES (
 if(USE_OTG)
 	ADD_LIBRARY (sai2-primitives STATIC
 		${TASKS_SOURCE}
-		# ${PERCEPTION_SOURCE}
-		# ${HUMANOID_SOURCE}
-		# ${PRIMITIVES_SOURCE}
 		# ${HAPTIC_TASKS_SOURCE}
 		${OTG_SOURCE}
 		)
 else()
 	ADD_LIBRARY (sai2-primitives STATIC
 		${TASKS_SOURCE}
-		# ${PERCEPTION_SOURCE}
-		# ${HUMANOID_SOURCE}
-		# ${PRIMITIVES_SOURCE}
 		# ${HAPTIC_TASKS_SOURCE}
 		)
 endif()

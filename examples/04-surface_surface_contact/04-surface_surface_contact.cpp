@@ -63,7 +63,8 @@ int main (int argc, char** argv) {
 
 	// load simulation world
 	auto sim = new Sai2Simulation::Sai2Simulation(world_file);
-	sim->setCoeffFrictionStatic(0);
+	sim->setCoeffFrictionStatic(0.3);
+	sim->setCollisionRestitution(0);
 
 	// load robot and plate
 	auto robot = new Sai2Model::Sai2Model(robot_file);
@@ -127,10 +128,8 @@ void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
 	posori_task->_use_interpolation_flag = false;
 #endif
 	// no gains setting here, using the default task values
-	Matrix3d initial_orientation;
-	Vector3d initial_position;
-	robot->rotation(initial_orientation, posori_task->_link_name);
-	robot->position(initial_position, posori_task->_link_name, posori_task->_control_frame.translation());
+	Matrix3d initial_orientation = robot->rotation(posori_task->_link_name);
+	Vector3d initial_position = robot->position(posori_task->_link_name, posori_task->_control_frame.translation());
 
 	// joint task to control the redundancy
 	Sai2Primitives::JointTask* joint_task = new Sai2Primitives::JointTask(robot);
@@ -180,7 +179,8 @@ void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
 		
 			if(posori_task->_sensed_force(2) <= -1.0) {
 				// switch the local z axis to be force controlled and the local x and y axis to be moment controlled
-				Vector3d local_z = posori_task->_current_orientation.col(2);
+				// Vector3d local_z = posori_task->_current_orientation.col(2);
+				Vector3d local_z(0, 0, -1);
 				posori_task->setForceAxis(local_z);
 				posori_task->setAngularMotionAxis(local_z);
 
@@ -204,7 +204,8 @@ void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
 			}	
 		}
 		else if(state == CONTACT_CONTROL) {
-				Vector3d local_z = posori_task->_current_orientation.col(2);
+				// Vector3d local_z = posori_task->_current_orientation.col(2);
+				Vector3d local_z(0, 0, -1);
 				posori_task->_desired_force = 10.0*local_z;
 				posori_task->updateForceAxis(local_z);
 				posori_task->updateAngularMotionAxis(local_z);			
@@ -245,7 +246,7 @@ void simulation(Sai2Model::Sai2Model* robot, Sai2Model::Sai2Model* plate, Sai2Si
 	Vector2d plate_torques = Vector2d::Zero();
 
 	// create a timer
-	double sim_freq = 8000;
+	double sim_freq = 2000;
 	LoopTimer timer;
 	timer.initializeTimer();
 	timer.setLoopFrequency(sim_freq); 
@@ -276,6 +277,13 @@ void simulation(Sai2Model::Sai2Model* robot, Sai2Model::Sai2Model* plate, Sai2Si
 
 		// integrate forward
 		sim->integrate();
+
+		// if(timer.elapsedCycles() % 8000 == 0) {
+		// 	sim->showContactInfo();
+		// 	cout << endl << endl;
+		// }
+		// auto contacts = sim->getContactList(robot_name, "end-effector");
+		// cout << contacts.size() << endl;
 
 	}
 

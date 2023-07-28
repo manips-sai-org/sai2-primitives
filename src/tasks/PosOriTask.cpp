@@ -41,8 +41,8 @@ PosOriTask::PosOriTask(Sai2Model::Sai2Model* robot,
 	_T_control_to_sensor = Affine3d::Identity();  
 
 	// motion
-	_robot->position(_current_position, _link_name, _control_frame.translation());
-	_robot->rotation(_current_orientation, _link_name);
+	_current_position = _robot->position(_link_name, _control_frame.translation());
+	_current_orientation = _robot->rotation(_link_name);
 
 	// default values for gains and velocity saturation
 	_kp_pos = 50.0;
@@ -114,10 +114,10 @@ void PosOriTask::reInitializeTask()
 	int dof = _robot->dof();
 
 	// motion
-	_robot->position(_current_position, _link_name, _control_frame.translation());
-	_robot->position(_desired_position, _link_name, _control_frame.translation());
-	_robot->rotation(_current_orientation, _link_name);
-	_robot->rotation(_desired_orientation, _link_name);
+	_current_position = _robot->position(_link_name, _control_frame.translation());
+	_desired_position = _robot->position(_link_name, _control_frame.translation());
+	_current_orientation = _robot->rotation(_link_name);
+	_desired_orientation = _robot->rotation(_link_name);
 
 	_current_velocity.setZero();
 	_desired_velocity.setZero();
@@ -187,11 +187,11 @@ void PosOriTask::updateTaskModel(const MatrixXd N_prec)
 
 	_N_prec = N_prec;
 
-	_robot->J(_jacobian, _link_name, _control_frame.translation());
+	_jacobian = _robot->J(_link_name, _control_frame.translation());
 	_projected_jacobian = _jacobian * _N_prec;
 
-	_robot->URangeJacobian(_URange_pos, _projected_jacobian.topRows(3), _N_prec);
-	_robot->URangeJacobian(_URange_ori, _projected_jacobian.bottomRows(3), _N_prec);
+	_URange_pos = Sai2Model::matrixRangeBasis(_projected_jacobian.topRows(3));
+	_URange_ori = Sai2Model::matrixRangeBasis(_projected_jacobian.bottomRows(3));
 
 	_pos_dof = _URange_pos.cols();
 	_ori_dof = _URange_ori.cols();
@@ -200,7 +200,12 @@ void PosOriTask::updateTaskModel(const MatrixXd N_prec)
 	_URange.block(0,0,3,_pos_dof) = _URange_pos;
 	_URange.block(3,_pos_dof,3,_ori_dof) = _URange_ori;
 
-	_robot->operationalSpaceMatrices(_Lambda, _Jbar, _N, _URange.transpose() * _projected_jacobian, _N_prec);
+	Sai2Model::OpSpaceMatrices op_space_matrices =
+		_robot->operationalSpaceMatrices(
+			_URange.transpose() * _projected_jacobian, _N_prec);
+	_Lambda = op_space_matrices.Lambda;
+	_Jbar = op_space_matrices.Jbar;
+	_N = op_space_matrices.N;
 
 	switch(_dynamic_decoupling_type)
 	{
@@ -252,7 +257,7 @@ void PosOriTask::updateTaskModel(const MatrixXd N_prec)
 
 void PosOriTask::computeTorques(VectorXd& task_joint_torques)
 {
-	_robot->J(_jacobian, _link_name, _control_frame.translation());
+	_jacobian = _robot->J(_link_name, _control_frame.translation());
 	_projected_jacobian = _jacobian * _N_prec;
 
 	// get time since last call for the I term
@@ -284,10 +289,10 @@ void PosOriTask::computeTorques(VectorXd& task_joint_torques)
 	Vector3d orientation_related_force = Vector3d::Zero();
 
 	// update controller state
-	_robot->position(_current_position, _link_name, _control_frame.translation());
-	_robot->rotation(_current_orientation, _link_name);
+	_current_position = _robot->position(_link_name, _control_frame.translation());
+	_current_orientation = _robot->rotation(_link_name);
 	_current_orientation = _current_orientation * _control_frame.linear(); // orientation of compliant frame in robot frame
-	Sai2Model::orientationError(_orientation_error, _desired_orientation, _current_orientation);
+	_orientation_error = Sai2Model::orientationError(_desired_orientation, _current_orientation);
 	_current_velocity = _projected_jacobian.block(0,0,3,_robot->dof()) * _robot->dq();
 	_current_angular_velocity = _projected_jacobian.block(3,0,3,_robot->dof()) * _robot->dq();
 
@@ -634,8 +639,7 @@ void PosOriTask::updateSensedForceAndMoment(const Vector3d sensed_force_sensor_f
 							    		    const Vector3d sensed_moment_sensor_frame)
 {
 	// find the transform from base frame to control frame
-	Affine3d T_base_link;
-	_robot->transform(T_base_link, _link_name);
+	Affine3d T_base_link = _robot->transform(_link_name);
 	Affine3d T_base_control = T_base_link * _control_frame;
 
 	// find the resolved sensed force and moment in control frame
