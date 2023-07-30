@@ -245,8 +245,9 @@ void MotionForceTask::updateTaskModel(const MatrixXd N_prec)
 
 }
 
-void MotionForceTask::computeTorques(VectorXd& task_joint_torques)
+VectorXd MotionForceTask::computeTorques()
 {
+	VectorXd task_joint_torques = VectorXd::Zero(_robot->dof());
 	_jacobian = _robot->J(_link_name, _control_frame.translation());
 	_projected_jacobian = _jacobian * _N_prec;
 
@@ -414,6 +415,8 @@ void MotionForceTask::computeTorques(VectorXd& task_joint_torques)
 
 	// update previous time
 	_prev_projected_jacobian = _projected_jacobian;
+
+	return task_joint_torques;
 }
 
 bool MotionForceTask::goalPositionReached(const double tolerance, const bool verbose)

@@ -40,7 +40,7 @@ struct PIDGains {
 	PIDGains(double kp, double kv, double ki) : kp(kp), kv(kv), ki(ki) {}
 };
 
-class MotionForceTask : public TemplateTask
+class MotionForceTask
 {
 
 enum DynamicDecouplingType
@@ -147,6 +147,9 @@ public:
 	}
 
 	// Gains for motion controller
+	void setPosControlGains(const PIDGains& gains) {
+		setPosControlGains(gains.kp, gains.kv, gains.ki);
+	}
 	void setPosControlGains(double kp_pos, double kv_pos, double ki_pos = 0) {
 		_kp_pos = kp_pos;
 		_kv_pos = kv_pos;
@@ -156,6 +159,9 @@ public:
 		return PIDGains(_kp_pos, _kv_pos, _ki_pos);
 	}
 
+	void setOriControlGains(const PIDGains& gains) {
+		setOriControlGains(gains.kp, gains.kv, gains.ki);
+	}
 	void setOriControlGains(double kp_ori, double kv_ori, double ki_ori = 0) {
 		_kp_ori = kp_ori;
 		_kv_ori = kv_ori;
@@ -165,6 +171,9 @@ public:
 		return PIDGains(_kp_ori, _kv_ori, _ki_ori);
 	}
 
+	void setForceControlGains(const PIDGains& gains) {
+		setForceControlGains(gains.kp, gains.kv, gains.ki);
+	}
 	void setForceControlGains(double kp_force, double kv_force,
 							  double ki_force) {
 		_kp_force = kp_force;
@@ -175,6 +184,9 @@ public:
 		return PIDGains(_kp_force, _kv_force, _ki_force);
 	}
 
+	void setMomentControlGains(const PIDGains& gains) {
+		setMomentControlGains(gains.kp, gains.kv, gains.ki);
+	}
 	void setMomentControlGains(double kp_moment, double kv_moment,
 							   double ki_moment) {
 		_kp_moment = kp_moment;
@@ -241,7 +253,7 @@ public:
 	 *                     identity of size n*n where n in the number of DoF of
 	 *                     the robot.
 	 */
-	virtual void updateTaskModel(const MatrixXd N_prec);
+	void updateTaskModel(const MatrixXd N_prec);
 
 	/**
 	 * @brief      Computes the torques associated with this task.
@@ -253,7 +265,7 @@ public:
 	 * @param      task_joint_torques  the vector to be filled with the new
 	 *                                 joint torques to apply for the task
 	 */
-	virtual void computeTorques(VectorXd& task_joint_torques);
+	VectorXd computeTorques();
 
 	/**
 	 * @brief      reinitializes the desired state to the current robot
@@ -584,6 +596,12 @@ private:
 	// Angular Acceleration  - PI    Rad/s^2
 	// Angular Jerk          - 3PI   Rad/s^3
 #endif
+
+	Sai2Model::Sai2Model* _robot;
+	double _loop_timestep;
+
+	Eigen::VectorXd _task_force;
+	Eigen::MatrixXd _N_prec;
 
 	// internal variables, not to be touched by the user
 	string _link_name;

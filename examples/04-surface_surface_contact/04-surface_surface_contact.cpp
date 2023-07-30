@@ -210,8 +210,8 @@ void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
 		}
 
 		// compute torques for the different tasks
-		motion_force_task->computeTorques(motion_force_task_torques);
-		joint_task->computeTorques(joint_task_torques);
+		motion_force_task_torques = motion_force_task->computeTorques();
+		joint_task_torques = joint_task->computeTorques();
 
 		//------ compute the final torques
 		command_torques = motion_force_task_torques + joint_task_torques;

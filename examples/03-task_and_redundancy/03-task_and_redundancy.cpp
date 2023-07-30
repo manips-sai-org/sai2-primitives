@@ -173,8 +173,8 @@ void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
 					 cos(w_circle_pos * curr_time)));
 
 		// compute torques for the different tasks
-		motion_force_task->computeTorques(motion_force_task_torques);
-		joint_task->computeTorques(joint_task_torques);
+		motion_force_task_torques = motion_force_task->computeTorques();
+		joint_task_torques = joint_task->computeTorques();
 
 		// activate joint task only after 5 seconds and try to rotate the first joint
 		if(controller_counter < 5000) {
@@ -182,8 +182,9 @@ void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
 		}
 		if(controller_counter == 5000) {
 			joint_task->reInitializeTask();
-			joint_task->_desired_position = initial_q;
-			joint_task->_desired_position(0) += 1.0;
+			Eigen::VectorXd desired_joint_pos = initial_q;
+			desired_joint_pos(0) += 1;
+			joint_task->setDesiredPosition(desired_joint_pos);
 		}
 
 		//------ compute the final torques

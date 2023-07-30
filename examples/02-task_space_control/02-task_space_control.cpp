@@ -184,7 +184,7 @@ void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
 		#endif
 
 		// compute task torques
-		motion_force_task->computeTorques(motion_force_task_torques);
+		motion_force_task_torques = motion_force_task->computeTorques();
 		
 		//------ Final torques
 		control_torques = motion_force_task_torques;

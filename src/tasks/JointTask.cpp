@@ -168,9 +168,10 @@ void JointTask::updateTaskModel(const Eigen::MatrixXd N_prec)
 }
 
 
-void JointTask::computeTorques(Eigen::VectorXd& task_joint_torques)
+Eigen::VectorXd JointTask::computeTorques()
 {
 	int dof = _robot->dof();
+	VectorXd task_joint_torques = VectorXd::Zero(dof);
 
 	// update matrix gains
 	if(_use_isotropic_gains)
@@ -225,6 +226,7 @@ void JointTask::computeTorques(Eigen::VectorXd& task_joint_torques)
 
 	// compute task torques
 	task_joint_torques = _N_prec.transpose() * _task_force;
+	return task_joint_torques;
 }
 
 } /* namespace Sai2Primitives */

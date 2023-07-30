@@ -102,9 +102,8 @@ void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
 	Sai2Primitives::JointTask* joint_task = new Sai2Primitives::JointTask(robot);
 	VectorXd joint_task_torques = VectorXd::Zero(dof);
 	// set the gains to get a PD controller with critical damping
-	joint_task->_kp = 100.0;
-	joint_task->_kv = 20.0;
-	joint_task->_ki = 0.0;
+	joint_task->setGains(100, 20);
+	Eigen::VectorXd desired_position = joint_task->getDesiredPosition();
 
 	#ifdef USING_OTG
 		// disable the interpolation for the first phase
@@ -140,11 +139,12 @@ void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
 		// -------- set task goals and compute control torques
 		// set the desired position (step every second)
 		if(controller_counter % 3000 == 500) {
-			joint_task->_desired_position(2) += 0.4;
+			desired_position(2) += 0.4;
 		}
 		if(controller_counter % 3000 == 2000) {
-			joint_task->_desired_position(2) -= 0.4;
+			desired_position(2) -= 0.4;
 		}
+		joint_task->setDesiredPosition(desired_position);
 		// enable interpolation after 6 seconds and set interpolation limits
 		#ifdef USING_OTG
 			if(controller_counter == 6500) {
@@ -155,7 +155,7 @@ void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
 			}
 		#endif
 		// compute task torques
-		joint_task->computeTorques(joint_task_torques);
+		joint_task_torques = joint_task->computeTorques();
 
 		//------ Final torques
 		command_torques = joint_task_torques;
@@ -171,9 +171,9 @@ void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
 		if(controller_counter % 500 == 0)
 		{
 			cout << time << endl;
-			cout << "desired position : " << joint_task->_desired_position.transpose() << endl;
-			cout << "current position : " << joint_task->_current_position.transpose() << endl;
-			cout << "position error : " << (joint_task->_desired_position - joint_task->_current_position).norm() << endl;
+			cout << "desired position : " << joint_task->getDesiredPosition().transpose() << endl;
+			cout << "current position : " << joint_task->getCurrentPosition().transpose() << endl;
+			cout << "position error : " << (joint_task->getDesiredPosition() - joint_task->getCurrentPosition()).norm() << endl;
 			cout << endl;
 		}
 
