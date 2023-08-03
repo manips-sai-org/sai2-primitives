@@ -598,13 +598,24 @@ public:
 	Vector3d _step_desired_acceleration;
 	Vector3d _step_desired_angular_acceleration;
 
-	// singularity handling
+	// singularity handling via jacobian truncation
+	bool _use_lambda_truncation_flag = false;
 	PartialJointTask* _sing_joint_task;  // partial joint task to move joints out of singularity
 	VectorXd _sing_joint_torques;
 	bool _truncated_jacobian;
 	VectorXd _prev_robot_dq;
 	VectorXd _prev_torques;
-	double _max_torque_diff = 10;
+	double _max_torque_diff = 1e-1;
+	double _lambda_max = 20;
+
+	// lambda singularity handling via lambda smoothing 
+	bool _use_lambda_smoothing_flag = true;
+	int _sing_flag = 0;
+	MatrixXd _Lambda_inv;
+	MatrixXd _Lambda_ns;
+	MatrixXd _Lambda_s;
+	double _e_max = 5e-2;  // tuned with the kuka
+	double _e_min = 5e-3;
 
 #ifdef USING_OTG
 	double _loop_time;

@@ -102,6 +102,9 @@ PosOriTask::PosOriTask(Sai2Model::Sai2Model* robot,
 	// std::unique_ptr<Sai2Primitives::PartialJointTask> _sing_joint_task(new Sai2Primitives::PartialJointTask(robot, q_dependency, loop_time));
 	_sing_joint_task = new Sai2Primitives::PartialJointTask(robot, q_dependency, loop_time); 
 	_sing_joint_task->_use_interpolation_flag = false;  // might be an error with the otg interpolation 
+	_sing_joint_task->_use_velocity_saturation_flag = false;
+	_sing_joint_task->_kp = 0;
+	_sing_joint_task->_kv = 20;
 
 	_prev_torques = VectorXd::Zero(dof);	
 
@@ -293,23 +296,110 @@ void PosOriTask::updateTaskModel(const MatrixXd N_prec)
 	_robot->J_0(_jacobian, _link_name, _control_frame.translation());
 	_projected_jacobian = _jacobian * _N_prec;
 
-	_robot->URangeJacobian(_URange_pos, _projected_jacobian.topRows(3), _N_prec, 1e-1);
-	_robot->URangeJacobian(_URange_ori, _projected_jacobian.bottomRows(3), _N_prec, 1e-1);
+	// _robot->URangeJacobian(_URange_pos, _projected_jacobian.topRows(3), _N_prec, 1e-2);
+	// _robot->URangeJacobian(_URange_ori, _projected_jacobian.bottomRows(3), _N_prec, 1e-2);
 
-	_pos_dof = _URange_pos.cols();
-	_ori_dof = _URange_ori.cols();
+	// _pos_dof = _URange_pos.cols();
+	// _ori_dof = _URange_ori.cols();
 
-	_truncated_jacobian = false;
-	if (_pos_dof != 3 || _ori_dof != 3) {
-		// std::cout << "(pos_dof, ori_dof): " << "(" << _pos_dof << ", " << _ori_dof << ")\n";
-		_truncated_jacobian = true;
+	// _URange.setZero(6, _pos_dof + _ori_dof);
+	// _URange.block(0,0,3,_pos_dof) = _URange_pos;
+	// _URange.block(3,_pos_dof,3,_ori_dof) = _URange_ori;
+
+	// _robot->operationalSpaceMatrices(_Lambda, _Jbar, _N, _URange.transpose() * _projected_jacobian, _N_prec);
+
+	// _truncated_jacobian = false;
+	// if (_pos_dof != 3 || _ori_dof != 3) {
+	// 	// std::cout << "(pos_dof, ori_dof): " << "(" << _pos_dof << ", " << _ori_dof << ")\n";
+	// 	_truncated_jacobian = true;
+	// 	_sing_joint_task->updateTaskModel(_N);
+	// 	_N = _sing_joint_task->_N;
+	// }
+
+	if (_use_lambda_truncation_flag) {
+		_robot->URangeJacobian(_URange_pos, _projected_jacobian.topRows(3), _N_prec);
+		_robot->URangeJacobian(_URange_ori, _projected_jacobian.bottomRows(3), _N_prec);
+
+		_pos_dof = _URange_pos.cols();
+		_ori_dof = _URange_ori.cols();
+
+		_URange.setZero(6, _pos_dof + _ori_dof);
+		_URange.block(0,0,3,_pos_dof) = _URange_pos;
+		_URange.block(3,_pos_dof,3,_ori_dof) = _URange_ori;
+
+		_robot->operationalSpaceMatrices(_Lambda, _Jbar, _N, _URange.transpose() * _projected_jacobian, _N_prec);
+
+		_truncated_jacobian = false;
+		if (_pos_dof != 3 || _ori_dof != 3) {
+			_truncated_jacobian = true;
+			_sing_joint_task->updateTaskModel(_N);
+			_N = _sing_joint_task->_N;
+		}
+	} else {
+		_dynamic_decoupling_type = FULL_DYNAMIC_DECOUPLING;  // enforced due to lambda smoothing 
+
+		// Lambda smoothing method 
+		_Lambda_inv = _projected_jacobian * _robot->_M_inv * _projected_jacobian.transpose();
+
+		// eigendecomposition 
+		Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double, 6, 6>> eigensolver(_Lambda_inv);
+		int n_cols = 0;
+		for (int i = 5; i >= 0; --i) {
+			if (abs(eigensolver.eigenvalues()(i)) < _e_max) {
+				n_cols = i + 1;
+				break;
+			}
+		}
+		if (n_cols != 0) {
+			_sing_flag = 1;
+			if (n_cols == 6) {
+				MatrixXd U_s = eigensolver.eigenvectors();
+				MatrixXd D_s = MatrixXd::Zero(6, 6);
+				VectorXd e_s = eigensolver.eigenvalues();
+				for (int i = 0; i < D_s.cols(); ++i) {
+					if (abs(e_s(i)) < _e_min) {
+						D_s(i, i) = 0;
+					} else if (abs(e_s(i)) > _e_max) {
+						D_s(i, i) = 1 / e_s(i);
+					} else {
+						D_s(i, i) = (1 / e_s(i)) * (0.5 + 0.5 * sin( (M_PI / (_e_max - _e_min)) * (abs(e_s(i)) - _e_min) - (M_PI / 2)));
+					}
+				}
+				_Lambda = U_s * D_s * U_s.transpose();
+				_Jbar = _robot->_M_inv * _projected_jacobian.transpose() * _Lambda;
+				_N = MatrixXd::Identity(_robot->_dof, _robot->_dof) - _Jbar * _projected_jacobian;
+			} else {
+				MatrixXd U_ns = eigensolver.eigenvectors().rightCols(6 - n_cols);
+				MatrixXd D_ns = MatrixXd::Zero(6 - n_cols, 6 - n_cols);
+				VectorXd e_ns = eigensolver.eigenvalues().tail(6 - n_cols);
+				for (int i = 0; i < D_ns.cols(); ++i) {
+					D_ns(i, i) = 1 / e_ns(i);  // safe
+				}
+				MatrixXd U_s = eigensolver.eigenvectors().leftCols(n_cols);
+				MatrixXd D_s = MatrixXd::Zero(n_cols, n_cols);
+				VectorXd e_s = eigensolver.eigenvalues().head(n_cols);
+				for (int i = 0; i < D_s.cols(); ++i) {
+					if (abs(e_s(i)) < _e_min) {
+						D_s(i, i) = 0;
+					} else if (abs(e_s(i)) > _e_max) {
+						D_s(i, i) = 1 / e_s(i);
+					} else {
+						D_s(i, i) = (1 / e_s(i)) * (0.5 + 0.5 * sin( (M_PI / (_e_max - _e_min)) * (abs(e_s(i)) - _e_min) - (M_PI / 2)));
+					}
+					_Lambda_ns = U_ns * D_ns * U_ns.transpose();
+					_Lambda_s = U_s * D_s * U_s.transpose();
+					_Lambda = _Lambda_ns + _Lambda_s;	
+					_Jbar = _robot->_M_inv * _projected_jacobian.transpose() * _Lambda;
+					_N = MatrixXd::Identity(_robot->_dof, _robot->_dof) - _Jbar * _projected_jacobian;
+				}			
+			}
+		} else {
+			_sing_flag = 0;
+			_Lambda = _Lambda_inv.inverse();
+			_Jbar = _robot->_M_inv * _projected_jacobian.transpose() * _Lambda;
+			_N = MatrixXd::Identity(_robot->_dof, _robot->_dof) - _Jbar * _projected_jacobian;
+		}
 	}
-
-	_URange.setZero(6, _pos_dof + _ori_dof);
-	_URange.block(0,0,3,_pos_dof) = _URange_pos;
-	_URange.block(3,_pos_dof,3,_ori_dof) = _URange_ori;
-
-	_robot->operationalSpaceMatrices(_Lambda, _Jbar, _N, _URange.transpose() * _projected_jacobian, _N_prec);
 
 	switch(_dynamic_decoupling_type)
 	{
@@ -356,6 +446,17 @@ void PosOriTask::updateTaskModel(const MatrixXd N_prec)
 			break;			
 		}
 	}
+
+	// lambda value saturation
+	for (int i = 0; i < _Lambda_modified.rows(); ++i) {
+		for (int j = 0; j < _Lambda_modified.cols(); ++j) {
+			if (_Lambda_modified(i, j) > _lambda_max) {
+				_Lambda_modified(i, j) = _lambda_max;
+			} else if (_Lambda_modified(i, j) < - _lambda_max) {
+				_Lambda_modified(i, j) = - _lambda_max;
+			}
+		}
+	}	
 
 }
 
@@ -608,28 +709,42 @@ void PosOriTask::computeTorques(VectorXd& task_joint_torques)
 	// compute task torques
 	task_joint_torques = _projected_jacobian.transpose() * _URange * _task_force;
 
-	// add partial joint task torques if jacobian is truncated
-	if (_truncated_jacobian) {
-		for (int i = 0; i < _sing_joint_task->_desired_position.size(); ++i) {		
-			// _sing_joint_task->_desired_position(i) += 0.1 * sgn(_prev_robot_dq(_sing_joint_task->_active_joints[i])) * M_PI / 180;  // naive update of 0.1 degrees per control cycle in direction of last velocity
-			// _sing_joint_task->_desired_velocity(i) = _prev_robot_dq(_sing_joint_task->_active_joints[i]);			
-		}
-		_sing_joint_task->updateTaskModel(_N);
-		_sing_joint_task->computeTorques(_sing_joint_torques);
-		task_joint_torques += _sing_joint_torques;
-		_N = _sing_joint_task->_N;
+	// compute task torques if lambda smoothing
+	if (_use_lambda_smoothing_flag) {
+		_task_force = _Lambda_modified * (position_orientation_contribution) + (force_moment_contribution + feedforward_force_moment);
+		task_joint_torques = _projected_jacobian.transpose() * _task_force;
 	}
 
-	// update previous time	
-	// partial joint task for singularity is updated only if the jacobian isn't truncated
-	if (_truncated_jacobian == false) {
-		_sing_joint_task->_kp = 0;  // current option is just to do velocity following 
-		for (int i = 0; i < _sing_joint_task->_desired_position.size(); ++i) {
-			_sing_joint_task->_desired_position(i) = _robot->_q(_sing_joint_task->_active_joints[i]);
-			_sing_joint_task->_desired_velocity(i) = _robot->_dq(_sing_joint_task->_active_joints[i]);
-		}
-		_prev_robot_dq = _robot->_dq;
-	}
+	// // add partial joint task torques if jacobian is truncated
+	// if (_truncated_jacobian) {
+	// 	// for (int i = 0; i < _sing_joint_task->_desired_position.size(); ++i) {		
+	// 		// _sing_joint_task->_desired_position(i) += 0.1 * sgn(_prev_robot_dq(_sing_joint_task->_active_joints[i])) * M_PI / 180;  // naive update of 0.1 degrees per control cycle in direction of last velocity
+	// 		// _sing_joint_task->_desired_velocity(i) = _prev_robot_dq(_sing_joint_task->_active_joints[i]);			
+	// 	// }
+	// 	// _sing_joint_task->updateTaskModel(_N);
+	// 	_sing_joint_task->computeTorques(_sing_joint_torques);
+	// 	task_joint_torques += _sing_joint_torques;
+	// 	// _N = _sing_joint_task->_N;
+	// }
+
+	// // // saturate torque spike 
+	// // for (int i = 0; i < task_joint_torques.size(); ++i) {		
+	// // 	if (abs(task_joint_torques(i) - _prev_torques(i)) > _max_torque_diff) {
+	// // 		task_joint_torques(i) = _prev_torques(i) + _max_torque_diff * sgn(task_joint_torques(i) - _prev_torques(i));
+	// // 		// task_joint_torques(i) = _prev_torques(i);
+	// // 	}
+	// // }
+
+	// // update previous time	
+	// // partial joint task for singularity is updated only if the jacobian isn't truncated
+	// if (_truncated_jacobian == false) {
+	// 	// _sing_joint_task->_kp = 0;  // current option is just to do velocity following 
+	// 	// for (int i = 0; i < _sing_joint_task->_desired_position.size(); ++i) {
+	// 		// _sing_joint_task->_desired_position(i) = _robot->_q(_sing_joint_task->_active_joints[i]);
+	// 		// _sing_joint_task->_desired_velocity(i) = _robot->_dq(_sing_joint_task->_active_joints[i]);
+	// 	// }
+	// 	_prev_robot_dq = _robot->_dq;
+	// }
 	_prev_projected_jacobian = _projected_jacobian;
 	_prev_torques = task_joint_torques;
 	_t_prev = _t_curr;
