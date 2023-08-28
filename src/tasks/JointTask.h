@@ -16,7 +16,6 @@
 #include <string>
 
 #include "Sai2Model.h"
-#include "TemplateTask.h"
 
 #ifdef USING_OTG
 #include "trajectory_generation/OTG.h"

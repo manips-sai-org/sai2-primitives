@@ -12,7 +12,6 @@
 #define SAI2_PRIMITIVES_POSITION_TASK_H_
 
 #include "Sai2Model.h"
-#include "TemplateTask.h"
 #include <Eigen/Dense>
 #include <string>
 #include <chrono>

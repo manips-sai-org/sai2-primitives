@@ -14,7 +14,6 @@
 #define SAI2_PRIMITIVES_MOTIONFORCETASK_TASK_H_
 
 #include "Sai2Model.h"
-#include "TemplateTask.h"
 #include <helper_modules/POPCExplicitForceControl.h>
 #include <Eigen/Dense>
 #include <string>
