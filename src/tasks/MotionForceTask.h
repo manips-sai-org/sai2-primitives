@@ -15,6 +15,7 @@
 
 #include "Sai2Model.h"
 #include <helper_modules/POPCExplicitForceControl.h>
+#include <helper_modules/Sai2PrimitivesCommonDefinitions.h>
 #include <Eigen/Dense>
 #include <string>
 // #include <chrono>
@@ -31,14 +32,6 @@ using namespace std;
 namespace Sai2Primitives
 {
 
-struct PIDGains {
-	double kp;
-	double kv;
-	double ki;
-
-	PIDGains(double kp, double kv, double ki) : kp(kp), kv(kv), ki(ki) {}
-};
-
 class MotionForceTask
 {
 
@@ -53,62 +46,70 @@ enum DynamicDecouplingType
 public:
 
 	//------------------------------------------------
-	// Constructors
+	// Constructor
 	//------------------------------------------------
 
 	/**
-	 * @brief      Constructor that takes an Affine3d matrix for definition of
-	 *             the control frame. Creates a full position controller by
-	 *             default.
+	 * @brief Construct a new Motion Force Task
 	 *
-	 * @param      robot          A pointer to a Sai2Model object for the robot
-	 *                            that is to be controlled
-	 * @param      link_name      The name of the link in the robot at which to
-	 *                            attach the control frame
-	 * @param      control_frame  The position and orientation of the control
-	 *                            frame in local link coordinates
-	 * @param[in]  loop_timestep      time taken by a control loop. Used in
-	 *                            trajectory generation and integral control
+	 * @param robot A pointer to a Sai2Model object for the robot that is to be
+	 * controlled
+	 * @param link_name The name of the link in the robot at which to attach the
+	 * compliant frame
+	 * @param compliant_frame Compliant frame with respect to link frame
+	 * @param is_force_motion_parametrization_in_compliant_frame Whether the
+	 * force and motion space (and potential non isotropic gains) are defined
+	 * with respect to the compliant frome or the robot base frame
+	 * @param loop_timestep Time taken by a control loop. Used in trajectory
+	 * generation and integral control.
 	 */
-	MotionForceTask(Sai2Model::Sai2Model* robot, 
-		            const string link_name, 
-		            const Affine3d control_frame = Affine3d::Identity(),
-		            const double loop_timestep = 0.001);
-
-	/**
-	 * @brief      Constructor that takes a Vector3d for definition of the
-	 *             control frame position and a Matrix3d for the frame
-	 *             orientation. Creates a full position controller by default.
-	 *
-	 * @param      robot        A pointer to a Sai2Model object for the robot
-	 *                          that is to be controlled
-	 * @param      link_name    The name of the link in the robot at which to
-	 *                          attach the control frame
-	 * @param      pos_in_link  The position the control frame in local link
-	 *                          coordinates
-	 * @param      rot_in_link  The orientation of the control frame in local
-	 *                          link coordinates
-	 * @param[in]  loop_timestep    time taken by a control loop. Used in
-	 *                          trajectory generation and integral control
-	 */
-	MotionForceTask(Sai2Model::Sai2Model* robot, 
-		            const string link_name, 
-		            const Vector3d pos_in_link, 
-		            const Matrix3d rot_in_link = Matrix3d::Identity(),
-		            const double loop_timestep = 0.001);
+	MotionForceTask(std::shared_ptr<Sai2Model::Sai2Model> robot, const string& link_name,
+					const Affine3d& compliant_frame = Affine3d::Identity(),
+					const bool is_force_motion_parametrization_in_compliant_frame = false,
+					const double loop_timestep = 0.001);
 
 	//------------------------------------------------
 	// Getters Setters
 	//------------------------------------------------
 
+	/**
+	 * @brief Get the Current Position
+	 * 
+	 * @return const Vector3d& current position of the control point
+	 */
 	const Vector3d& getCurrentPosition() const { return _current_position; }
+	/**
+	 * @brief Get the Current Velocity
+	 * 
+	 * @return const Vector3d& current velocity of the control point
+	 */
 	const Vector3d& getCurrentVelocity() const { return _current_velocity; }
 
+	/**
+	 * @brief Get the Current Orientation
+	 * 
+	 * @return const Matrix3d& current orientation of the control frame
+	 */
 	const Matrix3d& getCurrentOrientation() const { return _current_orientation; }
+	/**
+	 * @brief Get the Current Angular Velocity
+	 * 
+	 * @return const Vector3d& current angular velocity of the control frame
+	 */
 	const Vector3d& getCurrentAngularVelocity() const { return _current_angular_velocity; }
 
+	/**
+	 * @brief Get the Sensed Force resolved at the control frame
+	 * 
+	 * @return const Vector3d& current sensed force in the control frame
+	 */
 	const Vector3d& getSensedForce() const {return _sensed_force;}
 
+	/**
+	 * @brief Get the nullspace matrix of that task and the previous ones in the hierarchy
+	 * 
+	 * @return const MatrixXd& Nulspace matrix of the task and the previous ones
+	 */
 	const MatrixXd& getN() const {return _N;}
 
 	void setDesiredPosition(const Vector3d& desired_position) {
@@ -149,38 +150,31 @@ public:
 	void setPosControlGains(const PIDGains& gains) {
 		setPosControlGains(gains.kp, gains.kv, gains.ki);
 	}
-	void setPosControlGains(double kp_pos, double kv_pos, double ki_pos = 0) {
-		_kp_pos = kp_pos;
-		_kv_pos = kv_pos;
-		_ki_pos = ki_pos;
-	}
-	PIDGains getPosControlGains() const {
-		return PIDGains(_kp_pos, _kv_pos, _ki_pos);
-	}
+	void setPosControlGains(double kp_pos, double kv_pos, double ki_pos = 0);
+	void setPosControlGains(const Vector3d& kp_pos, const Vector3d& kv_pos,
+							const Vector3d& ki_pos = Vector3d::Zero());
+	vector<PIDGains> getPosControlGains() const;
 
 	void setOriControlGains(const PIDGains& gains) {
 		setOriControlGains(gains.kp, gains.kv, gains.ki);
 	}
-	void setOriControlGains(double kp_ori, double kv_ori, double ki_ori = 0) {
-		_kp_ori = kp_ori;
-		_kv_ori = kv_ori;
-		_ki_ori = ki_ori;
-	}
-	PIDGains getOriControlGains() const {
-		return PIDGains(_kp_ori, _kv_ori, _ki_ori);
-	}
+	void setOriControlGains(double kp_ori, double kv_ori, double ki_ori = 0);
+	void setOriControlGains(const Vector3d& kp_ori, const Vector3d& kv_ori,
+							const Vector3d& ki_ori = Vector3d::Zero());
+	vector<PIDGains> getOriControlGains() const;
 
 	void setForceControlGains(const PIDGains& gains) {
 		setForceControlGains(gains.kp, gains.kv, gains.ki);
 	}
 	void setForceControlGains(double kp_force, double kv_force,
 							  double ki_force) {
-		_kp_force = kp_force;
-		_kv_force = kv_force;
-		_ki_force = ki_force;
+		_kp_force = kp_force * Matrix3d::Identity();
+		_kv_force = kv_force * Matrix3d::Identity();
+		_ki_force = ki_force * Matrix3d::Identity();
 	}
-	PIDGains getForceControlGains() const {
-		return PIDGains(_kp_force, _kv_force, _ki_force);
+	vector<PIDGains> getForceControlGains() const {
+		return vector<PIDGains>(1, PIDGains(_kp_force(0, 0), _kv_force(0, 0),
+								_ki_force(0, 0)));
 	}
 
 	void setMomentControlGains(const PIDGains& gains) {
@@ -188,22 +182,43 @@ public:
 	}
 	void setMomentControlGains(double kp_moment, double kv_moment,
 							   double ki_moment) {
-		_kp_moment = kp_moment;
-		_kv_moment = kv_moment;
-		_ki_moment = ki_moment;
+		_kp_moment = kp_moment * Matrix3d::Identity();
+		_kv_moment = kv_moment * Matrix3d::Identity();
+		_ki_moment = ki_moment * Matrix3d::Identity();
 	}
-	PIDGains getMomentControlGains() const {
-		return PIDGains(_kp_moment, _kv_moment, _ki_moment);
+	vector<PIDGains> getMomentControlGains() const {
+		return vector<PIDGains>(1, PIDGains(_kp_moment(0, 0), _kv_moment(0, 0),
+								_ki_moment(0, 0)));
 	}
 
+	/**
+	 * @brief Set the Desired Force in control frame
+	 * 
+	 * @param desired_force 
+	 */
 	void setDesiredForce(const Vector3d& desired_force) {
 		_desired_force = desired_force;
 	}
+	/**
+	 * @brief Get the Desired Force in control frame
+	 * 
+	 * @return const Vector3d& desired force in control frame
+	 */
 	const Vector3d& getDesiredForce() const { return _desired_force; }
 
+	/**
+	 * @brief Set the Desired Moment in control frame
+	 * 
+	 * @param desired_moment 
+	 */
 	void setDesiredMoment(const Vector3d& desired_moment) {
 		_desired_moment = desired_moment;
 	}
+	/**
+	 * @brief Get the Desired Moment in control frame
+	 * 
+	 * @return const Vector3d& desired moment in control frame
+	 */
 	const Vector3d& getDesiredMoment() const { return _desired_moment; }
 
 	// Velocity saturation flag and saturation values
@@ -261,8 +276,6 @@ public:
 	 *             positions/velocities assumes the desired orientation and
 	 *             angular velocity has been updated
 	 *
-	 * @param      task_joint_torques  the vector to be filled with the new
-	 *                                 joint torques to apply for the task
 	 */
 	VectorXd computeTorques();
 
@@ -292,20 +305,13 @@ public:
 	 */
 	bool goalOrientationReached(const double tolerance, const bool verbose = false);
 
-
 	// ---------- set dynamic decoupling type for the controller  ----------------
-	void setDynamicDecouplingFull();
-	void setDynamicDecouplingPartial();
-	void setDynamicDecouplingNone();
-	void setDynamicDecouplingBIE();
-
-	void setNonIsotropicGainsPosition(const Matrix3d& frame, const Vector3d& kp, 
-		const Vector3d& kv, const Vector3d& ki);
-	void setNonIsotropicGainsOrientation(const Matrix3d& frame, const Vector3d& kp, 
-		const Vector3d& kv, const Vector3d& ki);
-
-	void setIsotropicGainsPosition(const double kp, const double kv, const double ki);
-	void setIsotropicGainsOrientation(const double kp, const double kv, const double ki);
+	void setDynamicDecouplingType(const DynamicDecouplingType type) {
+		_dynamic_decoupling_type = type;
+	}
+	DynamicDecouplingType getDynamicDecouplingType() const {
+		return _dynamic_decoupling_type;
+	}
 
 	// -------- force control related methods --------
 
@@ -339,188 +345,65 @@ public:
 								    const Vector3d sensed_moment_sensor_frame);
 
 	/**
-	 * @brief      Sets the force controlled axis for a hybrid position force
-	 *             controller with 1 DoF force and 2 DoF motion
-	 * @details    This is the function to use in order to get the position part
-	 *             of the controller behave as a Hybrid Force/Motion controller
-	 *             with 1 Dof force. The motion is controlled orthogonally to
-	 *             the force. It can be called anytime to change the behavior of
-	 *             the controller and reset the integral terms.
+	 * @brief Parametrizes the force space and motion space for translational
+	 * control The first argument is the dimension of the force space (between
+	 * 0 and 3, 0 meaning the whole translation is controlled in motion and 3
+	 * meaning the whole translation is controlled in force) and the second
+	 * argument is the axis defining the space of dimension one (unused if the
+	 * first parameter is 0 or 3, and representing the direction of the force
+	 * space is the first parameter is 1, or the direction of the motion space
+	 * if the first parameter is 2)
 	 *
-	 * @param      force_axis  The axis in robot frame coordinates along which
-	 *                         the controller behaves as a force controller.
+	 * @param force_space_dimension  between 0 and 3
+	 * @param force_or_motion_single_axis non singular axis (unused if
+	 * force_space_dimension is 0 or 3)
 	 */
-	void setForceAxis(const Vector3d force_axis);
+	void parametrizeForceMotionSpaces(
+		const int force_space_dimension,
+		const Vector3d& force_or_motion_single_axis = Vector3d::Zero());
 
 	/**
-	 * @brief      Updates the force controlled axis for a hybrid position force
-	 *             controller with 1 DoF force and 2 DoF motion
-	 * @details    Use this function in situations when the force axis needs to
-	 *             be updated (as an estimated normal for example) over time.
-	 *             This does not reset the integral terms. In setting up the
-	 *             controller for the first time, prefer setForceAxis.
-	 *
-	 * @param      force_axis  The axis in robot frame coordinates along which
-	 *                         the controller behaves as a force controller.
+	 * @brief Parametrizes the moment space and rotational motion space.
+	 * The first argument is the dimension of the moment space (between
+	 * 0 and 3, 0 meaning the whole rotation is controlled in motion and 3
+	 * meaning the whole rotation is controlled in moments) and the second
+	 * argument is the axis defining the space of dimension one (unused if the
+	 * first parameter is 0 or 3, and representing the direction of the moment
+	 * space is the first parameter is 1, or the direction of the rotational motion space
+	 * if the first parameter is 2)
+	 * 
+	 * @param moment_space_dimension betawwn 0 and 3
+	 * @param moment_or_rot_motion_single_axis non singular axis (unused if
+	 * moment_space_dimension is 0 or 3)
 	 */
-	void updateForceAxis(const Vector3d force_axis);
+	void parametrizeMomentRotMotionSpaces(
+		const int moment_space_dimension,
+		const Vector3d& moment_or_rot_motion_single_axis = Vector3d::Zero());
 
-	/**
-	 * @brief      Sets the motion controlled axis for a hybrid position force
-	 *             controller with 2 DoF force and 1 DoF motion
-	 * @details    This is the function to use in order to get the position part
-	 *             of the controller behave as a Hybrid Force/Motion controller
-	 *             with 2 Dof force. The motion is controlled along one axis and
-	 *             the force is controlled orthogonally to the motion It can be
-	 *             called anytime to change the behavior of the controller and
-	 *             reset the integral terms.
-	 *
-	 * @param[in]  motion_axis  The motion axis
-	 * @param      force_axis  The axis in robot frame coordinates along which the
-	 *                         controller behaves as a motion controller.
-	 */
-	void setLinearMotionAxis(const Vector3d motion_axis);
 
-	/**
-	 * @brief      Sets the motion controlled axis for a hybrid position force
-	 *             controller with 2 DoF force and 1 DoF motion
-	 * @details    Use this function in situations when the motion axis needs to
-	 *             be updated over time. This does not reset the integral terms.
-	 *             In setting up the controller for the first time, prefer
-	 *             setMotionAxis.
-	 *
-	 * @param[in]  motion_axis  The motion axis
-	 * @param      force_axis  The axis in robot frame coordinates along which the
-	 *                         controller behaves as a motion controller.
-	 */
-	void updateLinearMotionAxis(const Vector3d motion_axis);
-
-	/**
-	 * @brief      Sets the linear part of the task as a full 3DoF force
-	 *             controller
-	 * @details    This is the function to use in order to get the position part
-	 *             of the controller behave as pure Force controller with 3 Dof
-	 *             force. It can be called anytime to change the behavior of the
-	 *             controller and reset the integral terms.
-	 */
-	void setFullForceControl();
-
-	/**
-	 * @brief      Sets the linear part of the task as a full 3DoF motion
-	 *             controller
-	 * @details    This is the function to use in order to get the position part
-	 *             of the controller behave as pure Motion controller with 3 Dof
-	 *             linear motion. It is de default behavior of the controller.
-	 *             It can be called anytime to change the behavior of the
-	 *             controller and reset the integral terms.
-	 */
-	void setFullLinearMotionControl();
-
-	/**
-	 * @brief      Sets the moment controlled axis for a hybrid orientation
-	 *             moment controller with 1 DoF moment and 2 DoF orientation
-	 * @details    This is the function to use in order to get the orientation
-	 *             part of the controller behave as a Hybrid Force/Motion
-	 *             controller with 1 Dof moment. The rotational motion is
-	 *             controlled orthogonally to the moment. 
-	 *             
-	 *             It can be called anytime to change the behavior of the controller 
-	 *             and reset the integral terms.
-	 *
-	 * @param      moment_axis  The axis in robot frame coordinates along
-	 *                          which the controller behaves as a moment
-	 *                          controller.
-	 */
-	void setMomentAxis(const Vector3d moment_axis);
-
-	/**
-	 * @brief      Sets the moment controlled axis for a hybrid orientation
-	 *             moment controller with 1 DoF moment and 2 DoF orientation
-	 * @details    Use this function in situations when the moment axis needs to
-	 *             be updated over time. This does not reset the integral terms.
-	 *             
-	 *             In setting up the controller for the first time, prefer
-	 *             setMomentAxis.
-	 *
-	 * @param      moment_axis  The axis in robot frame coordinates along
-	 *                          which the controller behaves as a moment
-	 *                          controller.
-	 */
-	void updateMomentAxis(const Vector3d moment_axis);
-
-	/**
-	 * @brief      Sets the angular movement controlled axis for a hybrid
-	 *             orientation moment controller with 2 DoF moment and 1 DoF
-	 *             motion
-	 * @details    This is the function to use in order to get the orientation
-	 *             part of the controller behave as a Hybrid Force/Motion
-	 *             controller with 2 Dof moment. The rotational motion is
-	 *             controlled along one axis and the moment is controlled
-	 *             orthogonally to the motion.
-	 *             
-	 *             It can be called anytime to change
-	 *             the behavior of the controller and reset the integral terms.
-	 *
-	 * @param[in]  motion_axis  The motion axis
-	 * @param      force_axis  The axis in robot frame coordinates along which the
-	 *                         controller behaves as a rotational motion controller.
-	 */
-	void setAngularMotionAxis(const Vector3d motion_axis);
-
-	/**
-	 * @brief      Sets the angular movement controlled axis for a hybrid
-	 *             orientation moment controller with 2 DoF moment and 1 DoF
-	 *             motion
-	 * @details    Use this function in situations when the angular motion axis
-	 *             needs to be updated over time. This does not reset the
-	 *             integral terms. 
-	 *             
-	 *             In setting up the controller for the first
-	 *             time, prefer setAngularMotionAxis.
-	 *
-	 * @param[in]  motion_axis  The motion axis
-	 * @param      force_axis  The axis in robot frame coordinates along which the
-	 *                         controller behaves as a rotational motion controller.
-	 */
-	void updateAngularMotionAxis(const Vector3d motion_axis);
-
-	/**
-	 * @brief      Sets the angular part of the task as a full 3DoF moment
-	 *             controller
-	 * @details    This is the function to use in order to get the orientation
-	 *             part of the controller behave as pure moment controller with
-	 *             3 Dof moment. It can be called anytime to change the behavior
-	 *             of the controller and reset the integral terms.
-	 */
-	void setFullMomentControl();
-
-	/**
-	 * @brief      Sets the angular part of the task as a full 3DoF motion
-	 *             controller
-	 * @details    This is the function to use in order to get the orientation
-	 *             part of the controller behave as pure Motion controller with
-	 *             3 Dof angular motion. It is de default behavior of the
-	 *             controller. It can be called anytime to change the behavior
-	 *             of the controller and reset the integral terms.
-	 */
-	void setFullAngularMotionControl();
+	Matrix3d sigmaForce() const;
+	Matrix3d sigmaMoment() const;
 
 	/**
 	 * @brief      Changes the behavior to closed loop force/moment control for the
 	 *             force controlled directions in the linear/angular parts of the
 	 *             controller
 	 */
-	void setClosedLoopForceControl();
-	void setOpenLoopForceControl();
-	void setClosedLoopMomentControl();
-	void setOpenLoopMomentControl();
+	void setClosedLoopForceControl(const bool closed_loop_force_control = true) {
+		_closed_loop_force_control = closed_loop_force_control;
+		resetIntegratorsLinear();
+	}
+	void setClosedLoopMomentControl(const bool closed_loop_moment_control = true) {
+		_closed_loop_moment_control = closed_loop_moment_control;
+		resetIntegratorsAngular();
+	}
 
 	/**
 	 * @brief      Enables or disables the passivity based stability for the closed loop
 	 *             force control (enabled by default)
 	 */
-	void enablePassivity();
-	void disablePassivity();
+	void enablePassivity() { _POPC_force->enable(); }
+	void disablePassivity() { _POPC_force->disable(); }
 
 	// ------- helper methods -------
 
@@ -559,18 +442,18 @@ private:
 
 	// gains for motion controller
 	// defaults to 50 for p gains, 14 for d gains and 0 fir i gains
-	double _kp_pos, _kp_ori;
-	double _kv_pos, _kv_ori;
-	double _ki_pos, _ki_ori;
+	Matrix3d _kp_pos, _kp_ori;
+	Matrix3d _kv_pos, _kv_ori;
+	Matrix3d _ki_pos, _ki_ori;
 
 	// gains for the closed loop force controller
 	// by default, the force controller is open loop
 	// to set the behavior to closed loop controller, use the functions setClosedLoopForceControl and setClosedLoopMomentControl.
 	// the closed loop force controller is a PI controller with feedforward force and velocity based damping.
 	// gains default to 1 for p gains, 0.7 for i gains and 10 for d gains
-	double _kp_force, _kp_moment;
-	double _kv_force, _kv_moment;
-	double _ki_force, _ki_moment;
+	Matrix3d _kp_force, _kp_moment;
+	Matrix3d _kv_force, _kv_moment;
+	Matrix3d _ki_force, _ki_moment;
 	
 	// desired force and moment for the force part of the controller
 	// defaults to Zero
@@ -596,7 +479,7 @@ private:
 	// Angular Jerk          - 3PI   Rad/s^3
 #endif
 
-	Sai2Model::Sai2Model* _robot;
+	std::shared_ptr<Sai2Model::Sai2Model> _robot;
 	double _loop_timestep;
 
 	Eigen::VectorXd _task_force;
@@ -604,7 +487,8 @@ private:
 
 	// internal variables, not to be touched by the user
 	string _link_name;
-	Affine3d _control_frame;   // in link_frame
+	Affine3d _compliant_frame;   // in link_frame
+	bool _is_force_motion_parametrization_in_compliant_frame;
 
 	// motion quantities
 	Vector3d _current_position;      // robot frame
@@ -629,6 +513,8 @@ private:
 	Vector3d _integrated_force_error;    // robot frame
 	Vector3d _integrated_moment_error;   // robot frame
 
+	int _force_space_dimension, _moment_space_dimension;
+	Vector3d _force_or_motion_axis, _moment_or_rotmotion_axis;
 	Matrix3d _sigma_force;     // robot frame
 	Matrix3d _sigma_moment;    // robot frame
 
@@ -644,13 +530,13 @@ private:
 	Vector3d _linear_force_control;
 
 	// control parameters
-	bool _use_isotropic_gains_position;                 // defaults to true
-	bool _use_isotropic_gains_orientation;              // defaults to true
-	Matrix3d _kp_pos_mat, _kp_ori_mat;
-	Matrix3d _kv_pos_mat, _kv_ori_mat;
-	Matrix3d _ki_pos_mat, _ki_ori_mat;
+	bool _are_pos_gains_isotropic;        // defaults to true
+	bool _are_ori_gains_isotropic;        // defaults to true
+	// Matrix3d _kp_pos_mat, _kp_ori_mat;
+	// Matrix3d _kv_pos_mat, _kv_ori_mat;
+	// Matrix3d _ki_pos_mat, _ki_ori_mat;
 
-	int _dynamic_decoupling_type = BOUNDED_INERTIA_ESTIMATES;
+	DynamicDecouplingType _dynamic_decoupling_type = BOUNDED_INERTIA_ESTIMATES;
 
 	// model quantities
 	MatrixXd _jacobian;

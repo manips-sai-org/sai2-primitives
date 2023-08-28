@@ -29,7 +29,7 @@ void POPCExplicitForceControl::disable() {
 
 Vector3d POPCExplicitForceControl::computePassivitySaturatedForce(
 	const Vector3d& fd, const Vector3d& fs, const Vector3d& vcl,
-	const Vector3d& vr, const double kv_force, const double k_feedforward) {
+	const Vector3d& vr, const Matrix3d kv_force, const double k_feedforward) {
 	if (!_is_enabled) {
 		return vcl - kv_force * vr;
 	}

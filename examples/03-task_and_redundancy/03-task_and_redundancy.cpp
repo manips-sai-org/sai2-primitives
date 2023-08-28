@@ -32,8 +32,8 @@ const string robot_file = "resources/panda_arm.urdf";
 const string robot_name = "PANDA";
 
 // simulation and control loop
-void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim);
-void simulation(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim);
+void control(std::shared_ptr<Sai2Model::Sai2Model> robot, Sai2Simulation::Sai2Simulation* sim);
+void simulation(std::shared_ptr<Sai2Model::Sai2Model> robot, Sai2Simulation::Sai2Simulation* sim);
 
 //------------ main function
 int main (int argc, char** argv) {
@@ -51,7 +51,7 @@ int main (int argc, char** argv) {
 	auto sim = new Sai2Simulation::Sai2Simulation(world_file);
 
 	// load robots
-	auto robot = new Sai2Model::Sai2Model(robot_file, false);
+	auto robot = make_shared<Sai2Model::Sai2Model>(robot_file, false);
 	robot->setQ(sim->getJointPositions(robot_name));
 	robot->updateModel();
 
@@ -77,7 +77,7 @@ int main (int argc, char** argv) {
 }
 
 //------------------------------------------------------------------------------
-void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
+void control(std::shared_ptr<Sai2Model::Sai2Model> robot, Sai2Simulation::Sai2Simulation* sim) {
 	
 	// update robot model and initialize control vectors
 	robot->updateModel();
@@ -88,7 +88,8 @@ void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
 	// Position plus orientation task
 	string link_name = "end-effector";
 	Vector3d pos_in_link = Vector3d(0.0,0.0,0.0);
-	Sai2Primitives::MotionForceTask* motion_force_task = new Sai2Primitives::MotionForceTask(robot, link_name, pos_in_link); // no orientation parameter, default is identity
+	Affine3d compliant_frame = Affine3d(Translation3d(pos_in_link));
+	Sai2Primitives::MotionForceTask* motion_force_task = new Sai2Primitives::MotionForceTask(robot, link_name, compliant_frame); // no orientation parameter, default is identity
 	VectorXd motion_force_task_torques = VectorXd::Zero(dof);
 
 #ifdef USING_OTG
@@ -101,7 +102,7 @@ void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
 
 	// joint task to control the redundancy
 	// using default gains and interpolation settings
-	Sai2Primitives::JointTask* joint_task = new Sai2Primitives::JointTask(robot);
+	Sai2Primitives::JointTask* joint_task = new Sai2Primitives::JointTask(robot.get());
 	VectorXd joint_task_torques = VectorXd::Zero(dof);
 
 	VectorXd initial_q = robot->q();
@@ -218,7 +219,7 @@ void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
 }
 
 //------------------------------------------------------------------------------
-void simulation(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
+void simulation(std::shared_ptr<Sai2Model::Sai2Model> robot, Sai2Simulation::Sai2Simulation* sim) {
 	fSimulationRunning = true;
 
 	// create a timer

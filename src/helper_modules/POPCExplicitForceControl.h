@@ -27,7 +27,7 @@ public:
 	Vector3d computePassivitySaturatedForce(
 		const Vector3d& fd, const Vector3d& fs,
 		const Vector3d& vcl, const Vector3d& vr,
-		const double kv_force = 0, const double k_feedforward = 0);
+		const Matrix3d kv_force = Matrix3d::Zero(), const double k_feedforward = 0);
 
 private:
 

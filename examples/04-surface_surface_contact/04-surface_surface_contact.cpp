@@ -46,8 +46,8 @@ const Vector3d sensor_pos_in_link = Vector3d(0.0,0.0,0.0);
 #define CONTACT_CONTROL  1
 
 // simulation and control loop
-void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim);
-void simulation(Sai2Model::Sai2Model* robot, Sai2Model::Sai2Model* plate, Sai2Simulation::Sai2Simulation* sim);
+void control(shared_ptr<Sai2Model::Sai2Model> robot, Sai2Simulation::Sai2Simulation* sim);
+void simulation(shared_ptr<Sai2Model::Sai2Model> robot, shared_ptr<Sai2Model::Sai2Model> plate, Sai2Simulation::Sai2Simulation* sim);
 
 //------------ main function
 int main (int argc, char** argv) {
@@ -67,12 +67,12 @@ int main (int argc, char** argv) {
 	sim->setCollisionRestitution(0);
 
 	// load robot and plate
-	auto robot = new Sai2Model::Sai2Model(robot_file);
+	auto robot = make_shared<Sai2Model::Sai2Model>(robot_file);
 	robot->setQ(sim->getJointPositions(robot_name));
 	robot->updateModel();
 
 	// load plate
-	auto plate = new Sai2Model::Sai2Model(plate_file);
+	auto plate = make_shared<Sai2Model::Sai2Model>(plate_file);
 
 	// create simulated force sensor
 	Affine3d T_sensor = Affine3d::Identity();
@@ -105,7 +105,7 @@ int main (int argc, char** argv) {
 }
 
 //------------------------------------------------------------------------------
-void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
+void control(shared_ptr<Sai2Model::Sai2Model> robot, Sai2Simulation::Sai2Simulation* sim) {
 
 	// prepare state machine
 	int state = GO_TO_CONTACT;
@@ -118,7 +118,9 @@ void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
 
 	// Position plus orientation task
 
-	Sai2Primitives::MotionForceTask* motion_force_task = new Sai2Primitives::MotionForceTask(robot, link_name, pos_in_link);
+	Sai2Primitives::MotionForceTask* motion_force_task =
+		new Sai2Primitives::MotionForceTask(
+			robot, link_name, Affine3d(Translation3d(pos_in_link)), true);
 	motion_force_task->enablePassivity();
 	VectorXd motion_force_task_torques = VectorXd::Zero(dof);
 	// set the force sensor location for the contact part of the task
@@ -134,7 +136,7 @@ void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
 	Vector3d desired_position = initial_position;
 
 	// joint task to control the redundancy
-	Sai2Primitives::JointTask* joint_task = new Sai2Primitives::JointTask(robot);
+	Sai2Primitives::JointTask* joint_task = new Sai2Primitives::JointTask(robot.get());
 	VectorXd joint_task_torques = VectorXd::Zero(dof);
 
 	VectorXd initial_q = robot->q();
@@ -182,15 +184,14 @@ void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
 		
 			if(motion_force_task->getSensedForce()(2) <= -1.0) {
 				// switch the local z axis to be force controlled and the local x and y axis to be moment controlled
-				// Vector3d local_z = motion_force_task->_current_orientation.col(2);
-				Vector3d local_z(0, 0, -1);
-				motion_force_task->setForceAxis(local_z);
-				motion_force_task->setAngularMotionAxis(local_z);
+				motion_force_task->parametrizeForceMotionSpaces(1, Vector3d::UnitZ());
+				motion_force_task->parametrizeMomentRotMotionSpaces(2, Vector3d::UnitZ());
 
 				motion_force_task->setClosedLoopForceControl();
 				motion_force_task->setClosedLoopMomentControl();
 
 				// set the force and moment control set points and gains gains
+				Vector3d local_z = motion_force_task->getCurrentOrientation().col(2);
 				motion_force_task->setDesiredForce(5.0*local_z);
 				motion_force_task->setDesiredMoment(Vector3d::Zero());
 
@@ -202,11 +203,8 @@ void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
 			}	
 		}
 		else if(state == CONTACT_CONTROL) {
-				// Vector3d local_z = motion_force_task->_current_orientation.col(2);
-				Vector3d local_z(0, 0, -1);
+				Vector3d local_z = motion_force_task->getCurrentOrientation().col(2);
 				motion_force_task->setDesiredForce(10.0*local_z);
-				motion_force_task->updateForceAxis(local_z);
-				motion_force_task->updateAngularMotionAxis(local_z);			
 		}
 
 		// compute torques for the different tasks
@@ -235,7 +233,7 @@ void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
 }
 
 //------------------------------------------------------------------------------
-void simulation(Sai2Model::Sai2Model* robot, Sai2Model::Sai2Model* plate, Sai2Simulation::Sai2Simulation* sim)
+void simulation(shared_ptr<Sai2Model::Sai2Model> robot, shared_ptr<Sai2Model::Sai2Model> plate, Sai2Simulation::Sai2Simulation* sim)
 {
 	fSimulationRunning = true;
 
