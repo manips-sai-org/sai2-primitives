@@ -40,7 +40,7 @@ enum DynamicDecouplingType
 	FULL_DYNAMIC_DECOUPLING,            // use the real Lambda matrix
 	PARTIAL_DYNAMIC_DECOUPLING,         // Use Lambda for position part, Identity for orientation and Zero for cross coupling
 	IMPEDANCE,                          // use Identity for the mass matrix
-	BOUNDED_INERTIA_ESTIMATES,           // Use a Lambda computed from a saturated joint space mass matrix
+	BOUNDED_INERTIA_ESTIMATES,          // Use a Lambda computed from a saturated joint space mass matrix
 };
 
 public:
@@ -192,7 +192,7 @@ public:
 	}
 
 	/**
-	 * @brief Set the Desired Force in control frame
+	 * @brief Set the Desired Force in robot base frame
 	 * 
 	 * @param desired_force 
 	 */
@@ -200,14 +200,14 @@ public:
 		_desired_force = desired_force;
 	}
 	/**
-	 * @brief Get the Desired Force in control frame
+	 * @brief Get the Desired Force in robot base frame
 	 * 
-	 * @return const Vector3d& desired force in control frame
+	 * @return const Vector3d& desired force in robot base frame
 	 */
 	const Vector3d& getDesiredForce() const { return _desired_force; }
 
 	/**
-	 * @brief Set the Desired Moment in control frame
+	 * @brief Set the Desired Moment in robot base frame
 	 * 
 	 * @param desired_moment 
 	 */
@@ -215,19 +215,15 @@ public:
 		_desired_moment = desired_moment;
 	}
 	/**
-	 * @brief Get the Desired Moment in control frame
+	 * @brief Get the Desired Moment in robot base frame
 	 * 
-	 * @return const Vector3d& desired moment in control frame
+	 * @return const Vector3d& desired moment in robot base frame
 	 */
 	const Vector3d& getDesiredMoment() const { return _desired_moment; }
 
 	// Velocity saturation flag and saturation values
-	void enableVelocitySaturation(double linear_vel_sat,
-								  double angular_vel_sat) {
-		_use_velocity_saturation_flag = true;
-		_linear_saturation_velocity = linear_vel_sat;
-		_angular_saturation_velocity = angular_vel_sat;
-	}
+	void enableVelocitySaturation(const double linear_vel_sat = 0.3,
+								  const double angular_vel_sat = M_PI / 3);
 	void disableVelocitySaturation() { _use_velocity_saturation_flag = false; }
 
 	bool getVelocitySaturationEnabled() const {
@@ -305,12 +301,15 @@ public:
 	 */
 	bool goalOrientationReached(const double tolerance, const bool verbose = false);
 
-	// ---------- set dynamic decoupling type for the controller  ----------------
+	/**
+	 * @brief Set the Dynamic Decoupling Type. See the definition of the
+	 * DynamicDecouplingType enum for more details
+	 *
+	 *
+	 * @param type
+	 */
 	void setDynamicDecouplingType(const DynamicDecouplingType type) {
 		_dynamic_decoupling_type = type;
-	}
-	DynamicDecouplingType getDynamicDecouplingType() const {
-		return _dynamic_decoupling_type;
 	}
 
 	// -------- force control related methods --------
@@ -441,7 +440,7 @@ private:
 	Vector3d _desired_angular_acceleration;
 
 	// gains for motion controller
-	// defaults to 50 for p gains, 14 for d gains and 0 fir i gains
+	// defaults to isptropic 50 for p gains, 14 for d gains and 0 for i gains
 	Matrix3d _kp_pos, _kp_ori;
 	Matrix3d _kv_pos, _kv_ori;
 	Matrix3d _ki_pos, _ki_ori;
@@ -450,7 +449,7 @@ private:
 	// by default, the force controller is open loop
 	// to set the behavior to closed loop controller, use the functions setClosedLoopForceControl and setClosedLoopMomentControl.
 	// the closed loop force controller is a PI controller with feedforward force and velocity based damping.
-	// gains default to 1 for p gains, 0.7 for i gains and 10 for d gains
+	// gains default to isotropic 1 for p gains, 0.7 for i gains and 10 for d gains
 	Matrix3d _kp_force, _kp_moment;
 	Matrix3d _kv_force, _kv_moment;
 	Matrix3d _ki_force, _ki_moment;
@@ -462,8 +461,8 @@ private:
 
 	// velocity saturation is off by default
 	bool _use_velocity_saturation_flag;
-	double _linear_saturation_velocity;   // defaults to 0.3 m/s
-	double _angular_saturation_velocity;  // defaults to PI/3 Rad/s
+	double _linear_saturation_velocity;
+	double _angular_saturation_velocity;
 
 // trajectory generation via interpolation using Reflexxes Library
 // on by defalut
@@ -532,16 +531,13 @@ private:
 	// control parameters
 	bool _are_pos_gains_isotropic;        // defaults to true
 	bool _are_ori_gains_isotropic;        // defaults to true
-	// Matrix3d _kp_pos_mat, _kp_ori_mat;
-	// Matrix3d _kv_pos_mat, _kv_ori_mat;
-	// Matrix3d _ki_pos_mat, _ki_ori_mat;
 
-	DynamicDecouplingType _dynamic_decoupling_type = BOUNDED_INERTIA_ESTIMATES;
+	// dynamic decoupling type, defaults to BOUNDED_INERTIA_ESTIMATES
+	DynamicDecouplingType _dynamic_decoupling_type;
 
 	// model quantities
 	MatrixXd _jacobian;
 	MatrixXd _projected_jacobian;
-	MatrixXd _prev_projected_jacobian;
 	MatrixXd _Lambda, _Lambda_modified;
 	MatrixXd _Jbar;
 	MatrixXd _N;
@@ -553,6 +549,7 @@ private:
 
 	VectorXd _unit_mass_force;
 
+	// trajectory generation
 	Vector3d _step_desired_position;
 	Vector3d _step_desired_velocity;
 	Matrix3d _step_desired_orientation;

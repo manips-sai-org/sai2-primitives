@@ -30,6 +30,7 @@ MotionForceTask::MotionForceTask(
 	_compliant_frame = compliant_frame;
 	_is_force_motion_parametrization_in_compliant_frame =
 		is_force_motion_parametrization_in_compliant_frame;
+	setDynamicDecouplingType(BOUNDED_INERTIA_ESTIMATES);
 
 	int dof = _robot->dof();
 
@@ -50,6 +51,8 @@ MotionForceTask::MotionForceTask(
 	setMomentControlGains(0.7, 10.0, 1.3);
 
 	disableVelocitySaturation();
+	_linear_saturation_velocity = 0;
+	_angular_saturation_velocity = 0;
 
 	_k_ff = 1.0;
 
@@ -58,7 +61,6 @@ MotionForceTask::MotionForceTask(
 	// initialize matrices sizes
 	_jacobian.setZero(6, dof);
 	_projected_jacobian.setZero(6, dof);
-	_prev_projected_jacobian.setZero(6, dof);
 	_Lambda.setZero(6, 6);
 	_Lambda_modified.setZero(6, 6);
 	_Jbar.setZero(dof, 6);
@@ -410,9 +412,6 @@ VectorXd MotionForceTask::computeTorques() {
 	task_joint_torques =
 		_projected_jacobian.transpose() * _URange * _task_force;
 
-	// update previous time
-	_prev_projected_jacobian = _projected_jacobian;
-
 	return task_joint_torques;
 }
 
@@ -455,6 +454,17 @@ bool MotionForceTask::goalOrientationReached(const double tolerance,
 
 void MotionForceTask::setPosControlGains(double kp_pos, double kv_pos,
 										 double ki_pos) {
+	if(kp_pos < 0 || kv_pos < 0 || ki_pos < 0)
+	{
+		throw invalid_argument(
+			"all gains should be positive or zero in "
+			"MotionForceTask::setPosControlGains\n");
+	}
+	if(kv_pos < 1e-2 && _use_velocity_saturation_flag) {
+		throw invalid_argument(
+			"cannot have kv_pos = 0 if using velocity saturation in "
+			"MotionForceTask::setPosControlGains\n");
+	}
 	_are_pos_gains_isotropic = true;
 	_kp_pos = kp_pos * Matrix3d::Identity();
 	_kv_pos = kv_pos * Matrix3d::Identity();
@@ -464,6 +474,17 @@ void MotionForceTask::setPosControlGains(double kp_pos, double kv_pos,
 void MotionForceTask::setPosControlGains(const Vector3d& kp_pos,
 										 const Vector3d& kv_pos,
 										 const Vector3d& ki_pos) {
+	if(kp_pos.minCoeff() < 0 || kv_pos.minCoeff() < 0 || ki_pos.minCoeff() < 0)
+	{
+		throw invalid_argument(
+			"all gains should be positive or zero in "
+			"MotionForceTask::setPosControlGains\n");
+	}
+	if(kv_pos.minCoeff() < 1e-2 && _use_velocity_saturation_flag) {
+		throw invalid_argument(
+			"cannot have kv_pos = 0 if using velocity saturation in "
+			"MotionForceTask::setPosControlGains\n");
+	}
 	_are_pos_gains_isotropic = false;
 	Matrix3d rotation = _is_force_motion_parametrization_in_compliant_frame
 							? _compliant_frame.rotation()
@@ -498,6 +519,16 @@ vector<PIDGains> MotionForceTask::getPosControlGains() const {
 
 void MotionForceTask::setOriControlGains(double kp_ori, double kv_ori,
 										 double ki_ori) {
+	if(kp_ori < 0 || kv_ori < 0 || ki_ori < 0) {
+		throw invalid_argument(
+			"all gains should be positive or zero in "
+			"MotionForceTask::setOriControlGains\n");
+	}
+	if(kv_ori < 1e-2 && _use_velocity_saturation_flag) {
+		throw invalid_argument(
+			"cannot have kv_ori = 0 if using velocity saturation in "
+			"MotionForceTask::setOriControlGains\n");
+	}
 	_are_ori_gains_isotropic = true;
 	_kp_ori = kp_ori * Matrix3d::Identity();
 	_kv_ori = kv_ori * Matrix3d::Identity();
@@ -507,6 +538,16 @@ void MotionForceTask::setOriControlGains(double kp_ori, double kv_ori,
 void MotionForceTask::setOriControlGains(const Vector3d& kp_ori,
 										 const Vector3d& kv_ori,
 										 const Vector3d& ki_ori) {
+	if(kp_ori.minCoeff() < 0 || kv_ori.minCoeff() < 0 || ki_ori.minCoeff() < 0) {
+		throw invalid_argument(
+			"all gains should be positive or zero in "
+			"MotionForceTask::setOriControlGains\n");
+	}
+	if(kv_ori.minCoeff() < 1e-2 && _use_velocity_saturation_flag) {
+		throw invalid_argument(
+			"cannot have kv_ori = 0 if using velocity saturation in "
+			"MotionForceTask::setOriControlGains\n");
+	}
 	_are_ori_gains_isotropic = false;
 	Matrix3d rotation = _is_force_motion_parametrization_in_compliant_frame
 							? _compliant_frame.rotation()
@@ -537,6 +578,28 @@ vector<PIDGains> MotionForceTask::getOriControlGains() const {
 				 aniso_ki_robot_base(1)),
 		PIDGains(aniso_kp_robot_base(2), aniso_kv_robot_base(2),
 				 aniso_ki_robot_base(2))};
+}
+
+void MotionForceTask::enableVelocitySaturation(const double linear_vel_sat,
+								const double angular_vel_sat) {
+	if (linear_vel_sat <= 0 || angular_vel_sat <= 0) {
+		throw invalid_argument(
+			"Velocity saturation values should be strictly positive or zero in "
+			"MotionForceTask::enableVelocitySaturation\n");
+	}
+	if(_kv_pos.determinant() < 1e-3) {
+		throw invalid_argument(
+			"Cannot enable velocity saturation if kv_pos is singular in "
+			"MotionForceTask::enableVelocitySaturation\n");
+	}
+	if(_kv_ori.determinant() < 1e-3) {
+		throw invalid_argument(
+			"Cannot enable velocity saturation if kv_ori is singular in "
+			"MotionForceTask::enableVelocitySaturation\n");
+	}
+	_use_velocity_saturation_flag = true;
+	_linear_saturation_velocity = linear_vel_sat;
+	_angular_saturation_velocity = angular_vel_sat;
 }
 
 void MotionForceTask::setForceSensorFrame(
