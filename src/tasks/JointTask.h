@@ -11,16 +11,16 @@
 #ifndef SAI2_PRIMITIVES_JOINT_TASK_H_
 #define SAI2_PRIMITIVES_JOINT_TASK_H_
 
+#include <helper_modules/OTG_joints.h>
+
 #include <Eigen/Dense>
 #include <chrono>
+#include <memory>
 #include <string>
 
 #include "Sai2Model.h"
 
-#ifdef USING_OTG
-#include "trajectory_generation/OTG.h"
-#endif
-
+using namespace Eigen;
 namespace Sai2Primitives {
 
 class JointTask {
@@ -38,10 +38,11 @@ public:
 	 *
 	 * @param      robot      A pointer to a Sai2Model object for the robot that
 	 *                        is to be controlled
-	 * @param[in]  loop_time  time taken by a control loop. Used only in
+	 * @param[in]  loop_timestep  time taken by a control loop. Used only in
 	 * trajectory generation
 	 */
-	JointTask(Sai2Model::Sai2Model* robot, const double loop_timestep = 0.001);
+	JointTask(std::shared_ptr<Sai2Model::Sai2Model> robot,
+			  const double loop_timestep = 0.001);
 
 	/**
 	 * @brief      update the task model (only _N_prec for a joint task)
@@ -51,7 +52,7 @@ public:
 	 *                     identity of size n*n where n in the number of DoF of
 	 *                     the robot.
 	 */
-	void updateTaskModel(const Eigen::MatrixXd N_prec);
+	void updateTaskModel(const MatrixXd& N_prec);
 
 	/**
 	 * @brief      Computes the torques associated with this task.
@@ -63,7 +64,7 @@ public:
 	 * @param      task_joint_torques  the vector to be filled with the new
 	 *                                 joint torques to apply for the task
 	 */
-	Eigen::VectorXd computeTorques();
+	VectorXd computeTorques();
 
 	/**
 	 * @brief      reinitializes the desired state to the current robot
@@ -71,115 +72,147 @@ public:
 	 */
 	void reInitializeTask();
 
-	const Eigen::VectorXd& getCurrentPosition() { return _current_position; }
+	/**
+	 * @brief Get the Current Position
+	 *
+	 * @return const VectorXd&
+	 */
+	const VectorXd& getCurrentPosition() { return _current_position; }
 
-	void setDesiredPosition(const Eigen::VectorXd desired_position) {
+	/**
+	 * @brief Set the Desired Position
+	 *
+	 * @param desired_position
+	 */
+	void setDesiredPosition(const VectorXd& desired_position) {
 		_desired_position = desired_position;
 	}
-	const Eigen::VectorXd& getDesiredPosition() const {
-		return _desired_position;
-	}
 
-	void setDesiredvelocity(const Eigen::VectorXd desired_velocity) {
+	/**
+	 * @brief Get the Desired Position
+	 *
+	 * @return desired position as a VectorXd
+	 */
+	const VectorXd& getDesiredPosition() const { return _desired_position; }
+
+	/**
+	 * @brief Set the Desired Velocity
+	 *
+	 * @param desired_velocity
+	 */
+	void setDesiredvelocity(const VectorXd& desired_velocity) {
 		_desired_velocity = desired_velocity;
 	}
-	const Eigen::VectorXd& getDesiredvelocity() const {
-		return _desired_velocity;
-	}
 
-	void setDesiredacceleration(const Eigen::VectorXd desired_acceleration) {
+	/**
+	 * @brief Get the Desired Velocity
+	 *
+	 * @return desired velocity as a VectorXd
+	 */
+	const VectorXd& getDesiredvelocity() const { return _desired_velocity; }
+
+	/**
+	 * @brief Set the Desired Acceleration
+	 *
+	 * @param desired_acceleration
+	 */
+	void setDesiredacceleration(const VectorXd& desired_acceleration) {
 		_desired_acceleration = desired_acceleration;
 	}
-	const Eigen::VectorXd& getDesiredacceleration() const {
+
+	/**
+	 * @brief Get the Desired Acceleration
+	 *
+	 * @return desired acceleration as a VectorXd
+	 */
+	const VectorXd& getDesiredacceleration() const {
 		return _desired_acceleration;
 	}
 
-	void setGains(double kp, double kv, double ki = 0) {
-		_kp = kp;
-		_kv = kv;
-		_ki = ki;
+	/**
+	 * @brief Set non isotropic gains
+	 *
+	 * @param kp
+	 * @param kv
+	 * @param ki
+	 */
+	void setGains(const VectorXd& kp, const VectorXd& kv, const VectorXd& ki);
+
+	/**
+	 * @brief Set non isotropic gains with ki = 0
+	 *
+	 * @param kp
+	 * @param kv
+	 */
+	void setGains(const VectorXd& kp, const VectorXd& kv) {
+		setGains(kp, kv, VectorXd::Zero(_robot->dof()));
 	}
 
-	void enableVelocitySaturation(const Eigen::VectorXd& saturation_velocity) {
+	/**
+	 * @brief Set isotropic gains
+	 *
+	 * @param kp
+	 * @param kv
+	 * @param ki
+	 */
+	void setGains(const double kp, const double kv, const double ki = 0);
+
+	void enableVelocitySaturation(const VectorXd& saturation_velocity) {
 		_use_velocity_saturation_flag = true;
 		_saturation_velocity = saturation_velocity;
 	}
-	void disableVelocitySaturation(const Eigen::VectorXd& saturation_velocity) {
+	void disableVelocitySaturation(const VectorXd& saturation_velocity) {
 		_use_velocity_saturation_flag = false;
 	}
 
-	// ---------- set dynamic decoupling type for the controller
-	// ----------------
-	void setDynamicDecouplingFull();
-	void setDynamicDecouplingBIE();
-	void setDynamicDecouplingNone();
-
-	void setNonIsotropicGains(const Eigen::VectorXd& kp,
-							  const Eigen::VectorXd& kv,
-							  const Eigen::VectorXd& ki);
-	void setIsotropicGains(const double kp, const double kv, const double ki);
+	void setDynamicDecouplingType(const DynamicDecouplingType& type) {
+		_dynamic_decoupling_type = type;
+	}
 
 	//-----------------------------------------------
 	//         Member variables
 	//-----------------------------------------------
 
 private:
-	// inputs to be defined by the user
-	Eigen::VectorXd _desired_position;	// defaults to the current configuration
-										// when the task is created
-	Eigen::VectorXd _desired_velocity;	// defaults to zero
-	Eigen::VectorXd _desired_acceleration;	// defaults to zero
-
-	double _kp;	 // defaults to 50.0
-	double _kv;	 // defaults to 14.0
-	double _ki;	 // defaults to 0.0
-
-	bool _use_velocity_saturation_flag;	   // defaults to false
-	Eigen::VectorXd _saturation_velocity;  // defaults to PI/3 for all axes
-
-	// bool _use_isotropic_gains;              // defaults to true
-	// Eigen::VectorXd _kp_vec;
-	// Eigen::VectorXd _kv_vec;
-	// Eigen::VectorXd _ki_vec;
-
-// trajectory generation via interpolation using Reflexxes Library
-#ifdef USING_OTG
-	bool _use_interpolation_flag;  // defaults to true
-
-	// default limits for trajectory generation (same in all directions) :
-	// Velocity      - PI/3  Rad/s
-	// Acceleration  - PI    Rad/s^2
-	// Jerk          - 3PI   Rad/s^3
-#endif
-
-	Sai2Model::Sai2Model* _robot;
+	// robot model and control cycle duration
+	std::shared_ptr<Sai2Model::Sai2Model> _robot;
 	double _loop_timestep;
 
-	Eigen::VectorXd _task_force;
-	Eigen::MatrixXd _N_prec;
+	// desired controller state
+	VectorXd _desired_position;
+	VectorXd _desired_velocity;
+	VectorXd _desired_acceleration;
 
-	// internal variables, not to be touched by the user
-	Eigen::VectorXd _current_position;
-	Eigen::VectorXd _current_velocity;
+	// current state from robot model
+	VectorXd _current_position;
+	VectorXd _current_velocity;
 
-	Eigen::VectorXd _integrated_position_error;
+	// state variables for the integrator
+	VectorXd _integrated_position_error;
 
-	Eigen::VectorXd _step_desired_position;
-	Eigen::VectorXd _step_desired_velocity;
-	Eigen::VectorXd _step_desired_acceleration;
+	// controller gains
+	bool _are_gains_isotropic;
+	MatrixXd _kp;  // 50 by default on all axes
+	MatrixXd _kv;  // 14 by default on all axes
+	MatrixXd _ki;  // 0 by default on all axes
 
-	bool _use_isotropic_gains;
-	Eigen::MatrixXd _kp_mat;
-	Eigen::MatrixXd _kv_mat;
-	Eigen::MatrixXd _ki_mat;
+	// velocity saturation related variables
+	bool _use_velocity_saturation_flag;	 // disabled by default
+	VectorXd _saturation_velocity;
 
-	Eigen::MatrixXd _M_modified;
-	int _dynamic_decoupling_type = BOUNDED_INERTIA_ESTIMATES;
+	// internal trajectory generation. Defaults to a velocity and acceleration
+	// limited trajectory generation, with max velocity being PI/3 and max
+	// acceleration being PI on all axes
+	bool _use_internal_otg_flag;  // defaults to true
+	shared_ptr<OTG_joints> _otg;
 
-#ifdef USING_OTG
-	double _loop_time;
-	OTG* _otg;
-#endif
+	// model related variables
+	MatrixXd _N_prec;  // nullspace of the previous tasks
+	MatrixXd
+		_M_modified;  // modified mass matrix according to the decoupling type
+	DynamicDecouplingType
+		_dynamic_decoupling_type;  // defaults to BOUNDED_INERTIA_ESTIMATES. See
+								   // the enum for more details
 };
 
 } /* namespace Sai2Primitives */

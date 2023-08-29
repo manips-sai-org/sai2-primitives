@@ -38,8 +38,8 @@ const string robot_file = "resources/puma.urdf";
 const string robot_name = "PUMA";   // name in the world file
 
 // simulation and control loop thread functions
-void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim);
-void simulation(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim);
+void control(std::shared_ptr<Sai2Model::Sai2Model> robot, Sai2Simulation::Sai2Simulation* sim);
+void simulation(std::shared_ptr<Sai2Model::Sai2Model> robot, Sai2Simulation::Sai2Simulation* sim);
 
 /* 
  * Main function 
@@ -62,7 +62,7 @@ int main (int argc, char** argv) {
 	auto sim = new Sai2Simulation::Sai2Simulation(world_file);
 
 	// load robots
-	auto robot = new Sai2Model::Sai2Model(robot_file, false);
+	auto robot = make_shared<Sai2Model::Sai2Model>(robot_file, false);
 	// update robot model from simulation configuration
 	robot->setQ(sim->getJointPositions(robot_name));
 	robot->updateModel();
@@ -90,7 +90,7 @@ int main (int argc, char** argv) {
 }
 
 //------------------ Controller main function
-void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
+void control(std::shared_ptr<Sai2Model::Sai2Model> robot, Sai2Simulation::Sai2Simulation* sim) {
 	
 	// update robot model and initialize control vectors
 	robot->updateModel();
@@ -194,7 +194,7 @@ void control(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
 }
 
 //------------------------------------------------------------------------------
-void simulation(Sai2Model::Sai2Model* robot, Sai2Simulation::Sai2Simulation* sim) {
+void simulation(std::shared_ptr<Sai2Model::Sai2Model> robot, Sai2Simulation::Sai2Simulation* sim) {
 	fSimulationRunning = true;
 
 	// create a timer

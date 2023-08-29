@@ -136,7 +136,7 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot, Sai2Simulation::Sai2Simulat
 	Vector3d desired_position = initial_position;
 
 	// joint task to control the redundancy
-	Sai2Primitives::JointTask* joint_task = new Sai2Primitives::JointTask(robot.get());
+	Sai2Primitives::JointTask* joint_task = new Sai2Primitives::JointTask(robot);
 	VectorXd joint_task_torques = VectorXd::Zero(dof);
 
 	VectorXd initial_q = robot->q();

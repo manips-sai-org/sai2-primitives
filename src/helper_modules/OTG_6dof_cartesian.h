@@ -1,15 +1,15 @@
 /**
- * OTG_posori.h
+ * OTG_6dof_cartesian.h
  *
- *	A wrapper to use the Reflexxes library (type II or IV) with Eigen library
+ *	A wrapper to use the Ruckig OTG library
  *	specifically to work for 6DOF position and orientation
  *
  * Author: Mikael Jorda
- * Created: February 2019
+ * Created: August 2023
  */
 
-#ifndef SAI2_COMMON_OTG_POSORI_H
-#define SAI2_COMMON_OTG_POSORI_H
+#ifndef SAI2_PRIMITIVES_OTG_6DOF_CARTESIAN_H
+#define SAI2_PRIMITIVES_OTG_6DOF_CARTESIAN_H
 
 #include <Eigen/Dense>
 #include <ReflexxesAPI.h>
@@ -19,7 +19,7 @@
 namespace Sai2Primitives
 {
 
-class OTG_posori {
+class OTG_6dof_cartesian {
 public:
 
 
@@ -33,12 +33,12 @@ public:
 	 *                                  (typically, 0.001 if the robot is
 	 *                                  controlled at 1 kHz)
 	 */
-	OTG_posori(const Eigen::VectorXd& initial_position, const Eigen::Matrix3d& initial_orientation, const double loop_time);
+	OTG_6dof_cartesian(const Eigen::VectorXd& initial_position, const Eigen::Matrix3d& initial_orientation, const double loop_time);
 
 	/**
 	 * @brief      destructor
 	 */
-	~OTG_posori();
+	~OTG_6dof_cartesian();
 
 	/**
 	 * @brief      Re initializes the trajectory generator so that the goal state is the state given as argument
@@ -186,4 +186,4 @@ public:
 
 } /* namespace Sai2Primitives */
 
-#endif //SAI2_COMMON_OTG_POSORI_H
+#endif //SAI2_PRIMITIVES_OTG_6DOF_CARTESIAN_H

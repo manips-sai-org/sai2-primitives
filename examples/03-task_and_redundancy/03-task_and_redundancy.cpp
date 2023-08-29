@@ -102,7 +102,7 @@ void control(std::shared_ptr<Sai2Model::Sai2Model> robot, Sai2Simulation::Sai2Si
 
 	// joint task to control the redundancy
 	// using default gains and interpolation settings
-	Sai2Primitives::JointTask* joint_task = new Sai2Primitives::JointTask(robot.get());
+	Sai2Primitives::JointTask* joint_task = new Sai2Primitives::JointTask(robot);
 	VectorXd joint_task_torques = VectorXd::Zero(dof);
 
 	VectorXd initial_q = robot->q();

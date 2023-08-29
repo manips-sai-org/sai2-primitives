@@ -1,20 +1,20 @@
 /**
- * OTG_posori.cpp
+ * OTG_6dof_cartesian.cpp
  *
- *	A wrapper to use the Reflexxes library (type II or IV) with Eigen library
+ *	A wrapper to use the Ruckig OTG library
  *	specifically to work for 6DOF position and orientation
  *
  * Author: Mikael Jorda
- * Created: February 2019
+ * Created: August 2023
  */
 
-#include "OTG_posori.h"
+#include "OTG_6dof_cartesian.h"
 #include <stdexcept>
 
 namespace Sai2Primitives
 {
 
-OTG_posori::OTG_posori(const Eigen::VectorXd& initial_position, 
+OTG_6dof_cartesian::OTG_6dof_cartesian(const Eigen::VectorXd& initial_position, 
 		const Eigen::Matrix3d& initial_orientation, 
 		const double loop_time)
 {
@@ -32,7 +32,7 @@ OTG_posori::OTG_posori(const Eigen::VectorXd& initial_position,
     reInitialize(initial_position, initial_orientation);
 }
 
-OTG_posori::~OTG_posori()
+OTG_6dof_cartesian::~OTG_6dof_cartesian()
 {
 	delete _RML;
 	delete _IP;
@@ -42,7 +42,7 @@ OTG_posori::~OTG_posori()
 	_OP = NULL;
 }
 
-void OTG_posori::reInitialize(const Eigen::VectorXd& initial_position, const Eigen::Matrix3d& initial_orientation)
+void OTG_6dof_cartesian::reInitialize(const Eigen::VectorXd& initial_position, const Eigen::Matrix3d& initial_orientation)
 {
     setGoalPositionAndLinearVelocity(initial_position, Eigen::Vector3d::Zero());
     setGoalOrientationAndAngularVelocity(initial_orientation, initial_orientation, Eigen::Vector3d::Zero());
@@ -59,11 +59,11 @@ void OTG_posori::reInitialize(const Eigen::VectorXd& initial_position, const Eig
     }	
 }
 
-void OTG_posori::setMaxLinearVelocity(const Eigen::Vector3d max_linear_velocity)
+void OTG_6dof_cartesian::setMaxLinearVelocity(const Eigen::Vector3d max_linear_velocity)
 {
 	if(max_linear_velocity.minCoeff() <= 0)
 	{
-		throw std::invalid_argument("max velocity set to 0 or negative value in some directions in OTG_posori::setMaxLinearVelocity\n");
+		throw std::invalid_argument("max velocity set to 0 or negative value in some directions in OTG_6dof_cartesian::setMaxLinearVelocity\n");
 	}
 
 	for(int i=0 ; i<3 ; i++)
@@ -72,16 +72,16 @@ void OTG_posori::setMaxLinearVelocity(const Eigen::Vector3d max_linear_velocity)
 	}
 }
 
-void OTG_posori::setMaxLinearVelocity(const double max_linear_velocity)
+void OTG_6dof_cartesian::setMaxLinearVelocity(const double max_linear_velocity)
 {
 	setMaxLinearVelocity(max_linear_velocity * Eigen::VectorXd::Ones(3));
 }
 
-void OTG_posori::setMaxLinearAcceleration(const Eigen::Vector3d max_linear_acceleration)
+void OTG_6dof_cartesian::setMaxLinearAcceleration(const Eigen::Vector3d max_linear_acceleration)
 {
 	if(max_linear_acceleration.minCoeff() <= 0)
 	{
-		throw std::invalid_argument("max acceleration set to 0 or negative value in some directions in OTG_posori::setMaxLinearAcceleration\n");
+		throw std::invalid_argument("max acceleration set to 0 or negative value in some directions in OTG_6dof_cartesian::setMaxLinearAcceleration\n");
 	}
 
 	for(int i=0 ; i<3 ; i++)
@@ -90,16 +90,16 @@ void OTG_posori::setMaxLinearAcceleration(const Eigen::Vector3d max_linear_accel
 	}
 }
 
-void OTG_posori::setMaxLinearAcceleration(const double max_linear_acceleration)
+void OTG_6dof_cartesian::setMaxLinearAcceleration(const double max_linear_acceleration)
 {
 	setMaxLinearAcceleration(max_linear_acceleration * Eigen::VectorXd::Ones(3));
 }
 
-void OTG_posori::setMaxLinearJerk(const Eigen::Vector3d max_linear_jerk)
+void OTG_6dof_cartesian::setMaxLinearJerk(const Eigen::Vector3d max_linear_jerk)
 {
 	if(max_linear_jerk.minCoeff() <= 0)
 	{
-		throw std::invalid_argument("max jerk set to 0 or negative value in some directions in OTG_posori::setMaxLinearJerk\n");
+		throw std::invalid_argument("max jerk set to 0 or negative value in some directions in OTG_6dof_cartesian::setMaxLinearJerk\n");
 	}
 
 	for(int i=0 ; i<3 ; i++)
@@ -108,16 +108,16 @@ void OTG_posori::setMaxLinearJerk(const Eigen::Vector3d max_linear_jerk)
 	}
 }
 
-void OTG_posori::setMaxLinearJerk(const double max_linear_jerk)
+void OTG_6dof_cartesian::setMaxLinearJerk(const double max_linear_jerk)
 {
 	setMaxLinearJerk(max_linear_jerk * Eigen::VectorXd::Ones(3));
 }
 
-void OTG_posori::setMaxAngularVelocity(const Eigen::Vector3d max_velocity)
+void OTG_6dof_cartesian::setMaxAngularVelocity(const Eigen::Vector3d max_velocity)
 {
 	if(max_velocity.minCoeff() <= 0)
 	{
-		throw std::invalid_argument("max velocity set to 0 or negative value in some directions in OTG_posori::setMaxAngularVelocity\n");
+		throw std::invalid_argument("max velocity set to 0 or negative value in some directions in OTG_6dof_cartesian::setMaxAngularVelocity\n");
 	}
 
 	for(int i=0 ; i<3 ; i++)
@@ -126,16 +126,16 @@ void OTG_posori::setMaxAngularVelocity(const Eigen::Vector3d max_velocity)
 	}
 }
 
-void OTG_posori::setMaxAngularVelocity(const double max_angular_velocity)
+void OTG_6dof_cartesian::setMaxAngularVelocity(const double max_angular_velocity)
 {
 	setMaxAngularVelocity(max_angular_velocity * Eigen::VectorXd::Ones(3));
 }
 
-void OTG_posori::setMaxAngularAcceleration(const Eigen::Vector3d max_angular_acceleration)
+void OTG_6dof_cartesian::setMaxAngularAcceleration(const Eigen::Vector3d max_angular_acceleration)
 {
 	if(max_angular_acceleration.minCoeff() <= 0)
 	{
-		throw std::invalid_argument("max acceleration set to 0 or negative value in some directions in OTG_posori::setMaxAngularAcceleration\n");
+		throw std::invalid_argument("max acceleration set to 0 or negative value in some directions in OTG_6dof_cartesian::setMaxAngularAcceleration\n");
 	}
 
 	for(int i=0 ; i<3 ; i++)
@@ -144,16 +144,16 @@ void OTG_posori::setMaxAngularAcceleration(const Eigen::Vector3d max_angular_acc
 	}
 }
 
-void OTG_posori::setMaxAngularAcceleration(const double max_angular_acceleration)
+void OTG_6dof_cartesian::setMaxAngularAcceleration(const double max_angular_acceleration)
 {
 	setMaxAngularAcceleration(max_angular_acceleration * Eigen::VectorXd::Ones(3));
 }
 
-void OTG_posori::setMaxAngularJerk(const Eigen::Vector3d max_angular_jerk)
+void OTG_6dof_cartesian::setMaxAngularJerk(const Eigen::Vector3d max_angular_jerk)
 {
 	if(max_angular_jerk.minCoeff() <= 0)
 	{
-		throw std::invalid_argument("max jerk set to 0 or negative value in some directions in OTG_posori::setMaxAngularJerk\n");
+		throw std::invalid_argument("max jerk set to 0 or negative value in some directions in OTG_6dof_cartesian::setMaxAngularJerk\n");
 	}
 
 	for(int i=0 ; i<3 ; i++)
@@ -162,12 +162,12 @@ void OTG_posori::setMaxAngularJerk(const Eigen::Vector3d max_angular_jerk)
 	}
 }
 
-void OTG_posori::setMaxAngularJerk(const double max_angular_jerk)
+void OTG_6dof_cartesian::setMaxAngularJerk(const double max_angular_jerk)
 {
 	setMaxAngularJerk(max_angular_jerk * Eigen::VectorXd::Ones(3));
 }
 
-void OTG_posori::setGoalPositionAndLinearVelocity(const Eigen::Vector3d goal_position, const Eigen::Vector3d goal_linear_velocity)
+void OTG_6dof_cartesian::setGoalPositionAndLinearVelocity(const Eigen::Vector3d goal_position, const Eigen::Vector3d goal_linear_velocity)
 {
 	for(int i=0 ; i<3 ; i++)
 	{
@@ -180,23 +180,23 @@ void OTG_posori::setGoalPositionAndLinearVelocity(const Eigen::Vector3d goal_pos
 	}
 }
 
-void OTG_posori::setGoalOrientationAndAngularVelocity(const Eigen::Matrix3d goal_orientation, const Eigen::Matrix3d current_orientation, const Eigen::Vector3d goal_angular_velocity)
+void OTG_6dof_cartesian::setGoalOrientationAndAngularVelocity(const Eigen::Matrix3d goal_orientation, const Eigen::Matrix3d current_orientation, const Eigen::Vector3d goal_angular_velocity)
 {
 	if((goal_orientation.transpose() * goal_orientation - Eigen::Matrix3d::Identity()).norm() > 1e-3)
 	{
-		throw std::invalid_argument("goal orientation is not a valid rotation matrix OTG_posori::setGoalOrientationAndAngularVelocity\n");
+		throw std::invalid_argument("goal orientation is not a valid rotation matrix OTG_6dof_cartesian::setGoalOrientationAndAngularVelocity\n");
 	}
 	if(abs(goal_orientation.determinant() - 1) > 1e-3)
 	{
-		throw std::invalid_argument("goal orientation is not a valid rotation matrix OTG_posori::setGoalOrientationAndAngularVelocity\n");
+		throw std::invalid_argument("goal orientation is not a valid rotation matrix OTG_6dof_cartesian::setGoalOrientationAndAngularVelocity\n");
 	}
 	if((current_orientation.transpose() * current_orientation - Eigen::Matrix3d::Identity()).norm() > 1e-3)
 	{
-		throw std::invalid_argument("current orientation is not a valid rotation matrix OTG_posori::setGoalOrientationAndAngularVelocity\n");
+		throw std::invalid_argument("current orientation is not a valid rotation matrix OTG_6dof_cartesian::setGoalOrientationAndAngularVelocity\n");
 	}
 	if(abs(current_orientation.determinant() - 1) > 1e-3)
 	{
-		throw std::invalid_argument("current orientation is not a valid rotation matrix OTG_posori::setGoalOrientationAndAngularVelocity\n");
+		throw std::invalid_argument("current orientation is not a valid rotation matrix OTG_6dof_cartesian::setGoalOrientationAndAngularVelocity\n");
 	}
 	if( (_goal_orientation != goal_orientation) || (_goal_angular_velocity_in_base_frame != goal_angular_velocity) )
 	{
@@ -233,7 +233,7 @@ void OTG_posori::setGoalOrientationAndAngularVelocity(const Eigen::Matrix3d goal
 
 }
 
-void OTG_posori::computeNextState(Eigen::Vector3d& next_position, Eigen::Vector3d& next_linear_velocity, Eigen::Vector3d& next_linear_acceleration,
+void OTG_6dof_cartesian::computeNextState(Eigen::Vector3d& next_position, Eigen::Vector3d& next_linear_velocity, Eigen::Vector3d& next_linear_acceleration,
 			Eigen::Matrix3d& next_orientation, Eigen::Vector3d& next_angular_velocity, Eigen::Vector3d& next_angular_acceleration)
 {
 	Eigen::Vector3d next_ori_representation = Eigen::Vector3d::Zero();
@@ -266,9 +266,9 @@ void OTG_posori::computeNextState(Eigen::Vector3d& next_position, Eigen::Vector3
         	}
         	else
         	{
-	        	printf("An error occurred (%d) in OTG_posori::computeNextState.\nTrajectory Stopped\n", _ResultValue );
+	        	printf("An error occurred (%d) in OTG_6dof_cartesian::computeNextState.\nTrajectory Stopped\n", _ResultValue );
 	            return;
-	            // throw std::runtime_error("error in computing next state in OTG_posori::computeNextState.\n");
+	            // throw std::runtime_error("error in computing next state in OTG_6dof_cartesian::computeNextState.\n");
         	}
         }
 
@@ -300,7 +300,7 @@ void OTG_posori::computeNextState(Eigen::Vector3d& next_position, Eigen::Vector3
 	
 }
 
-bool OTG_posori::goalReached()
+bool OTG_6dof_cartesian::goalReached()
 {
 	return _goal_reached;
 }
