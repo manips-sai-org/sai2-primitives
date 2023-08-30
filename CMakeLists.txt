@@ -1,5 +1,4 @@
-# CMAKE_MINIMUM_REQUIRED(VERSION 2.8.12)
-cmake_minimum_required(VERSION 3.10)
+CMAKE_MINIMUM_REQUIRED(VERSION 2.8.12)
 
 PROJECT (SAI2-PRIMITIVES)
 SET (PROJECT_VERSION 0.1.0) #major version is zero for now since api will certainly change in future
@@ -20,14 +19,6 @@ message( STATUS "DirDefs: " ${DirDefs} )
 
 # include Eigen
 find_package(Eigen3 QUIET)
-# 	set(EIGEN3_INCLUDE_DIR $ENV{EIGEN3_INCLUDE_DIR})
-# if(NOT EIGEN3_INCLUDE_DIR)
-# 	find_package(Eigen3 QUIET)
-# 	# TODO: Find automatic way to find for Ubuntu 14.04
-# 	if(NOT EIGEN3_INCLUDE_DIR)
-# 		set(EIGEN3_INCLUDE_DIR /usr/include/eigen3)
-# 	endif()
-# endif()
 
 # include sai2-model
 find_package(SAI2-MODEL REQUIRED)
