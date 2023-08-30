@@ -111,8 +111,9 @@ void control(std::shared_ptr<Sai2Model::Sai2Model> robot, std::shared_ptr<Sai2Si
 	// set the gains to get a PD controller with critical damping
 	joint_task->setGains(100, 20);
 	Eigen::VectorXd desired_position = joint_task->getDesiredPosition();
-	// disable internal otg
-	joint_task->disableInternalOtg();
+	// internal otg is on by default with acceleration limited trajectory
+	// generation with max velocity PI/3 and max acceleration PI
+	// joint_task->enableInternalOtgAccelerationLimited(PI/3, PI);
 
 	// create a loop timer
 	double control_freq = 1000;   // 1 KHz
@@ -133,36 +134,31 @@ void control(std::shared_ptr<Sai2Model::Sai2Model> robot, std::shared_ptr<Sai2Si
 
 		// -------- set task goals and compute control torques
 		// set the desired position (step every second)
-		if(timer.elapsedCycles() % 3000 == 500) {
+		if(timer.elapsedCycles() % 4000 == 1000) {
+			desired_position(1) -= 0.2;
 			desired_position(2) += 0.4;
 			desired_position(3) -= 0.6;
 		}
-		if(timer.elapsedCycles() % 3000 == 2000) {
+		if(timer.elapsedCycles() % 4000 == 3000) {
+			desired_position(1) += 0.2;
 			desired_position(2) -= 0.4;
 			desired_position(3) += 0.6;
 		}
 		joint_task->setDesiredPosition(desired_position);
 
-		// change the gains to an underdamped system after 6.5 seconds
-		if(timer.elapsedCycles() == 6500) {
+		// increase velocity and acceleration limits after 5 seconds
+		if(timer.elapsedCycles() == 5000) {
 			std::cout << "------------------------------------" << std::endl;
-			std::cout << "changing gains to underdamped system" << std::endl;
+			std::cout << "increasing velocity and acceleration limits" << std::endl;
 			std::cout << "------------------------------------" << std::endl;
-			joint_task->setGains(100, 10);
+			joint_task->enableInternalOtgAccelerationLimited(M_PI, 3*M_PI);
 		}
-		// enable velocity saturation after 10.5 seconds
-		if(timer.elapsedCycles() == 10500) {
+		// adding jerk limits after 10 seconds
+		if(timer.elapsedCycles() == 10000) {
 			std::cout << "------------------------------------" << std::endl;
-			std::cout << "enabling velocity saturation" << std::endl;
+			std::cout << "adding jerk limits" << std::endl;
 			std::cout << "------------------------------------" << std::endl;
-			joint_task->enableVelocitySaturation(M_PI/4);
-		}
-		// change the gains back to a critically damped system after 14.5 seconds
-		if(timer.elapsedCycles() == 14500) {
-			std::cout << "------------------------------------" << std::endl;
-			std::cout << "changing gains back to critically damped system" << std::endl;
-			std::cout << "------------------------------------" << std::endl;
-			joint_task->setGains(100, 20);
+			joint_task->enableInternalOtgJerkLimited(M_PI, 3*M_PI, 3*M_PI);
 		}
 		// compute task torques
 		control_torques = joint_task->computeTorques();

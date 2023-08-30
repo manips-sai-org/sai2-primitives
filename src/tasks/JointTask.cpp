@@ -191,4 +191,48 @@ VectorXd JointTask::computeTorques() {
 	return _N_prec.transpose() * task_joint_torques;
 }
 
+void JointTask::enableInternalOtgAccelerationLimited(
+	const VectorXd& max_velocity, const VectorXd& max_acceleration) {
+	if (max_velocity.size() != _robot->dof() ||
+		max_acceleration.size() != _robot->dof()) {
+		throw std::invalid_argument(
+			"max velocity or max acceleration vector size not consistent with "
+			"robot dof in "
+			"JointTask::enableInternalOtgAccelerationLimited\n");
+	}
+	_use_internal_otg_flag = true;
+	_otg->reInitialize(_current_position);
+	_otg->setMaxVelocity(max_velocity);
+	_otg->setMaxAcceleration(max_acceleration);
+	_otg->disableJerkLimits();
+}
+
+void JointTask::enableInternalOtgJerkLimited(const VectorXd& max_velocity,
+											 const VectorXd& max_acceleration,
+											 const VectorXd& max_jerk) {
+	if (max_velocity.size() != _robot->dof() ||
+		max_acceleration.size() != _robot->dof() ||
+		max_jerk.size() != _robot->dof()) {
+		throw std::invalid_argument(
+			"max velocity, max acceleration or max jerk vector size not "
+			"consistent with robot dof in "
+			"JointTask::enableInternalOtgJerkLimited\n");
+	}
+	_use_internal_otg_flag = true;
+	_otg->reInitialize(_current_position);
+	_otg->setMaxVelocity(max_velocity);
+	_otg->setMaxAcceleration(max_acceleration);
+	_otg->setMaxJerk(max_jerk);
+}
+
+void JointTask::enableVelocitySaturation(const VectorXd& saturation_velocity) {
+	if(saturation_velocity.size() != _robot->dof()) {
+		throw std::invalid_argument(
+			"saturation velocity vector size not consistent with robot dof in "
+			"JointTask::enableVelocitySaturation\n");
+	}
+	_use_velocity_saturation_flag = true;
+	_saturation_velocity = saturation_velocity;
+}
+
 } /* namespace Sai2Primitives */

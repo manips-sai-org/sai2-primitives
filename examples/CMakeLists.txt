@@ -40,6 +40,7 @@ set(SAI2-PRIMITIVES_EXAMPLES_COMMON_LIBRARIES
 	)
 
 ADD_SUBDIRECTORY(01-joint_control)
+ADD_SUBDIRECTORY(02-joint_control_internal_otg)
 ADD_SUBDIRECTORY(02-task_space_control)
 ADD_SUBDIRECTORY(03-task_and_redundancy)
 ADD_SUBDIRECTORY(04-surface_surface_contact)

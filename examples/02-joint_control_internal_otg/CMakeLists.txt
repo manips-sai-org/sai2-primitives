@@ -1,4 +1,4 @@
-set(EXAMPLE_NAME 01-joint_control)
+set(EXAMPLE_NAME 02-joint_control_internal_otg)
 
 # create an executable
 ADD_EXECUTABLE (${EXAMPLE_NAME} ${EXAMPLE_NAME}.cpp)

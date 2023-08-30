@@ -3,7 +3,7 @@
  *
  *      This class creates a joint controller for a robotic manipulator using
  * dynamic decoupling and an underlying PID compensator. It requires a robot
- * model parsed from a urdf file to a Sai2Model object.
+ * model parsed from a urdf file to a Sai2Model object. It does not support spherical joints
  *
  *      Author: Mikael Jorda
  */
@@ -157,14 +157,95 @@ public:
 	 */
 	void setGains(const double kp, const double kv, const double ki = 0);
 
-	void enableVelocitySaturation(const VectorXd& saturation_velocity) {
-		_use_velocity_saturation_flag = true;
-		_saturation_velocity = saturation_velocity;
+	/**
+	 * @brief Enables the internal trajectory generation and sets the max
+	 * velocity and acceleration (different for each joint)
+	 *
+	 * @param max_velocity
+	 * @param max_acceleration
+	 */
+	void enableInternalOtgAccelerationLimited(const VectorXd& max_velocity,
+											  const VectorXd& max_acceleration);
+
+	/**
+	 * @brief Enables the internal trajectory generation and sets the max
+	 * velocity and acceleration (same for all joints)
+	 *
+	 * @param max_velocity
+	 * @param max_acceleration
+	 */
+	void enableInternalOtgAccelerationLimited(const double max_velocity,
+											  const double max_acceleration) {
+		enableInternalOtgAccelerationLimited(
+			max_velocity * VectorXd::Ones(_robot->dof()),
+			max_acceleration * VectorXd::Ones(_robot->dof()));
 	}
+
+	/**
+	 * @brief      Enables the internal trajectory generation and sets the max
+	 * velocity, acceleration and jerk (different for each joint)
+	 *
+	 * @param[in]  max_velocity      The maximum velocity
+	 * @param[in]  max_acceleration  The maximum acceleration
+	 * @param[in]  max_jerk          The maximum jerk
+	 */
+	void enableInternalOtgJerkLimited(const VectorXd& max_velocity,
+									  const VectorXd& max_acceleration,
+									  const VectorXd& max_jerk);
+
+	/**
+	 * @brief 	Enables the internal trajectory generation and sets the max
+	 * velocity, acceleration and jerk (same for all joints)
+	 *
+	 * @param max_velocity
+	 * @param max_acceleration
+	 * @param max_jerk
+	 */
+	void enableInternalOtgJerkLimited(const double max_velocity,
+									  const double max_acceleration,
+									  const double max_jerk) {
+		enableInternalOtgJerkLimited(
+			max_velocity * VectorXd::Ones(_robot->dof()),
+			max_acceleration * VectorXd::Ones(_robot->dof()),
+			max_jerk * VectorXd::Ones(_robot->dof()));
+	}
+
+	/**
+	 * @brief      Disables the internal trajectory generation and uses the
+	 * desired position, velocity and acceleration directly
+	 */
+	void disableInternalOtg() { _use_internal_otg_flag = false; }
+
+	/**
+	 * @brief      Enables the velocity saturation and sets the saturation
+	 * velocity (different for each joint)
+	 *
+	 * @param[in]  saturation_velocity  The saturation velocity
+	 */
+	void enableVelocitySaturation(const VectorXd& saturation_velocity);
+
+	/**
+	 * @brief      Enables the velocity saturation and sets the saturation
+	 * velocity (same for all joints)
+	 *
+	 * @param[in]  saturation_velocity  The saturation velocity
+	 */
+	void enableVelocitySaturation(const double saturation_velocity) {
+		enableVelocitySaturation(saturation_velocity *
+								 VectorXd::Ones(_robot->dof()));
+	}
+
+	/**
+	 * @brief      Disables the velocity saturation
+	 */
 	void disableVelocitySaturation(const VectorXd& saturation_velocity) {
 		_use_velocity_saturation_flag = false;
 	}
 
+	/**
+	 * @brief      Sets the dynamic decoupling type. See the enum for more info
+	 * on what each type does
+	 */
 	void setDynamicDecouplingType(const DynamicDecouplingType& type) {
 		_dynamic_decoupling_type = type;
 	}

@@ -33,6 +33,9 @@ OTG_joints::OTG_joints(const VectorXd& initial_position,
 	_output = OutputParameter<DynamicDOFs>(_dim);
 	_input.synchronization = Synchronization::Phase;
 
+	_goal_position_eigen.resize(_dim);
+	_goal_velocity_eigen.resize(_dim);
+
 	reInitialize(initial_position);
 }
 
@@ -123,10 +126,15 @@ void OTG_joints::setGoalPositionAndVelocity(const VectorXd& goal_position,
 			"OTG_joints::setGoalPositionAndVelocity\n");
 	}
 
+	if((goal_position - _goal_position_eigen).norm() > 1e-3 ||
+		(goal_velocity - _goal_velocity_eigen).norm() > 1e-3)
+	{
+		_goal_reached = false;
+	}
+
 	_goal_position_eigen = goal_position;
 	_goal_velocity_eigen = goal_velocity;
 
-	_goal_reached = false;
 	for (int i = 0; i < _dim; ++i) {
 		_input.target_position[i] = _goal_position_eigen[i];
 		_input.target_velocity[i] = _goal_velocity_eigen[i];
