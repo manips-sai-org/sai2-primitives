@@ -19,6 +19,9 @@ if(WIN32 AND BUILD_SHARED_LIBS)
   option(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS "On Windows, export all symbols when building a shared library." ON)
 endif()
 
+# find Eigen3
+find_package(Eigen3 3.4 REQUIRED NO_MODULE)
+INCLUDE_DIRECTORIES (${EIGEN3_INCLUDE_DIR}) 
 
 add_library(ruckig
   src/ruckig/brake.cpp

@@ -41,7 +41,7 @@ SET(TASKS_SOURCE
 SET(HELPER_MODULES_SOURCE 
 	${PROJECT_SOURCE_DIR}/src/helper_modules/POPCExplicitForceControl.cpp
 	${PROJECT_SOURCE_DIR}/src/helper_modules/OTG_joints.cpp
-	# ${PROJECT_SOURCE_DIR}/src/helper_modules/OTG_6dof_cartesian.cpp
+	${PROJECT_SOURCE_DIR}/src/helper_modules/OTG_6dof_cartesian.cpp
 	)
 
 # # add haptic_tasks

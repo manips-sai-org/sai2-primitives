@@ -13,7 +13,6 @@
 #include <Eigen/Dense>
 #include <ruckig/ruckig.hpp>
 
-#include <iostream>
 #include <memory>
 
 using namespace Eigen;
@@ -132,21 +131,21 @@ public:
 	 *
 	 * @return     The next position.
 	 */
-	VectorXd getNextPosition();
+	VectorXd getNextPosition() { return _output.new_position;}
 
 	/**
 	 * @brief      Gets the next velocity.
 	 *
 	 * @return     The next velocity.
 	 */
-	VectorXd getNextVelocity();
+	VectorXd getNextVelocity() { return _output.new_velocity;}
 
 	/**
 	 * @brief      Gets the next acceleration.
 	 *
 	 * @return     The next acceleration.
 	 */
-	VectorXd getNextAcceleration();
+	VectorXd getNextAcceleration() { return _output.new_acceleration;}
 
 	/**
 	 * @brief      Function to know if the goal position and velocity is
@@ -165,9 +164,9 @@ private:
 	VectorXd _goal_position_eigen;
 	VectorXd _goal_velocity_eigen;
 
-	std::shared_ptr<Ruckig<DynamicDOFs, StandardVector, true>> _otg;
-	InputParameter<DynamicDOFs> _input {0};
-	OutputParameter<DynamicDOFs> _output {0};
+	std::unique_ptr<Ruckig<DynamicDOFs, EigenVector>> _otg;
+	InputParameter<DynamicDOFs, EigenVector> _input {0};
+	OutputParameter<DynamicDOFs, EigenVector> _output {0};
 };
 
 } /* namespace Sai2Primitives */

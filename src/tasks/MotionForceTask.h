@@ -1,11 +1,16 @@
 /*
  * MotionForceTask.h
  *
- *      This class creates a 6Dof position + orientation hybrid controller for a robotic manipulator using operational space formulation and an underlying PID compensator.
- *      If used for hybrid position force control, assumes a force sensor is attached to the same link as the control frame and the force sensed values are given in sensor frame.
- *      Besides, the force sensed and moment sensed are assumed to be the force and moment that the robot applies to the environment.
- *      It requires a robot model parsed from a urdf file to a Sai2Model object, as well as the definition of a control frame
- *      as a link at which the frame is attached, and an affine transform that determines the position and orientation of the control frame in this link
+ *      This class creates a 6Dof position + orientation hybrid controller for a
+ * robotic manipulator using operational space formulation and an underlying PID
+ * compensator. If used for hybrid position force control, assumes a force
+ * sensor is attached to the same link as the control frame and the force sensed
+ * values are given in sensor frame. Besides, the force sensed and moment sensed
+ * are assumed to be the force and moment that the robot applies to the
+ * environment. It requires a robot model parsed from a urdf file to a Sai2Model
+ * object, as well as the definition of a control frame as a link at which the
+ * frame is attached, and an affine transform that determines the position and
+ * orientation of the control frame in this link
  *
  *      Author: Mikael Jorda
  */
@@ -13,38 +18,33 @@
 #ifndef SAI2_PRIMITIVES_MOTIONFORCETASK_TASK_H_
 #define SAI2_PRIMITIVES_MOTIONFORCETASK_TASK_H_
 
-#include "Sai2Model.h"
+#include <helper_modules/OTG_6dof_cartesian.h>
 #include <helper_modules/POPCExplicitForceControl.h>
 #include <helper_modules/Sai2PrimitivesCommonDefinitions.h>
-#include <Eigen/Dense>
-#include <string>
-// #include <chrono>
-#include <memory>
-// #include <queue> 
 
-#ifdef USING_OTG
-	#include "trajectory_generation/OTG_posori.h"
-#endif
+#include <Eigen/Dense>
+#include <memory>
+#include <string>
+
+#include "Sai2Model.h"
 
 using namespace Eigen;
 using namespace std;
 
-namespace Sai2Primitives
-{
+namespace Sai2Primitives {
 
-class MotionForceTask
-{
-
-enum DynamicDecouplingType
-{
-	FULL_DYNAMIC_DECOUPLING,            // use the real Lambda matrix
-	PARTIAL_DYNAMIC_DECOUPLING,         // Use Lambda for position part, Identity for orientation and Zero for cross coupling
-	IMPEDANCE,                          // use Identity for the mass matrix
-	BOUNDED_INERTIA_ESTIMATES,          // Use a Lambda computed from a saturated joint space mass matrix
-};
+class MotionForceTask {
+	enum DynamicDecouplingType {
+		FULL_DYNAMIC_DECOUPLING,	 // use the real Lambda matrix
+		PARTIAL_DYNAMIC_DECOUPLING,	 // Use Lambda for position part, Identity
+									 // for orientation and Zero for cross
+									 // coupling
+		IMPEDANCE,					 // use Identity for the mass matrix
+		BOUNDED_INERTIA_ESTIMATES,	 // Use a Lambda computed from a saturated
+									 // joint space mass matrix
+	};
 
 public:
-
 	//------------------------------------------------
 	// Constructor
 	//------------------------------------------------
@@ -63,10 +63,11 @@ public:
 	 * @param loop_timestep Time taken by a control loop. Used in trajectory
 	 * generation and integral control.
 	 */
-	MotionForceTask(std::shared_ptr<Sai2Model::Sai2Model> robot, const string& link_name,
-					const Affine3d& compliant_frame = Affine3d::Identity(),
-					const bool is_force_motion_parametrization_in_compliant_frame = false,
-					const double loop_timestep = 0.001);
+	MotionForceTask(
+		std::shared_ptr<Sai2Model::Sai2Model> robot, const string& link_name,
+		const Affine3d& compliant_frame = Affine3d::Identity(),
+		const bool is_force_motion_parametrization_in_compliant_frame = false,
+		const double loop_timestep = 0.001);
 
 	//------------------------------------------------
 	// Getters Setters
@@ -74,43 +75,48 @@ public:
 
 	/**
 	 * @brief Get the Current Position
-	 * 
+	 *
 	 * @return const Vector3d& current position of the control point
 	 */
 	const Vector3d& getCurrentPosition() const { return _current_position; }
 	/**
 	 * @brief Get the Current Velocity
-	 * 
+	 *
 	 * @return const Vector3d& current velocity of the control point
 	 */
 	const Vector3d& getCurrentVelocity() const { return _current_velocity; }
 
 	/**
 	 * @brief Get the Current Orientation
-	 * 
+	 *
 	 * @return const Matrix3d& current orientation of the control frame
 	 */
-	const Matrix3d& getCurrentOrientation() const { return _current_orientation; }
+	const Matrix3d& getCurrentOrientation() const {
+		return _current_orientation;
+	}
 	/**
 	 * @brief Get the Current Angular Velocity
-	 * 
+	 *
 	 * @return const Vector3d& current angular velocity of the control frame
 	 */
-	const Vector3d& getCurrentAngularVelocity() const { return _current_angular_velocity; }
+	const Vector3d& getCurrentAngularVelocity() const {
+		return _current_angular_velocity;
+	}
 
 	/**
 	 * @brief Get the Sensed Force resolved at the control frame
-	 * 
+	 *
 	 * @return const Vector3d& current sensed force in the control frame
 	 */
-	const Vector3d& getSensedForce() const {return _sensed_force;}
+	const Vector3d& getSensedForce() const { return _sensed_force; }
 
 	/**
-	 * @brief Get the nullspace matrix of that task and the previous ones in the hierarchy
-	 * 
+	 * @brief Get the nullspace matrix of that task and the previous ones in the
+	 * hierarchy
+	 *
 	 * @return const MatrixXd& Nulspace matrix of the task and the previous ones
 	 */
-	const MatrixXd& getN() const {return _N;}
+	const MatrixXd& getN() const { return _N; }
 
 	void setDesiredPosition(const Vector3d& desired_position) {
 		_desired_position = desired_position;
@@ -137,7 +143,9 @@ public:
 	void setDesiredAcceleration(const Vector3d& desired_acceleration) {
 		_desired_acceleration = desired_acceleration;
 	}
-	const Vector3d& getDesiredAcceleration() const { return _desired_acceleration; }
+	const Vector3d& getDesiredAcceleration() const {
+		return _desired_acceleration;
+	}
 
 	void setDesiredAngularAcceleration(const Vector3d& desired_angaccel) {
 		_desired_angular_acceleration = desired_angaccel;
@@ -173,8 +181,8 @@ public:
 		_ki_force = ki_force * Matrix3d::Identity();
 	}
 	vector<PIDGains> getForceControlGains() const {
-		return vector<PIDGains>(1, PIDGains(_kp_force(0, 0), _kv_force(0, 0),
-								_ki_force(0, 0)));
+		return vector<PIDGains>(
+			1, PIDGains(_kp_force(0, 0), _kv_force(0, 0), _ki_force(0, 0)));
 	}
 
 	void setMomentControlGains(const PIDGains& gains) {
@@ -187,39 +195,79 @@ public:
 		_ki_moment = ki_moment * Matrix3d::Identity();
 	}
 	vector<PIDGains> getMomentControlGains() const {
-		return vector<PIDGains>(1, PIDGains(_kp_moment(0, 0), _kv_moment(0, 0),
-								_ki_moment(0, 0)));
+		return vector<PIDGains>(
+			1, PIDGains(_kp_moment(0, 0), _kv_moment(0, 0), _ki_moment(0, 0)));
 	}
 
 	/**
 	 * @brief Set the Desired Force in robot base frame
-	 * 
-	 * @param desired_force 
+	 *
+	 * @param desired_force
 	 */
 	void setDesiredForce(const Vector3d& desired_force) {
 		_desired_force = desired_force;
 	}
+
 	/**
 	 * @brief Get the Desired Force in robot base frame
-	 * 
+	 *
 	 * @return const Vector3d& desired force in robot base frame
 	 */
 	const Vector3d& getDesiredForce() const { return _desired_force; }
 
 	/**
 	 * @brief Set the Desired Moment in robot base frame
-	 * 
-	 * @param desired_moment 
+	 *
+	 * @param desired_moment
 	 */
 	void setDesiredMoment(const Vector3d& desired_moment) {
 		_desired_moment = desired_moment;
 	}
+
 	/**
 	 * @brief Get the Desired Moment in robot base frame
-	 * 
+	 *
 	 * @return const Vector3d& desired moment in robot base frame
 	 */
 	const Vector3d& getDesiredMoment() const { return _desired_moment; }
+
+	// internal otg functions
+	/**
+	 * @brief 	Enables the internal otg for position and orientation with
+	 * acceleration limited trajectory, given the input numbers. By default,
+	 * this one is enabled with linear velocity and acceleration limits of 0.3
+	 * and 1.0 respectively, and angular velocity and acceleration limits of
+	 * pi/3 and pi respectively
+	 *
+	 * @param max_linear_velelocity
+	 * @param max_linear_acceleration
+	 * @param max_angular_velocity
+	 * @param max_angular_acceleration
+	 */
+	void enableInternalOtgAccelerationLimited(
+		const double max_linear_velelocity,
+		const double max_linear_acceleration, const double max_angular_velocity,
+		const double max_angular_acceleration);
+
+	/**
+	 * @brief 	Enables the internal otg for position and orientation with jerk
+	 * limited trajectory, given the input numbers
+	 *
+	 * @param max_linear_velelocity
+	 * @param max_linear_acceleration
+	 * @param max_linear_jerk
+	 * @param max_angular_velocity
+	 * @param max_angular_acceleration
+	 * @param max_angular_jerk
+	 */
+	void enableInternalOtgJerkLimited(const double max_linear_velelocity,
+									  const double max_linear_acceleration,
+									  const double max_linear_jerk,
+									  const double max_angular_velocity,
+									  const double max_angular_acceleration,
+									  const double max_angular_jerk);
+
+	void disableInternalOtg() { _use_internal_otg_flag = false; }
 
 	// Velocity saturation flag and saturation values
 	void enableVelocitySaturation(const double linear_vel_sat = 0.3,
@@ -255,8 +303,8 @@ public:
 	 *             which is the product of the nullspace matrices of the higher
 	 *             priority tasks. The N matrix will be the matrix to use as
 	 *             N_prec for the subsequent tasks. In order to get the
-	 *             nullspace matrix of this task alone, one needs to compute _N *
-	 *             _N_prec.inverse().
+	 *             nullspace matrix of this task alone, one needs to compute _N
+	 * * _N_prec.inverse().
 	 *
 	 * @param      N_prec  The nullspace matrix of all the higher priority
 	 *                     tasks. If this is the highest priority task, use
@@ -282,24 +330,29 @@ public:
 	void reInitializeTask();
 
 	/**
-	 * @brief      Checks if the desired position is reached op to a certain tolerance
+	 * @brief      Checks if the desired position is reached op to a certain
+	 * tolerance
 	 *
 	 * @param[in]  tolerance  The tolerance
 	 * @param[in]  verbose    display info or not
 	 *
 	 * @return     true of the position error is smaller than the tolerance
 	 */
-	bool goalPositionReached(const double tolerance, const bool verbose = false);
-	
+	bool goalPositionReached(const double tolerance,
+							 const bool verbose = false);
+
 	/**
-	 * @brief      Checks if the desired orientation has reched the goal up to a tolerance
+	 * @brief      Checks if the desired orientation has reched the goal up to a
+	 * tolerance
 	 *
 	 * @param[in]  tolerance  The tolerance
 	 * @param[in]  verbose    display info or not
 	 *
-	 * @return     true if the norm of the orientation error is smaller than the tolerance
+	 * @return     true if the norm of the orientation error is smaller than the
+	 * tolerance
 	 */
-	bool goalOrientationReached(const double tolerance, const bool verbose = false);
+	bool goalOrientationReached(const double tolerance,
+								const bool verbose = false);
 
 	/**
 	 * @brief Set the Dynamic Decoupling Type. See the definition of the
@@ -317,21 +370,23 @@ public:
 	/**
 	 * @brief      Sets the force sensor frame.
 	 *
-	 * @param[in]  link_name               The link name on which the sensor is attached
-	 * @param[in]  transformation_in_link  The transformation in link of the sensor
+	 * @param[in]  link_name               The link name on which the sensor is
+	 * attached
+	 * @param[in]  transformation_in_link  The transformation in link of the
+	 * sensor
 	 */
-	void setForceSensorFrame(const string link_name, const Affine3d transformation_in_link);
+	void setForceSensorFrame(const string link_name,
+							 const Affine3d transformation_in_link);
 
 	/**
 	 * @brief      Updates the velues of the sensed force and sensed moment from
 	 *             sensor values
 	 * @details    Assumes that the sensor is attached to the same link as the
-	 *             control frame and that the setSensorFrame finction has been called. 
-	 *             The force and moment values given to
-	 *             this function are assumed to be in the force sensor frame
-	 *             (values taken directly from the force sensor) These values
-	 *             are supposed to be the forces that the sensor applies to the
-	 *             environment (so the opposite of what the sensor feels)
+	 *             control frame and that the setSensorFrame finction has been
+	 * called. The force and moment values given to this function are assumed to
+	 * be in the force sensor frame (values taken directly from the force
+	 * sensor) These values are supposed to be the forces that the sensor
+	 * applies to the environment (so the opposite of what the sensor feels)
 	 *
 	 * @param      sensed_force_sensor_frame   The sensed force as the force
 	 *                                         that the sensor applies to the
@@ -340,8 +395,8 @@ public:
 	 *                                         that the sensor applies to the
 	 *                                         environment in sensor frame
 	 */
-	void updateSensedForceAndMoment(const Vector3d sensed_force_sensor_frame, 
-								    const Vector3d sensed_moment_sensor_frame);
+	void updateSensedForceAndMoment(const Vector3d sensed_force_sensor_frame,
+									const Vector3d sensed_moment_sensor_frame);
 
 	/**
 	 * @brief Parametrizes the force space and motion space for translational
@@ -368,9 +423,9 @@ public:
 	 * meaning the whole rotation is controlled in moments) and the second
 	 * argument is the axis defining the space of dimension one (unused if the
 	 * first parameter is 0 or 3, and representing the direction of the moment
-	 * space is the first parameter is 1, or the direction of the rotational motion space
-	 * if the first parameter is 2)
-	 * 
+	 * space is the first parameter is 1, or the direction of the rotational
+	 * motion space if the first parameter is 2)
+	 *
 	 * @param moment_space_dimension betawwn 0 and 3
 	 * @param moment_or_rot_motion_single_axis non singular axis (unused if
 	 * moment_space_dimension is 0 or 3)
@@ -379,27 +434,28 @@ public:
 		const int moment_space_dimension,
 		const Vector3d& moment_or_rot_motion_single_axis = Vector3d::Zero());
 
-
 	Matrix3d sigmaForce() const;
 	Matrix3d sigmaMoment() const;
 
 	/**
-	 * @brief      Changes the behavior to closed loop force/moment control for the
-	 *             force controlled directions in the linear/angular parts of the
+	 * @brief      Changes the behavior to closed loop force/moment control for
+	 * the force controlled directions in the linear/angular parts of the
 	 *             controller
 	 */
-	void setClosedLoopForceControl(const bool closed_loop_force_control = true) {
+	void setClosedLoopForceControl(
+		const bool closed_loop_force_control = true) {
 		_closed_loop_force_control = closed_loop_force_control;
 		resetIntegratorsLinear();
 	}
-	void setClosedLoopMomentControl(const bool closed_loop_moment_control = true) {
+	void setClosedLoopMomentControl(
+		const bool closed_loop_moment_control = true) {
 		_closed_loop_moment_control = closed_loop_moment_control;
 		resetIntegratorsAngular();
 	}
 
 	/**
-	 * @brief      Enables or disables the passivity based stability for the closed loop
-	 *             force control (enabled by default)
+	 * @brief      Enables or disables the passivity based stability for the
+	 * closed loop force control (enabled by default)
 	 */
 	void enablePassivity() { _POPC_force->enable(); }
 	void disablePassivity() { _POPC_force->disable(); }
@@ -432,10 +488,10 @@ public:
 	// inputs to be defined by the user
 private:
 	// desired pose defaults to the configuration when the task is created
-	Vector3d _desired_position;           // in robot frame
-	Matrix3d _desired_orientation;        // in robot frame
-	Vector3d _desired_velocity;           // in robot frame
-	Vector3d _desired_angular_velocity;   // in robot frame
+	Vector3d _desired_position;			 // in robot frame
+	Matrix3d _desired_orientation;		 // in robot frame
+	Vector3d _desired_velocity;			 // in robot frame
+	Vector3d _desired_angular_velocity;	 // in robot frame
 	Vector3d _desired_acceleration;
 	Vector3d _desired_angular_acceleration;
 
@@ -447,13 +503,15 @@ private:
 
 	// gains for the closed loop force controller
 	// by default, the force controller is open loop
-	// to set the behavior to closed loop controller, use the functions setClosedLoopForceControl and setClosedLoopMomentControl.
-	// the closed loop force controller is a PI controller with feedforward force and velocity based damping.
-	// gains default to isotropic 1 for p gains, 0.7 for i gains and 10 for d gains
+	// to set the behavior to closed loop controller, use the functions
+	// setClosedLoopForceControl and setClosedLoopMomentControl. the closed loop
+	// force controller is a PI controller with feedforward force and velocity
+	// based damping. gains default to isotropic 1 for p gains, 0.7 for i gains
+	// and 10 for d gains
 	Matrix3d _kp_force, _kp_moment;
 	Matrix3d _kv_force, _kv_moment;
 	Matrix3d _ki_force, _ki_moment;
-	
+
 	// desired force and moment for the force part of the controller
 	// defaults to Zero
 	Vector3d _desired_force;   // robot frame
@@ -464,20 +522,12 @@ private:
 	double _linear_saturation_velocity;
 	double _angular_saturation_velocity;
 
-// trajectory generation via interpolation using Reflexxes Library
-// on by defalut
-#ifdef USING_OTG
-	bool _use_interpolation_flag; 
+	// internal otg using ruckig, on by default with acceleration limited
+	// trajectory
+	bool _use_internal_otg_flag;
+	std::unique_ptr<OTG_6dof_cartesian> _otg;
 
-	// default limits for trajectory generation (same in all directions) :
-	// Linear Velocity       - 0.3   m/s
-	// Linear Acceleration   - 1.0   m/s^2
-	// Linear Jerk           - 3.0   m/s^3
-	// Angular Velocity      - PI/3  Rad/s
-	// Angular Acceleration  - PI    Rad/s^2
-	// Angular Jerk          - 3PI   Rad/s^3
-#endif
-
+	// robot model
 	std::shared_ptr<Sai2Model::Sai2Model> _robot;
 	double _loop_timestep;
 
@@ -486,36 +536,36 @@ private:
 
 	// internal variables, not to be touched by the user
 	string _link_name;
-	Affine3d _compliant_frame;   // in link_frame
+	Affine3d _compliant_frame;	// in link_frame
 	bool _is_force_motion_parametrization_in_compliant_frame;
 
 	// motion quantities
-	Vector3d _current_position;      // robot frame
-	Matrix3d _current_orientation;   // robot frame
+	Vector3d _current_position;		// robot frame
+	Matrix3d _current_orientation;	// robot frame
 
-	Vector3d _current_velocity;           // robot frame
-	Vector3d _current_angular_velocity;   // robot frame
+	Vector3d _current_velocity;			 // robot frame
+	Vector3d _current_angular_velocity;	 // robot frame
 
-	Vector3d _orientation_error;               // robot frame
-	Vector3d _integrated_orientation_error;    // robot frame
-	Vector3d _integrated_position_error;       // robot frame
-	
-	Matrix3d _sigma_position;        // robot frame
-	Matrix3d _sigma_orientation;     // robot frame
+	Vector3d _orientation_error;			 // robot frame
+	Vector3d _integrated_orientation_error;	 // robot frame
+	Vector3d _integrated_position_error;	 // robot frame
+
+	Matrix3d _sigma_position;	  // robot frame
+	Matrix3d _sigma_orientation;  // robot frame
 
 	// force quantities
-	Affine3d _T_control_to_sensor;  
+	Affine3d _T_control_to_sensor;
 
-	Vector3d _sensed_force;    // robot frame
-	Vector3d _sensed_moment;   // robot frame
+	Vector3d _sensed_force;	  // robot frame
+	Vector3d _sensed_moment;  // robot frame
 
-	Vector3d _integrated_force_error;    // robot frame
-	Vector3d _integrated_moment_error;   // robot frame
+	Vector3d _integrated_force_error;	// robot frame
+	Vector3d _integrated_moment_error;	// robot frame
 
 	int _force_space_dimension, _moment_space_dimension;
 	Vector3d _force_or_motion_axis, _moment_or_rotmotion_axis;
-	Matrix3d _sigma_force;     // robot frame
-	Matrix3d _sigma_moment;    // robot frame
+	Matrix3d _sigma_force;	 // robot frame
+	Matrix3d _sigma_moment;	 // robot frame
 
 	bool _closed_loop_force_control;
 	bool _closed_loop_moment_control;
@@ -529,8 +579,8 @@ private:
 	Vector3d _linear_force_control;
 
 	// control parameters
-	bool _are_pos_gains_isotropic;        // defaults to true
-	bool _are_ori_gains_isotropic;        // defaults to true
+	bool _are_pos_gains_isotropic;	// defaults to true
+	bool _are_ori_gains_isotropic;	// defaults to true
 
 	// dynamic decoupling type, defaults to BOUNDED_INERTIA_ESTIMATES
 	DynamicDecouplingType _dynamic_decoupling_type;
@@ -548,20 +598,6 @@ private:
 	int _pos_dof, _ori_dof;
 
 	VectorXd _unit_mass_force;
-
-	// trajectory generation
-	Vector3d _step_desired_position;
-	Vector3d _step_desired_velocity;
-	Matrix3d _step_desired_orientation;
-	Vector3d _step_orientation_error;
-	Vector3d _step_desired_angular_velocity;
-	Vector3d _step_desired_acceleration;
-	Vector3d _step_desired_angular_acceleration;
-
-#ifdef USING_OTG
-	OTG_posori* _otg;
-#endif
-
 };
 
 } /* namespace Sai2Primitives */

@@ -74,19 +74,11 @@ MotionForceTask::MotionForceTask(
 	_pos_dof = 3;
 	_ori_dof = 3;
 
-#ifdef USING_OTG
-	_use_interpolation_flag = true;
-	_otg =
-		new OTG_posori(_current_position, _current_orientation, _loop_timestep);
+	// trajectory generation
+	_otg.reset(new OTG_6dof_cartesian(_current_position, _current_orientation,
+									  _loop_timestep));
+	enableInternalOtgAccelerationLimited(0.3, 1.0, M_PI / 3, M_PI);
 
-	_otg->setMaxLinearVelocity(0.3);
-	_otg->setMaxLinearAcceleration(1.0);
-	_otg->setMaxLinearJerk(3.0);
-
-	_otg->setMaxAngularVelocity(M_PI / 3);
-	_otg->setMaxAngularAcceleration(M_PI);
-	_otg->setMaxAngularJerk(3 * M_PI);
-#endif
 	reInitializeTask();
 }
 
@@ -111,14 +103,6 @@ void MotionForceTask::reInitializeTask() {
 	_integrated_position_error.setZero();
 	_integrated_orientation_error.setZero();
 
-	_step_desired_position = _desired_position;
-	_step_desired_velocity = _desired_velocity;
-	_step_desired_orientation = _desired_orientation;
-	_step_orientation_error.setZero();
-	_step_desired_angular_velocity.setZero();
-	_step_desired_acceleration.setZero();
-	_step_desired_angular_acceleration.setZero();
-
 	_desired_force.setZero();
 	_sensed_force.setZero();
 	_desired_moment.setZero();
@@ -129,9 +113,7 @@ void MotionForceTask::reInitializeTask() {
 	_task_force.setZero(6);
 	_unit_mass_force.setZero(6);
 
-#ifdef USING_OTG
 	_otg->reInitialize(_current_position, _current_orientation);
-#endif
 }
 
 void MotionForceTask::updateTaskModel(const MatrixXd N_prec) {
@@ -243,14 +225,6 @@ VectorXd MotionForceTask::computeTorques() {
 	_current_angular_velocity =
 		_projected_jacobian.block(3, 0, 3, _robot->dof()) * _robot->dq();
 
-	_step_desired_position = _desired_position;
-	_step_desired_velocity = _desired_velocity;
-	_step_desired_acceleration = _desired_acceleration;
-	_step_desired_orientation = _desired_orientation;
-	_step_orientation_error = _orientation_error;
-	_step_desired_angular_velocity = _desired_angular_velocity;
-	_step_desired_angular_acceleration = _desired_angular_acceleration;
-
 	// force related terms
 	if (_closed_loop_force_control) {
 		// update the integrated error
@@ -308,76 +282,86 @@ VectorXd MotionForceTask::computeTorques() {
 
 	// motion related terms
 	// compute next state from trajectory generation
-#ifdef USING_OTG
-	if (_use_interpolation_flag) {
+	Vector3d tmp_desired_position = _desired_position;
+	Matrix3d tmp_desired_orientation = _desired_orientation;
+	Vector3d tmp_desired_velocity = _desired_velocity;
+	Vector3d tmp_desired_angular_velocity = _desired_angular_velocity;
+	Vector3d tmp_desired_acceleration = _desired_acceleration;
+	Vector3d tmp_desired_angular_acceleration =
+		_desired_angular_acceleration;
+
+	if(_use_internal_otg_flag) {
 		_otg->setGoalPositionAndLinearVelocity(_desired_position,
 											   _desired_velocity);
 		_otg->setGoalOrientationAndAngularVelocity(_desired_orientation,
-												   _current_orientation,
 												   _desired_angular_velocity);
-		_otg->computeNextState(
-			_step_desired_position, _step_desired_velocity,
-			_step_desired_acceleration, _step_desired_orientation,
-			_step_desired_angular_velocity, _step_desired_angular_acceleration);
-		Sai2Model::orientationError(_step_orientation_error,
-									_step_desired_orientation,
-									_current_orientation);
+		_otg->update();
+		
+		tmp_desired_position = _otg->getNextPosition();
+		tmp_desired_velocity = _otg->getNextLinearVelocity();
+		tmp_desired_acceleration = _otg->getNextLinearAcceleration();
+		tmp_desired_orientation = _otg->getNextOrientation();
+		tmp_desired_angular_velocity = _otg->getNextAngularVelocity();
+		tmp_desired_angular_acceleration = _otg->getNextAngularAcceleration();
 	}
-#endif
 
 	// linear motion
 	// update integrated error for I term
 	_integrated_position_error +=
-		(_current_position - _step_desired_position) * _loop_timestep;
+		(_current_position - tmp_desired_position) * _loop_timestep;
 
 	// final contribution
 	if (_use_velocity_saturation_flag) {
-		_step_desired_velocity =
+		tmp_desired_velocity =
 			-_kp_pos * _kv_pos.inverse() *
-				(_current_position - _step_desired_position) -
+				(_current_position - tmp_desired_position) -
 			_ki_pos * _kv_pos.inverse() * _integrated_position_error;
-		if (_step_desired_velocity.norm() > _linear_saturation_velocity) {
-			_step_desired_velocity *=
-				_linear_saturation_velocity / _step_desired_velocity.norm();
+		if (tmp_desired_velocity.norm() > _linear_saturation_velocity) {
+			tmp_desired_velocity *=
+				_linear_saturation_velocity / tmp_desired_velocity.norm();
 		}
 		position_related_force =
 			sigma_position *
-			(_step_desired_acceleration -
-			 _kv_pos * (_current_velocity - _step_desired_velocity));
+			(tmp_desired_acceleration -
+			 _kv_pos * (_current_velocity - tmp_desired_velocity));
 	} else {
 		position_related_force =
 			sigma_position *
-			(_step_desired_acceleration -
-			 _kp_pos * (_current_position - _step_desired_position) -
-			 _kv_pos * (_current_velocity - _step_desired_velocity) -
+			(tmp_desired_acceleration -
+			 _kp_pos * (_current_position - tmp_desired_position) -
+			 _kv_pos * (_current_velocity - tmp_desired_velocity) -
 			 _ki_pos * _integrated_position_error);
 	}
 
 	// angular motion
+	// orientation error
+	Vector3d orientation_error = Sai2Model::orientationError(
+		tmp_desired_orientation, _current_orientation);
+
 	// update integrated error for I term
-	_integrated_orientation_error += _step_orientation_error * _loop_timestep;
+	_integrated_orientation_error += orientation_error * _loop_timestep;
 
 	// final contribution
 	if (_use_velocity_saturation_flag) {
-		_step_desired_angular_velocity =
-			-_kp_ori * _kv_ori.inverse() * _step_orientation_error -
+		tmp_desired_angular_velocity =
+			-_kp_ori * _kv_ori.inverse() * orientation_error -
 			_ki_ori * _kv_ori.inverse() * _integrated_orientation_error;
-		if (_step_desired_angular_velocity.norm() >
+		if (tmp_desired_angular_velocity.norm() >
 			_angular_saturation_velocity) {
-			_step_desired_angular_velocity *=
+			tmp_desired_angular_velocity *=
 				_angular_saturation_velocity /
-				_step_desired_angular_velocity.norm();
+				tmp_desired_angular_velocity.norm();
 		}
 		orientation_related_force =
-			sigma_orientation * (_step_desired_angular_acceleration -
+			sigma_orientation * (tmp_desired_angular_acceleration -
 								 _kv_ori * (_current_angular_velocity -
-											_step_desired_angular_velocity));
+											tmp_desired_angular_velocity));
 	} else {
 		orientation_related_force =
-			sigma_orientation * (_step_desired_angular_acceleration -
-								 _kp_ori * _step_orientation_error -
+			sigma_orientation * (tmp_desired_angular_acceleration -
+								 _kp_ori * orientation_error -
 								 _kv_ori * (_current_angular_velocity -
-											_step_desired_angular_velocity) -
+											tmp_desired_angular_velocity) -
 								 _ki_ori * _integrated_orientation_error);
 	}
 
@@ -413,6 +397,29 @@ VectorXd MotionForceTask::computeTorques() {
 		_projected_jacobian.transpose() * _URange * _task_force;
 
 	return task_joint_torques;
+}
+
+void MotionForceTask::enableInternalOtgAccelerationLimited(
+	const double max_linear_velelocity, const double max_linear_acceleration,
+	const double max_angular_velocity, const double max_angular_acceleration) {
+	_otg->setMaxLinearVelocity(max_linear_velelocity);
+	_otg->setMaxLinearAcceleration(max_linear_acceleration);
+	_otg->setMaxAngularVelocity(max_angular_velocity);
+	_otg->setMaxAngularAcceleration(max_angular_acceleration);
+	_otg->disableJerkLimits();
+	_use_internal_otg_flag = true;
+}
+
+void MotionForceTask::enableInternalOtgJerkLimited(
+	const double max_linear_velelocity, const double max_linear_acceleration,
+	const double max_linear_jerk, const double max_angular_velocity,
+	const double max_angular_acceleration, const double max_angular_jerk) {
+	_otg->setMaxLinearVelocity(max_linear_velelocity);
+	_otg->setMaxLinearAcceleration(max_linear_acceleration);
+	_otg->setMaxAngularVelocity(max_angular_velocity);
+	_otg->setMaxAngularAcceleration(max_angular_acceleration);
+	_otg->setMaxJerk(max_linear_jerk, max_angular_jerk);
+	_use_internal_otg_flag = true;
 }
 
 bool MotionForceTask::goalPositionReached(const double tolerance,
@@ -454,13 +461,12 @@ bool MotionForceTask::goalOrientationReached(const double tolerance,
 
 void MotionForceTask::setPosControlGains(double kp_pos, double kv_pos,
 										 double ki_pos) {
-	if(kp_pos < 0 || kv_pos < 0 || ki_pos < 0)
-	{
+	if (kp_pos < 0 || kv_pos < 0 || ki_pos < 0) {
 		throw invalid_argument(
 			"all gains should be positive or zero in "
 			"MotionForceTask::setPosControlGains\n");
 	}
-	if(kv_pos < 1e-2 && _use_velocity_saturation_flag) {
+	if (kv_pos < 1e-2 && _use_velocity_saturation_flag) {
 		throw invalid_argument(
 			"cannot have kv_pos = 0 if using velocity saturation in "
 			"MotionForceTask::setPosControlGains\n");
@@ -474,13 +480,13 @@ void MotionForceTask::setPosControlGains(double kp_pos, double kv_pos,
 void MotionForceTask::setPosControlGains(const Vector3d& kp_pos,
 										 const Vector3d& kv_pos,
 										 const Vector3d& ki_pos) {
-	if(kp_pos.minCoeff() < 0 || kv_pos.minCoeff() < 0 || ki_pos.minCoeff() < 0)
-	{
+	if (kp_pos.minCoeff() < 0 || kv_pos.minCoeff() < 0 ||
+		ki_pos.minCoeff() < 0) {
 		throw invalid_argument(
 			"all gains should be positive or zero in "
 			"MotionForceTask::setPosControlGains\n");
 	}
-	if(kv_pos.minCoeff() < 1e-2 && _use_velocity_saturation_flag) {
+	if (kv_pos.minCoeff() < 1e-2 && _use_velocity_saturation_flag) {
 		throw invalid_argument(
 			"cannot have kv_pos = 0 if using velocity saturation in "
 			"MotionForceTask::setPosControlGains\n");
@@ -519,12 +525,12 @@ vector<PIDGains> MotionForceTask::getPosControlGains() const {
 
 void MotionForceTask::setOriControlGains(double kp_ori, double kv_ori,
 										 double ki_ori) {
-	if(kp_ori < 0 || kv_ori < 0 || ki_ori < 0) {
+	if (kp_ori < 0 || kv_ori < 0 || ki_ori < 0) {
 		throw invalid_argument(
 			"all gains should be positive or zero in "
 			"MotionForceTask::setOriControlGains\n");
 	}
-	if(kv_ori < 1e-2 && _use_velocity_saturation_flag) {
+	if (kv_ori < 1e-2 && _use_velocity_saturation_flag) {
 		throw invalid_argument(
 			"cannot have kv_ori = 0 if using velocity saturation in "
 			"MotionForceTask::setOriControlGains\n");
@@ -538,12 +544,13 @@ void MotionForceTask::setOriControlGains(double kp_ori, double kv_ori,
 void MotionForceTask::setOriControlGains(const Vector3d& kp_ori,
 										 const Vector3d& kv_ori,
 										 const Vector3d& ki_ori) {
-	if(kp_ori.minCoeff() < 0 || kv_ori.minCoeff() < 0 || ki_ori.minCoeff() < 0) {
+	if (kp_ori.minCoeff() < 0 || kv_ori.minCoeff() < 0 ||
+		ki_ori.minCoeff() < 0) {
 		throw invalid_argument(
 			"all gains should be positive or zero in "
 			"MotionForceTask::setOriControlGains\n");
 	}
-	if(kv_ori.minCoeff() < 1e-2 && _use_velocity_saturation_flag) {
+	if (kv_ori.minCoeff() < 1e-2 && _use_velocity_saturation_flag) {
 		throw invalid_argument(
 			"cannot have kv_ori = 0 if using velocity saturation in "
 			"MotionForceTask::setOriControlGains\n");
@@ -581,18 +588,18 @@ vector<PIDGains> MotionForceTask::getOriControlGains() const {
 }
 
 void MotionForceTask::enableVelocitySaturation(const double linear_vel_sat,
-								const double angular_vel_sat) {
+											   const double angular_vel_sat) {
 	if (linear_vel_sat <= 0 || angular_vel_sat <= 0) {
 		throw invalid_argument(
 			"Velocity saturation values should be strictly positive or zero in "
 			"MotionForceTask::enableVelocitySaturation\n");
 	}
-	if(_kv_pos.determinant() < 1e-3) {
+	if (_kv_pos.determinant() < 1e-3) {
 		throw invalid_argument(
 			"Cannot enable velocity saturation if kv_pos is singular in "
 			"MotionForceTask::enableVelocitySaturation\n");
 	}
-	if(_kv_ori.determinant() < 1e-3) {
+	if (_kv_ori.determinant() < 1e-3) {
 		throw invalid_argument(
 			"Cannot enable velocity saturation if kv_ori is singular in "
 			"MotionForceTask::enableVelocitySaturation\n");

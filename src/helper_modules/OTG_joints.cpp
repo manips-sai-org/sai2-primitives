@@ -14,27 +14,13 @@ using namespace ruckig;
 
 namespace Sai2Primitives {
 
-namespace {
-bool isVectorZero(std::vector<double> vec) {
-	for (auto& v : vec) {
-		if (fabs(v) > 1e-3) {
-			return false;
-		}
-	}
-	return true;
-}
-}  // namespace
-
 OTG_joints::OTG_joints(const VectorXd& initial_position,
 					   const double loop_time) {
 	_dim = initial_position.size();
-	_otg = std::make_shared<Ruckig<DynamicDOFs, StandardVector, true>>(_dim, loop_time);
-	_input = InputParameter<DynamicDOFs>(_dim);
-	_output = OutputParameter<DynamicDOFs>(_dim);
+	_otg.reset(new Ruckig<DynamicDOFs, EigenVector>(_dim, loop_time));
+	_input = InputParameter<DynamicDOFs, EigenVector>(_dim);
+	_output = OutputParameter<DynamicDOFs, EigenVector>(_dim);
 	_input.synchronization = Synchronization::Phase;
-
-	_goal_position_eigen.resize(_dim);
-	_goal_velocity_eigen.resize(_dim);
 
 	reInitialize(initial_position);
 }
@@ -46,17 +32,12 @@ void OTG_joints::reInitialize(const VectorXd& initial_position) {
 			"OTG_joints object in OTG_joints::reInitialize\n");
 	}
 
+	_output.new_position = initial_position;
+	_output.new_velocity.setZero();
+	_output.new_acceleration.setZero();
+	_output.pass_to_input(_input);
+
 	setGoalPosition(initial_position);
-
-	for (int i = 0; i < _dim; ++i) {
-		_input.current_position[i] = initial_position[i];
-		_input.current_velocity[i] = 0;
-		_input.current_acceleration[i] = 0;
-
-		_output.new_position[i] = initial_position[i];
-		_output.new_velocity[i] = 0;
-		_output.new_acceleration[i] = 0;
-	}
 }
 
 void OTG_joints::setMaxVelocity(const VectorXd& max_velocity) {
@@ -71,9 +52,7 @@ void OTG_joints::setMaxVelocity(const VectorXd& max_velocity) {
 			"OTG_joints::setMaxVelocity\n");
 	}
 
-	for (int i = 0; i < _dim; ++i) {
-		_input.max_velocity[i] = max_velocity[i];
-	}
+	_input.max_velocity = max_velocity;
 }
 
 void OTG_joints::setMaxAcceleration(const VectorXd& max_acceleration) {
@@ -88,9 +67,7 @@ void OTG_joints::setMaxAcceleration(const VectorXd& max_acceleration) {
 			"directions in OTG_joints::setMaxAcceleration\n");
 	}
 
-	for (int i = 0; i < _dim; ++i) {
-		_input.max_acceleration[i] = max_acceleration[i];
-	}
+	_input.max_acceleration = max_acceleration;
 }
 
 void OTG_joints::setMaxJerk(const VectorXd& max_jerk) {
@@ -105,16 +82,12 @@ void OTG_joints::setMaxJerk(const VectorXd& max_jerk) {
 			"OTG_joints::setMaxJerk\n");
 	}
 
-	for (int i = 0; i < _dim; ++i) {
-		_input.max_jerk[i] = max_jerk[i];
-	}
+	_input.max_jerk = max_jerk;
 }
 
 void OTG_joints::disableJerkLimits() {
-	for (int i = 0; i < _dim; ++i) {
-		_input.max_jerk[i] = std::numeric_limits<double>::infinity();
-		_input.current_acceleration[i] = 0;
-	}
+	_input.max_jerk.setConstant(std::numeric_limits<double>::infinity());
+	_input.current_acceleration.setZero();
 }
 
 void OTG_joints::setGoalPositionAndVelocity(const VectorXd& goal_position,
@@ -126,19 +99,15 @@ void OTG_joints::setGoalPositionAndVelocity(const VectorXd& goal_position,
 			"OTG_joints::setGoalPositionAndVelocity\n");
 	}
 
-	if((goal_position - _goal_position_eigen).norm() > 1e-3 ||
-		(goal_velocity - _goal_velocity_eigen).norm() > 1e-3)
+	if(goal_position.isApprox(_input.target_position) &&
+		goal_velocity.isApprox(_input.target_velocity))
 	{
-		_goal_reached = false;
+		return;
 	}
 
-	_goal_position_eigen = goal_position;
-	_goal_velocity_eigen = goal_velocity;
-
-	for (int i = 0; i < _dim; ++i) {
-		_input.target_position[i] = _goal_position_eigen[i];
-		_input.target_velocity[i] = _goal_velocity_eigen[i];
-	}
+	_goal_reached = false;
+	_input.target_position = goal_position;
+	_input.target_velocity = goal_velocity;
 }
 
 void OTG_joints::update() {
@@ -148,7 +117,7 @@ void OTG_joints::update() {
 	// if the goal is reached, either return if the current velocity is
 	// zero, or set a new goal to the current position with zero velocity
 	if (_result_value == Result::Finished) {
-		if (isVectorZero(_output.new_velocity)) {
+		if (_output.new_velocity.norm() < 1e-3) {
 			_goal_reached = true;
 		} else {
 			setGoalPosition(_goal_position_eigen);
@@ -165,30 +134,6 @@ void OTG_joints::update() {
 	// if an error occurred, throw an exception
 	throw std::runtime_error(
 		"error in computing next state in OTG_joints::update.\n");
-}
-
-VectorXd OTG_joints::getNextPosition() {
-	VectorXd next_position(_dim);
-	for (int i = 0; i < _dim; ++i) {
-		next_position[i] = _output.new_position[i];
-	}
-	return next_position;
-}
-
-VectorXd OTG_joints::getNextVelocity() {
-	VectorXd next_velocity(_dim);
-	for (int i = 0; i < _dim; ++i) {
-		next_velocity[i] = _output.new_velocity[i];
-	}
-	return next_velocity;
-}
-
-VectorXd OTG_joints::getNextAcceleration() {
-	VectorXd next_acceleration(_dim);
-	for (int i = 0; i < _dim; ++i) {
-		next_acceleration[i] = _output.new_acceleration[i];
-	}
-	return next_acceleration;
 }
 
 } /* namespace Sai2Primitives */

@@ -9,300 +9,195 @@
  */
 
 #include "OTG_6dof_cartesian.h"
-#include <stdexcept>
 
-namespace Sai2Primitives
-{
+using namespace Eigen;
+using namespace ruckig;
 
-OTG_6dof_cartesian::OTG_6dof_cartesian(const Eigen::VectorXd& initial_position, 
-		const Eigen::Matrix3d& initial_orientation, 
-		const double loop_time)
-{
-	_loop_time = loop_time;
+namespace Sai2Primitives {
 
-    _IP  = new RMLPositionInputParameters(6);
-    _OP  = new RMLPositionOutputParameters(6);
-	_RML = new ReflexxesAPI(6, _loop_time);
+namespace {
+bool isValidRotation(const Matrix3d mat) {
+	if ((mat.transpose() * mat - Matrix3d::Identity()).norm() > 1e-6) {
+		return false;
+	}
+	if (abs(mat.determinant() - 1) > 1e-6) {
+		return false;
+	}
+	return true;
+}
+}  // namespace
 
-    for(int i=0 ; i<3 ; i++)
-    {
-    	_IP->SelectionVector->VecData[i] = true;
-    	_IP->SelectionVector->VecData[i+3] = true;
-    }
-    reInitialize(initial_position, initial_orientation);
+OTG_6dof_cartesian::OTG_6dof_cartesian(const Vector3d& initial_position,
+									   const Matrix3d& initial_orientation,
+									   const double loop_time) {
+	_otg = std::make_shared<Ruckig<6, EigenVector>>(loop_time);
+	_input = InputParameter<6, EigenVector>();
+	_output = OutputParameter<6, EigenVector>();
+	_input.synchronization = Synchronization::Phase;
+
+	_reference_frame = initial_orientation;
+	reInitialize(initial_position, initial_orientation);
 }
 
-OTG_6dof_cartesian::~OTG_6dof_cartesian()
-{
-	delete _RML;
-	delete _IP;
-	delete _OP;
-	_RML = NULL;
-	_IP = NULL;
-	_OP = NULL;
+void OTG_6dof_cartesian::reInitialize(const Vector3d& initial_position,
+									  const Matrix3d& initial_orientation) {
+	setGoalPosition(initial_position);
+	setGoalOrientation(initial_orientation);
+
+	_input.current_position = _input.target_position;
+	_input.current_velocity.setZero();
+	_input.current_acceleration.setZero();
+
+	_output.new_position = _input.target_position;
+	_output.new_velocity.setZero();
+	_output.new_acceleration.setZero();
 }
 
-void OTG_6dof_cartesian::reInitialize(const Eigen::VectorXd& initial_position, const Eigen::Matrix3d& initial_orientation)
-{
-    setGoalPositionAndLinearVelocity(initial_position, Eigen::Vector3d::Zero());
-    setGoalOrientationAndAngularVelocity(initial_orientation, initial_orientation, Eigen::Vector3d::Zero());
-
-    for(int i=0 ; i<3 ; i++)
-    {
-		_OP->NewPositionVector->VecData[i] = initial_position(i);
-		_OP->NewVelocityVector->VecData[i] = 0;
-		_OP->NewAccelerationVector->VecData[i] = 0;
-
-		_OP->NewPositionVector->VecData[i+3] = 0;
-		_OP->NewVelocityVector->VecData[i+3] = 0;
-		_OP->NewAccelerationVector->VecData[i+3] = 0;
-    }	
+void OTG_6dof_cartesian::setMaxLinearVelocity(
+	const Vector3d& max_linear_velocity) {
+	if (max_linear_velocity.minCoeff() <= 0) {
+		throw std::invalid_argument(
+			"max velocity set to 0 or negative value in some directions in "
+			"OTG_6dof_cartesian::setMaxLinearVelocity\n");
+	}
+	_input.max_velocity.head<3>() = max_linear_velocity;
 }
 
-void OTG_6dof_cartesian::setMaxLinearVelocity(const Eigen::Vector3d max_linear_velocity)
-{
-	if(max_linear_velocity.minCoeff() <= 0)
-	{
-		throw std::invalid_argument("max velocity set to 0 or negative value in some directions in OTG_6dof_cartesian::setMaxLinearVelocity\n");
+void OTG_6dof_cartesian::setMaxLinearAcceleration(
+	const Vector3d& max_linear_acceleration) {
+	if (max_linear_acceleration.minCoeff() <= 0) {
+		throw std::invalid_argument(
+			"max acceleration set to 0 or negative value in some directions in "
+			"OTG_6dof_cartesian::setMaxLinearAcceleration\n");
+	}
+	_input.max_acceleration.head<3>() = max_linear_acceleration;
+}
+
+void OTG_6dof_cartesian::setMaxAngularVelocity(const Vector3d& max_velocity) {
+	if (max_velocity.minCoeff() <= 0) {
+		throw std::invalid_argument(
+			"max velocity set to 0 or negative value in some directions in "
+			"OTG_6dof_cartesian::setMaxAngularVelocity\n");
 	}
 
-	for(int i=0 ; i<3 ; i++)
-	{
-	    _IP->MaxVelocityVector->VecData[i] = max_linear_velocity(i);
-	}
+	_input.max_velocity.tail<3>() = max_velocity;
 }
 
-void OTG_6dof_cartesian::setMaxLinearVelocity(const double max_linear_velocity)
-{
-	setMaxLinearVelocity(max_linear_velocity * Eigen::VectorXd::Ones(3));
-}
-
-void OTG_6dof_cartesian::setMaxLinearAcceleration(const Eigen::Vector3d max_linear_acceleration)
-{
-	if(max_linear_acceleration.minCoeff() <= 0)
-	{
-		throw std::invalid_argument("max acceleration set to 0 or negative value in some directions in OTG_6dof_cartesian::setMaxLinearAcceleration\n");
+void OTG_6dof_cartesian::setMaxAngularAcceleration(
+	const Vector3d& max_angular_acceleration) {
+	if (max_angular_acceleration.minCoeff() <= 0) {
+		throw std::invalid_argument(
+			"max acceleration set to 0 or negative value in some directions in "
+			"OTG_6dof_cartesian::setMaxAngularAcceleration\n");
 	}
 
-	for(int i=0 ; i<3 ; i++)
-	{
-	    _IP->MaxAccelerationVector->VecData[i] = max_linear_acceleration(i);
-	}
+	_input.max_acceleration.tail<3>() = max_angular_acceleration;
 }
 
-void OTG_6dof_cartesian::setMaxLinearAcceleration(const double max_linear_acceleration)
-{
-	setMaxLinearAcceleration(max_linear_acceleration * Eigen::VectorXd::Ones(3));
-}
-
-void OTG_6dof_cartesian::setMaxLinearJerk(const Eigen::Vector3d max_linear_jerk)
-{
-	if(max_linear_jerk.minCoeff() <= 0)
-	{
-		throw std::invalid_argument("max jerk set to 0 or negative value in some directions in OTG_6dof_cartesian::setMaxLinearJerk\n");
+void OTG_6dof_cartesian::setMaxJerk(const Vector3d& max_linear_jerk,
+									const Vector3d& max_angular_jerk) {
+	if (max_linear_jerk.minCoeff() <= 0 || max_angular_jerk.minCoeff() <= 0) {
+		throw std::invalid_argument(
+			"max jerk set to 0 or negative value in some directions in "
+			"OTG_6dof_cartesian::setMaxJerk\n");
 	}
 
-	for(int i=0 ; i<3 ; i++)
-	{
-	    _IP->MaxJerkVector->VecData[i] = max_linear_jerk(i);
+	_input.max_jerk.head<3>() = max_linear_jerk;
+	_input.max_jerk.tail<3>() = max_angular_jerk;
+}
+
+void OTG_6dof_cartesian::setGoalPositionAndLinearVelocity(
+	const Vector3d& goal_position, const Vector3d& goal_linear_velocity) {
+	if (goal_position.isApprox(_input.target_position.head<3>(), 1e-3) &&
+		goal_linear_velocity.isApprox(_input.target_velocity.head<3>(), 1e-3)) {
+		return;
 	}
+	_goal_reached = false;
+	_input.target_position.head<3>() = goal_position;
+	_input.target_velocity.head<3>() = goal_linear_velocity;
 }
 
-void OTG_6dof_cartesian::setMaxLinearJerk(const double max_linear_jerk)
-{
-	setMaxLinearJerk(max_linear_jerk * Eigen::VectorXd::Ones(3));
-}
-
-void OTG_6dof_cartesian::setMaxAngularVelocity(const Eigen::Vector3d max_velocity)
-{
-	if(max_velocity.minCoeff() <= 0)
-	{
-		throw std::invalid_argument("max velocity set to 0 or negative value in some directions in OTG_6dof_cartesian::setMaxAngularVelocity\n");
-	}
-
-	for(int i=0 ; i<3 ; i++)
-	{
-	    _IP->MaxVelocityVector->VecData[i+3] = max_velocity(i);
-	}
-}
-
-void OTG_6dof_cartesian::setMaxAngularVelocity(const double max_angular_velocity)
-{
-	setMaxAngularVelocity(max_angular_velocity * Eigen::VectorXd::Ones(3));
-}
-
-void OTG_6dof_cartesian::setMaxAngularAcceleration(const Eigen::Vector3d max_angular_acceleration)
-{
-	if(max_angular_acceleration.minCoeff() <= 0)
-	{
-		throw std::invalid_argument("max acceleration set to 0 or negative value in some directions in OTG_6dof_cartesian::setMaxAngularAcceleration\n");
+void OTG_6dof_cartesian::setGoalOrientationAndAngularVelocity(
+	const Matrix3d& goal_orientation, const Vector3d& goal_angular_velocity) {
+	if (!isValidRotation(goal_orientation)) {
+		throw std::invalid_argument(
+			"goal orientation is not a valid rotation matrix "
+			"OTG_6dof_cartesian::setGoalOrientationAndAngularVelocity\n");
 	}
 
-	for(int i=0 ; i<3 ; i++)
-	{
-	    _IP->MaxAccelerationVector->VecData[i+3] = max_angular_acceleration(i);
-	}
-}
-
-void OTG_6dof_cartesian::setMaxAngularAcceleration(const double max_angular_acceleration)
-{
-	setMaxAngularAcceleration(max_angular_acceleration * Eigen::VectorXd::Ones(3));
-}
-
-void OTG_6dof_cartesian::setMaxAngularJerk(const Eigen::Vector3d max_angular_jerk)
-{
-	if(max_angular_jerk.minCoeff() <= 0)
-	{
-		throw std::invalid_argument("max jerk set to 0 or negative value in some directions in OTG_6dof_cartesian::setMaxAngularJerk\n");
+	if (_goal_orientation_in_base_frame.isApprox(goal_orientation, 1e-3) &&
+		_goal_angular_velocity_in_base_frame.isApprox(goal_angular_velocity,
+													  1e-3)) {
+		return;
 	}
 
-	for(int i=0 ; i<3 ; i++)
-	{
-	    _IP->MaxJerkVector->VecData[i+3] = max_angular_jerk(i);
-	}
+	_goal_reached = false;
+	// the new reference frame is the current orientation
+	Matrix3d new_reference_frame = getNextOrientation();
+	Matrix3d R_new_to_previous_reference =
+		new_reference_frame.transpose() * _reference_frame;
+	_reference_frame = new_reference_frame;
+	_goal_orientation_in_base_frame = goal_orientation;
+	_goal_angular_velocity_in_base_frame = goal_angular_velocity;
+
+	// set the new orientation representation vector in otg to zero and
+	// rotate input current velocity and acceleration to the new reference
+	// frame
+	_output.new_position.tail<3>().setZero();
+	_output.new_velocity.tail<3>() =
+		R_new_to_previous_reference * _output.new_velocity.tail<3>();
+	_output.new_acceleration.tail<3>() =
+		R_new_to_previous_reference * _output.new_acceleration.tail<3>();
+	_output.pass_to_input(_input);
+
+	// set the target position and velocity in the new reference frame
+	Matrix3d reference_to_goal =
+		_reference_frame.transpose() * _goal_orientation_in_base_frame;
+	AngleAxisd reference_to_goal_angle_axis = AngleAxisd(reference_to_goal);
+	_input.target_position.tail<3>() = reference_to_goal_angle_axis.angle() *
+									   reference_to_goal_angle_axis.axis();
+	_input.target_velocity.tail<3>() =
+		_reference_frame.transpose() * _goal_angular_velocity_in_base_frame;
 }
 
-void OTG_6dof_cartesian::setMaxAngularJerk(const double max_angular_jerk)
-{
-	setMaxAngularJerk(max_angular_jerk * Eigen::VectorXd::Ones(3));
-}
+void OTG_6dof_cartesian::update() {
+	// compute next state and get result value
+	_result_value = _otg->update(_input, _output);
 
-void OTG_6dof_cartesian::setGoalPositionAndLinearVelocity(const Eigen::Vector3d goal_position, const Eigen::Vector3d goal_linear_velocity)
-{
-	for(int i=0 ; i<3 ; i++)
-	{
-		if( (_IP->TargetPositionVector->VecData[i] != goal_position(i)) || (_IP->TargetVelocityVector->VecData[i] != goal_linear_velocity(i)) )
-		{
-			_IP->TargetPositionVector->VecData[i] = goal_position(i);
-			_IP->TargetVelocityVector->VecData[i] = goal_linear_velocity(i);
-			_goal_reached = false;
+	// if the goal is reached, either return if the current velocity is
+	// zero, or set a new goal to the current position with zero velocity
+	if (_result_value == Result::Finished) {
+		if (_output.new_velocity.norm() < 1e-3) {
+			_goal_reached = true;
+		} else {
+			setGoalPosition(_input.target_position.head<3>());
+			setGoalOrientation(_goal_orientation_in_base_frame);
 		}
+		return;
 	}
+
+	// if the goal is not reached, update the current state and return
+	if (_result_value == Result::Working) {
+		_output.pass_to_input(_input);
+		return;
+	}
+
+	// is an error occured, throw an exception
+	throw std::runtime_error(
+		"error in computing next state in OTG_6dof_cartesian::update.\n");
 }
 
-void OTG_6dof_cartesian::setGoalOrientationAndAngularVelocity(const Eigen::Matrix3d goal_orientation, const Eigen::Matrix3d current_orientation, const Eigen::Vector3d goal_angular_velocity)
-{
-	if((goal_orientation.transpose() * goal_orientation - Eigen::Matrix3d::Identity()).norm() > 1e-3)
-	{
-		throw std::invalid_argument("goal orientation is not a valid rotation matrix OTG_6dof_cartesian::setGoalOrientationAndAngularVelocity\n");
-	}
-	if(abs(goal_orientation.determinant() - 1) > 1e-3)
-	{
-		throw std::invalid_argument("goal orientation is not a valid rotation matrix OTG_6dof_cartesian::setGoalOrientationAndAngularVelocity\n");
-	}
-	if((current_orientation.transpose() * current_orientation - Eigen::Matrix3d::Identity()).norm() > 1e-3)
-	{
-		throw std::invalid_argument("current orientation is not a valid rotation matrix OTG_6dof_cartesian::setGoalOrientationAndAngularVelocity\n");
-	}
-	if(abs(current_orientation.determinant() - 1) > 1e-3)
-	{
-		throw std::invalid_argument("current orientation is not a valid rotation matrix OTG_6dof_cartesian::setGoalOrientationAndAngularVelocity\n");
-	}
-	if( (_goal_orientation != goal_orientation) || (_goal_angular_velocity_in_base_frame != goal_angular_velocity) )
-	{
-		_goal_reached = false;
-		Eigen::Matrix3d R_new_to_previous_initial_frame = current_orientation.transpose()*_initial_orientation;
-		_initial_orientation = current_orientation;
-		_goal_orientation = goal_orientation;
-		_goal_angular_velocity_in_base_frame = goal_angular_velocity;
-
-		Eigen::Vector3d velocity = Eigen::Vector3d::Zero();
-		Eigen::Vector3d acceleration = Eigen::Vector3d::Zero();
-		for(int i = 0 ; i<3 ; i++)
-		{
-			velocity(i) = _OP->NewVelocityVector->VecData[i+3];
-			acceleration(i) = _OP->NewAccelerationVector->VecData[i+3];
-		}
-		velocity = R_new_to_previous_initial_frame * velocity;
-		acceleration = R_new_to_previous_initial_frame * acceleration;
-
-		Eigen::Matrix3d goal_rot_relative_to_current = _initial_orientation.transpose()*goal_orientation;
-		Eigen::AngleAxisd rot_rel_aa = Eigen::AngleAxisd(goal_rot_relative_to_current);
-		Eigen::Vector3d rot_representation = rot_rel_aa.angle() * rot_rel_aa.axis();
-		Eigen::Vector3d goal_velocity_in_current_frame = _initial_orientation.transpose()*goal_angular_velocity;
-
-		for(int i=0 ; i<3 ; i++)
-		{
-			_OP->NewPositionVector->VecData[i+3] = 0;
-			_OP->NewVelocityVector->VecData[i+3] = velocity(i);
-			_OP->NewAccelerationVector->VecData[i+3] = acceleration(i);
-			_IP->TargetPositionVector->VecData[i+3] = rot_representation(i);
-			_IP->TargetVelocityVector->VecData[i+3] = goal_velocity_in_current_frame(i);
-		}
-	}
-
-}
-
-void OTG_6dof_cartesian::computeNextState(Eigen::Vector3d& next_position, Eigen::Vector3d& next_linear_velocity, Eigen::Vector3d& next_linear_acceleration,
-			Eigen::Matrix3d& next_orientation, Eigen::Vector3d& next_angular_velocity, Eigen::Vector3d& next_angular_acceleration)
-{
-	Eigen::Vector3d next_ori_representation = Eigen::Vector3d::Zero();
-
-	for(int i=0 ; i<3 ; i++)
-	{
-		_IP->CurrentPositionVector->VecData[i] = _OP->NewPositionVector->VecData[i];
-	    _IP->CurrentVelocityVector->VecData[i] = _OP->NewVelocityVector->VecData[i];
-	    _IP->CurrentAccelerationVector->VecData[i] = _OP->NewAccelerationVector->VecData[i];
-		next_position(i) = _IP->CurrentPositionVector->VecData[i];
-		next_linear_velocity(i) = 0;
-		next_linear_acceleration(i) = 0;
-
-		_IP->CurrentPositionVector->VecData[i+3] = _OP->NewPositionVector->VecData[i+3];
-	    _IP->CurrentVelocityVector->VecData[i+3] = _OP->NewVelocityVector->VecData[i+3];
-	    _IP->CurrentAccelerationVector->VecData[i+3] = _OP->NewAccelerationVector->VecData[i+3];
-		next_ori_representation(i) = _IP->CurrentPositionVector->VecData[i+3];
-		next_angular_velocity(i) = 0;
-		next_angular_acceleration(i) = 0;
-	}
-
-	if(!_goal_reached)
-	{
-		_ResultValue = _RML->RMLPosition(*_IP, _OP, _Flags);
-        if (_ResultValue < 0)
-        {
-        	if(_ResultValue == -102)
-        	{
-        		printf("trajectory generation : phase synchronisation not possible.\n");
-        	}
-        	else
-        	{
-	        	printf("An error occurred (%d) in OTG_6dof_cartesian::computeNextState.\nTrajectory Stopped\n", _ResultValue );
-	            return;
-	            // throw std::runtime_error("error in computing next state in OTG_6dof_cartesian::computeNextState.\n");
-        	}
-        }
-
-		for(int i=0 ; i<3 ; i++)
-		{
-			next_position(i) = _OP->NewPositionVector->VecData[i];
-			next_linear_velocity(i) = _OP->NewVelocityVector->VecData[i];
-			next_linear_acceleration(i) = _OP->NewAccelerationVector->VecData[i];
-			next_ori_representation(i) = _OP->NewPositionVector->VecData[i+3];
-			next_angular_velocity(i) = _OP->NewVelocityVector->VecData[i+3];
-			next_angular_acceleration(i) = _OP->NewAccelerationVector->VecData[i+3];
-		}
-	}
-
-	if(next_ori_representation.norm() < 1e-3)
-	{
+Matrix3d OTG_6dof_cartesian::getNextOrientation() const {
+	Matrix3d next_orientation;
+	if (_output.new_position.tail<3>().norm() < 1e-3) {
 		next_orientation.setIdentity();
+	} else {
+		next_orientation =
+			AngleAxisd(_output.new_position.tail<3>().norm(),
+					   _output.new_position.tail<3>().normalized())
+				.toRotationMatrix();
 	}
-	else
-	{
-		next_orientation = Eigen::AngleAxisd(next_ori_representation.norm(), next_ori_representation.normalized()).toRotationMatrix();
-	}
-
-	next_orientation = _initial_orientation*next_orientation;
-	next_angular_velocity = _initial_orientation*next_angular_velocity;
-	next_angular_acceleration = _initial_orientation*next_angular_acceleration;
-
-	_goal_reached = (_ResultValue == ReflexxesAPI::RML_FINAL_STATE_REACHED);
-	
-}
-
-bool OTG_6dof_cartesian::goalReached()
-{
-	return _goal_reached;
+	return _reference_frame * next_orientation;
 }
 
 } /* namespace Sai2Primitives */

@@ -160,8 +160,11 @@ void control(std::shared_ptr<Sai2Model::Sai2Model> robot, std::shared_ptr<Sai2Si
 			std::cout << "------------------------------------" << std::endl;
 			joint_task->enableInternalOtgJerkLimited(M_PI, 3*M_PI, 3*M_PI);
 		}
+
+		VectorXd joint_task_torques = joint_task->computeTorques();
+
 		// compute task torques
-		control_torques = joint_task->computeTorques();
+		control_torques = joint_task_torques;
 
 		// -------------------------------------------
 		// display robot state every half second
