@@ -159,6 +159,10 @@ runs:
       shell: bash
       run: |
         export CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:dep/*
+        cd third_party/ruckig
+        mkdir build && cd build
+        cmake .. && make -j8
+        cd ../../..
         mkdir build && cd build
         cmake .. && make -j8
 

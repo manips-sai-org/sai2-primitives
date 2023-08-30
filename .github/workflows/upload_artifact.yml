@@ -23,3 +23,6 @@ jobs:
         with:
           name: sai2-primitives-artifact
           path: build/libsai2-primitives.a
+          path: |
+            build/libsai2-primitives.a
+            libruckig.so
