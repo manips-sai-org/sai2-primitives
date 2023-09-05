@@ -30,6 +30,13 @@ const string world_file = "resources/world.urdf";
 const string robot_file = "resources/panda_arm.urdf";
 const string robot_name = "PANDA";
 
+// ui torques and control torques
+VectorXd ui_torques;
+VectorXd control_torques;
+
+// mutex for global variables between different threads
+mutex mutex_torques;
+
 // simulation and control loop
 void control(shared_ptr<Sai2Model::Sai2Model> robot,
 			 shared_ptr<Sai2Simulation::Sai2Simulation> sim);
@@ -47,6 +54,7 @@ int main(int argc, char** argv) {
 
 	// load graphics scene
 	auto graphics = make_shared<Sai2Graphics::Sai2Graphics>(world_file);
+	graphics->addUIForceInteraction(robot_name);
 
 	// load simulation world
 	auto sim = make_shared<Sai2Simulation::Sai2Simulation>(world_file);
@@ -55,6 +63,10 @@ int main(int argc, char** argv) {
 	auto robot = make_shared<Sai2Model::Sai2Model>(robot_file, false);
 	robot->setQ(sim->getJointPositions(robot_name));
 	robot->updateModel();
+
+	// intitialize global torques variables
+	ui_torques = VectorXd::Zero(robot->dof());
+	control_torques = VectorXd::Zero(robot->dof());
 
 	// start the simulation thread first
 	fSimulationRunning = true;
@@ -67,6 +79,10 @@ int main(int argc, char** argv) {
 	while (graphics->isWindowOpen()) {
 		graphics->updateRobotGraphics(robot_name, robot->q());
 		graphics->renderGraphicsWorld();
+		{
+			lock_guard<mutex> lock(mutex_torques);
+			ui_torques = graphics->getUITorques(robot_name);
+		}
 	}
 
 	// stop simulation
@@ -83,52 +99,36 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 	// update robot model and initialize control vectors
 	robot->updateModel();
 	int dof = robot->dof();
-	VectorXd command_torques = VectorXd::Zero(dof);
 	MatrixXd N_prec = MatrixXd::Identity(dof, dof);
 
 	// Position plus orientation task
 	string link_name = "end-effector";
-	Vector3d pos_in_link = Vector3d(0.0, 0.0, 0.0);
+	Vector3d pos_in_link = Vector3d(0.0, 0.0, 0.07);
 	Affine3d compliant_frame = Affine3d(Translation3d(pos_in_link));
-	Sai2Primitives::MotionForceTask* motion_force_task =
-		new Sai2Primitives::MotionForceTask(
-			robot, link_name,
-			compliant_frame);  // no orientation parameter, default is identity
+	auto motion_force_task = make_unique<Sai2Primitives::MotionForceTask>(
+		robot, link_name, compliant_frame);
 	VectorXd motion_force_task_torques = VectorXd::Zero(dof);
+	motion_force_task->disableInternalOtg();
 
-#ifdef USING_OTG
-	// disable the interpolation because trajectory is sent directly
-	motion_force_task->_use_interpolation_flag = false;
-#endif
 	// no gains setting here, using the default task values
 	const Matrix3d initial_orientation = robot->rotation(link_name);
 	const Vector3d initial_position = robot->position(link_name, pos_in_link);
 
 	// joint task to control the redundancy
 	// using default gains and interpolation settings
-	Sai2Primitives::JointTask* joint_task =
-		new Sai2Primitives::JointTask(robot);
+	auto joint_task = make_unique<Sai2Primitives::JointTask>(robot);
 	VectorXd joint_task_torques = VectorXd::Zero(dof);
 
 	VectorXd initial_q = robot->q();
 
 	// create a loop timer
 	double control_freq = 1000;
-	Sai2Common::LoopTimer timer;
-	timer.setLoopFrequency(control_freq);	 // 1 KHz
-	double last_time = timer.elapsedTime();	 // secs
-	bool fTimerDidSleep = true;
-	timer.initializeTimer(1000000);	 // 1 ms pause before starting loop
+	Sai2Common::LoopTimer timer(control_freq);
+	timer.initializeTimer(1e6);
 
-	unsigned long long controller_counter = 0;
-
-	while (fSimulationRunning) {  // automatically set to false when simulation
-								  // is quit
-		fTimerDidSleep = timer.waitForNextLoop();
-
-		// update time
-		double curr_time = timer.elapsedTime();
-		double loop_dt = curr_time - last_time;
+	while (fSimulationRunning) {
+		timer.waitForNextLoop();
+		const double time = timer.elapsedSimTime();
 
 		// read joint positions, velocities, update model
 		robot->setQ(sim->getJointPositions(robot_name));
@@ -148,14 +148,14 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 
 		// -------- set task goals and compute control torques
 		// first the posori task.
-		// orientation:
+		// orientation: oscillation around Y
 		double w_ori_traj = 2 * M_PI * 0.2;
 		double amp_ori_traj = M_PI / 8;
-		double angle_ori_traj = amp_ori_traj * sin(w_ori_traj * curr_time);
+		double angle_ori_traj = amp_ori_traj * sin(w_ori_traj * time);
 		double ang_vel_traj =
-			amp_ori_traj * w_ori_traj * cos(w_ori_traj * curr_time);
-		double ang_accel_traj = amp_ori_traj * w_ori_traj * w_ori_traj *
-								-sin(w_ori_traj * curr_time);
+			amp_ori_traj * w_ori_traj * cos(w_ori_traj * time);
+		double ang_accel_traj =
+			amp_ori_traj * w_ori_traj * w_ori_traj * -sin(w_ori_traj * time);
 
 		Matrix3d R =
 			AngleAxisd(angle_ori_traj, Vector3d::UnitY()).toRotationMatrix();
@@ -167,21 +167,19 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 		motion_force_task->setDesiredAngularAcceleration(ang_accel_traj *
 														 Vector3d::UnitY());
 
-		// position:
+		// position: circle in the y-z plane
 		double radius_circle_pos = 0.05;
 		double w_circle_pos = 2 * M_PI * 0.33;
 		motion_force_task->setDesiredPosition(
 			initial_position +
-			radius_circle_pos * Vector3d(0.0, sin(w_circle_pos * curr_time),
-										 1 - cos(w_circle_pos * curr_time)));
+			radius_circle_pos * Vector3d(0.0, sin(w_circle_pos * time),
+										 1 - cos(w_circle_pos * time)));
 		motion_force_task->setDesiredVelocity(
 			radius_circle_pos * w_circle_pos *
-			Vector3d(0.0, cos(w_circle_pos * curr_time),
-					 sin(w_circle_pos * curr_time)));
+			Vector3d(0.0, cos(w_circle_pos * time), sin(w_circle_pos * time)));
 		motion_force_task->setDesiredAcceleration(
 			radius_circle_pos * w_circle_pos * w_circle_pos *
-			Vector3d(0.0, -sin(w_circle_pos * curr_time),
-					 cos(w_circle_pos * curr_time)));
+			Vector3d(0.0, -sin(w_circle_pos * time), cos(w_circle_pos * time)));
 
 		// compute torques for the different tasks
 		motion_force_task_torques = motion_force_task->computeTorques();
@@ -189,25 +187,25 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 
 		// activate joint task only after 5 seconds and try to rotate the first
 		// joint
-		if (controller_counter < 5000) {
+		if (timer.elapsedCycles() < 5000) {
 			joint_task_torques.setZero();
 		}
-		if (controller_counter == 5000) {
+		if (timer.elapsedCycles() == 5000) {
 			joint_task->reInitializeTask();
-			Eigen::VectorXd desired_joint_pos = initial_q;
-			desired_joint_pos(0) += 1;
+			VectorXd desired_joint_pos = initial_q;
+			desired_joint_pos(0) += 1.5;
 			joint_task->setDesiredPosition(desired_joint_pos);
 		}
 
 		//------ compute the final torques
-		command_torques = motion_force_task_torques + joint_task_torques;
-
-		// send to simulation
-		sim->setJointTorques(robot_name, command_torques);
+		{
+			lock_guard<mutex> lock(mutex_torques);
+			control_torques = motion_force_task_torques + joint_task_torques;
+		}
 
 		// -------------------------------------------
-		if (controller_counter % 500 == 0) {
-			cout << curr_time << endl;
+		if (timer.elapsedCycles() % 500 == 0) {
+			cout << "time: " << time << endl;
 			cout << "position error : "
 				 << (motion_force_task->getDesiredPosition() -
 					 motion_force_task->getCurrentPosition())
@@ -215,12 +213,6 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 				 << endl;
 			cout << endl;
 		}
-
-		controller_counter++;
-
-		// -------------------------------------------
-		// update last time
-		last_time = curr_time;
 	}
 	timer.stop();
 	cout << "\nControl loop timer stats:\n";
@@ -241,8 +233,10 @@ void simulation(shared_ptr<Sai2Model::Sai2Model> robot,
 
 	while (fSimulationRunning) {
 		timer.waitForNextLoop();
-
-		// integrate forward
+		{
+			lock_guard<mutex> lock(mutex_torques);
+			sim->setJointTorques(robot_name, control_torques + ui_torques);
+		}
 		sim->integrate();
 	}
 	timer.stop();
