@@ -151,6 +151,14 @@ public:
 	}
 
 	/**
+	 * @brief Get the nullspace of this and the previous tasks. Will be 0 if ths
+	 * is a full joint task
+	 *
+	 * @return const MatrixXd& Nullspace matrix
+	 */
+	const MatrixXd& getN() const { return _N; }
+
+	/**
 	 * @brief Set non isotropic gains
 	 *
 	 * @param kp
@@ -325,6 +333,11 @@ private:
 
 	MatrixXd _joint_selection;	// selection matrix for the joint task, defaults
 								// to Identity
+	MatrixXd _projected_jacobian;
+	MatrixXd _Jbar;
+	MatrixXd _N;
+	MatrixXd _URange;
+
 };
 
 } /* namespace Sai2Primitives */

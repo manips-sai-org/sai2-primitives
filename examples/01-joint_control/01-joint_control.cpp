@@ -1,19 +1,22 @@
 /*
  * Example of joint space control on a simulated PUMA robot
- * Will move the elbow joint back and forth, and enable the joint interpolation after 5 seconds.
- * Assumes the robot is performing its own gravity compensation so the controller ignores gravity
+ * Will move the elbow joint back and forth, and enable the joint interpolation
+ * after 5 seconds. Assumes the robot is performing its own gravity compensation
+ * so the controller ignores gravity
  *
  */
 
 // some standard library includes
-#include <iostream>
-#include <string>
-#include <thread>
 #include <math.h>
 
+#include <iostream>
+#include <mutex>
+#include <string>
+#include <thread>
+
 // sai2 main libraries includes
-#include "Sai2Model.h"
 #include "Sai2Graphics.h"
+#include "Sai2Model.h"
 #include "Sai2Simulation.h"
 
 // sai2 utilities from sai2-common
@@ -25,32 +28,38 @@
 // for handling ctrl+c and interruptions properly
 #include <signal.h>
 bool fSimulationRunning = false;
-void sighandler(int){fSimulationRunning = false;}
+void sighandler(int) { fSimulationRunning = false; }
 
 // namespaces for compactness of code
 using namespace std;
 using namespace Eigen;
 
+// mutex to read and write the torques shared between the control thread and the
+// simulation thread
+mutex mutex_torques;
+
 // config file names and object names
 const string world_file = "resources/world.urdf";
 const string robot_file = "resources/puma.urdf";
-const string robot_name = "PUMA";   // name in the world file
+const string robot_name = "PUMA";  // name in the world file
 
 // control and ui interaction torques
 VectorXd UI_interaction_torques;
 VectorXd control_torques;
 
 // simulation and control loop thread functions
-void control(std::shared_ptr<Sai2Model::Sai2Model> robot, std::shared_ptr<Sai2Simulation::Sai2Simulation> sim);
-void simulation(std::shared_ptr<Sai2Model::Sai2Model> robot, std::shared_ptr<Sai2Simulation::Sai2Simulation> sim);
+void control(shared_ptr<Sai2Model::Sai2Model> robot,
+			 shared_ptr<Sai2Simulation::Sai2Simulation> sim);
+void simulation(shared_ptr<Sai2Model::Sai2Model> robot,
+				shared_ptr<Sai2Simulation::Sai2Simulation> sim);
 
-/* 
- * Main function 
- * initializes everything, 
- * handles the visualization thread 
- * and starts the control and simulation threads 
+/*
+ * Main function
+ * initializes everything,
+ * handles the visualization thread
+ * and starts the control and simulation threads
  */
-int main (int argc, char** argv) {
+int main(int argc, char** argv) {
 	cout << "Loading URDF world model file: " << world_file << endl;
 
 	// set up signal handler
@@ -59,11 +68,11 @@ int main (int argc, char** argv) {
 	signal(SIGINT, &sighandler);
 
 	// load graphics scene
-	auto graphics = std::make_shared<Sai2Graphics::Sai2Graphics>(world_file);
+	auto graphics = make_shared<Sai2Graphics::Sai2Graphics>(world_file);
 	graphics->addUIForceInteraction(robot_name);
 
 	// load simulation world
-	auto sim = std::make_shared<Sai2Simulation::Sai2Simulation>(world_file);
+	auto sim = make_shared<Sai2Simulation::Sai2Simulation>(world_file);
 
 	// load robots
 	auto robot = make_shared<Sai2Model::Sai2Model>(robot_file, false);
@@ -80,14 +89,16 @@ int main (int argc, char** argv) {
 	thread sim_thread(simulation, robot, sim);
 	// next start the control thread
 	thread ctrl_thread(control, robot, sim);
-	
-    // while window is open:
-    while (graphics->isWindowOpen()) {
 
+	// while window is open:
+	while (graphics->isWindowOpen()) {
 		graphics->updateRobotGraphics(robot_name, robot->q());
 		graphics->renderGraphicsWorld();
-		UI_interaction_torques = graphics->getUITorques(robot_name);
-
+		{
+			// lock mutex and update ui torques
+			lock_guard<mutex> lock(mutex_torques);
+			UI_interaction_torques = graphics->getUITorques(robot_name);
+		}
 	}
 
 	// stop simulation and control
@@ -99,15 +110,15 @@ int main (int argc, char** argv) {
 }
 
 //------------------ Controller main function
-void control(std::shared_ptr<Sai2Model::Sai2Model> robot, std::shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
-	
+void control(shared_ptr<Sai2Model::Sai2Model> robot,
+			 shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 	// update robot model and initialize control vectors
 	robot->updateModel();
 	int dof = robot->dof();
-	MatrixXd N_prec = MatrixXd::Identity(dof,dof);
+	MatrixXd N_prec = MatrixXd::Identity(dof, dof);
 
 	// prepare joint task
-	auto joint_task = std::make_shared<Sai2Primitives::JointTask>(robot);
+	auto joint_task = make_shared<Sai2Primitives::JointTask>(robot);
 	// set the gains to get a PD controller with critical damping
 	joint_task->setGains(100, 20);
 	Eigen::VectorXd desired_position = joint_task->getDesiredPosition();
@@ -115,85 +126,95 @@ void control(std::shared_ptr<Sai2Model::Sai2Model> robot, std::shared_ptr<Sai2Si
 	joint_task->disableInternalOtg();
 
 	// create a loop timer
-	double control_freq = 1000;   // 1 KHz
+	double control_freq = 1000;	 // 1 KHz
 	Sai2Common::LoopTimer timer(control_freq);
-	timer.initializeTimer(1000000); // 1 ms pause before starting loop
+	timer.initializeTimer(1000000);	 // 1 ms pause before starting loop
 
-	while (fSimulationRunning) { //automatically set to false when simulation is quit
+	while (fSimulationRunning) {  // automatically set to false when simulation
+								  // is quit
 		timer.waitForNextLoop();
 
-		// read joint positions, velocities from simulation and update robot model
+		// read joint positions, velocities from simulation and update robot
+		// model
 		robot->setQ(sim->getJointPositions(robot_name));
 		robot->setDq(sim->getJointVelocities(robot_name));
 		robot->updateModel();
 
 		// update task model
-		N_prec.setIdentity(dof,dof);
+		N_prec.setIdentity(dof, dof);
 		joint_task->updateTaskModel(N_prec);
 
 		// -------- set task goals and compute control torques
 		// set the desired position (step every second)
-		if(timer.elapsedCycles() % 3000 == 500) {
+		if (timer.elapsedCycles() % 3000 == 500) {
 			desired_position(2) += 0.4;
 			desired_position(3) -= 0.6;
 		}
-		if(timer.elapsedCycles() % 3000 == 2000) {
+		if (timer.elapsedCycles() % 3000 == 2000) {
 			desired_position(2) -= 0.4;
 			desired_position(3) += 0.6;
 		}
 		joint_task->setDesiredPosition(desired_position);
 
 		// change the gains to an underdamped system after 6.5 seconds
-		if(timer.elapsedCycles() == 6500) {
-			std::cout << "------------------------------------" << std::endl;
-			std::cout << "changing gains to underdamped system" << std::endl;
-			std::cout << "------------------------------------" << std::endl;
+		if (timer.elapsedCycles() == 6500) {
+			cout << "------------------------------------" << endl;
+			cout << "changing gains to underdamped system" << endl;
+			cout << "------------------------------------" << endl;
 			joint_task->setGains(100, 10);
 		}
 		// enable velocity saturation after 10.5 seconds
-		if(timer.elapsedCycles() == 10500) {
-			std::cout << "------------------------------------" << std::endl;
-			std::cout << "enabling velocity saturation" << std::endl;
-			std::cout << "------------------------------------" << std::endl;
-			joint_task->enableVelocitySaturation(M_PI/4);
+		if (timer.elapsedCycles() == 10500) {
+			cout << "------------------------------------" << endl;
+			cout << "enabling velocity saturation" << endl;
+			cout << "------------------------------------" << endl;
+			joint_task->enableVelocitySaturation(M_PI / 4);
 		}
-		// change the gains back to a critically damped system after 14.5 seconds
-		if(timer.elapsedCycles() == 14500) {
-			std::cout << "------------------------------------" << std::endl;
-			std::cout << "changing gains back to critically damped system" << std::endl;
-			std::cout << "------------------------------------" << std::endl;
+		// change the gains back to a critically damped system after 14.5
+		// seconds
+		if (timer.elapsedCycles() == 14500) {
+			cout << "------------------------------------" << endl;
+			cout << "changing gains back to critically damped system" << endl;
+			cout << "------------------------------------" << endl;
 			joint_task->setGains(100, 20);
 		}
 		// compute task torques
-		control_torques = joint_task->computeTorques();
+		VectorXd joint_task_torques = joint_task->computeTorques();
+
+		{
+			// lock mutex and update control torques
+			lock_guard<mutex> lock(mutex_torques);
+			control_torques = joint_task_torques;
+		}
 
 		// -------------------------------------------
 		// display robot state every half second
-		if(timer.elapsedCycles() % 500 == 0)
-		{
+		if (timer.elapsedCycles() % 500 == 0) {
 			cout << time << endl;
-			cout << "desired position : " << joint_task->getDesiredPosition().transpose() << endl;
-			cout << "current position : " << joint_task->getCurrentPosition().transpose() << endl;
-			cout << "position error : " << (joint_task->getDesiredPosition() - joint_task->getCurrentPosition()).norm() << endl;
+			cout << "desired position : "
+				 << joint_task->getDesiredPosition().transpose() << endl;
+			cout << "current position : "
+				 << joint_task->getCurrentPosition().transpose() << endl;
+			cout << "position error : "
+				 << (joint_task->getDesiredPosition() -
+					 joint_task->getCurrentPosition())
+						.norm()
+				 << endl;
 			cout << endl;
 		}
 	}
-
-	// display controller run frequency at the end
-	double end_time = timer.elapsedTime();
-    std::cout << "\n";
-    std::cout << "Control Loop run time  : " << end_time << " seconds\n";
-    std::cout << "Control Loop updates   : " << timer.elapsedCycles() << "\n";
-    std::cout << "Control Loop frequency : " << timer.elapsedCycles()/end_time << "Hz\n";
-
+	timer.stop();
+	cout << "\nControl loop timer stats:\n";
+	timer.printInfoPostRun();
 }
 
 //------------------------------------------------------------------------------
-void simulation(std::shared_ptr<Sai2Model::Sai2Model> robot, std::shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
+void simulation(shared_ptr<Sai2Model::Sai2Model> robot,
+				shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 	fSimulationRunning = true;
 
 	// create a timer
-	double sim_freq = 2000;   // 2 kHz
+	double sim_freq = 2000;	 // 2 kHz
 	Sai2Common::LoopTimer timer(sim_freq);
 	timer.initializeTimer();
 
@@ -201,14 +222,15 @@ void simulation(std::shared_ptr<Sai2Model::Sai2Model> robot, std::shared_ptr<Sai
 
 	while (fSimulationRunning) {
 		timer.waitForNextLoop();
-		sim->setJointTorques(robot_name, control_torques + UI_interaction_torques);
+		{
+			// lock mutex and set sim torques
+			lock_guard<mutex> lock(mutex_torques);
+			sim->setJointTorques(robot_name,
+								 control_torques + UI_interaction_torques);
+		}
 		sim->integrate();
 	}
-
-	// display simulation run frequency at the end
-	double end_time = timer.elapsedTime();
-    std::cout << "\n";
-    std::cout << "Simulation Loop run time  : " << end_time << " seconds\n";
-    std::cout << "Simulation Loop updates   : " << timer.elapsedCycles() << "\n";
-    std::cout << "Simulation Loop frequency : " << timer.elapsedCycles()/end_time << "Hz\n";
+	timer.stop();
+	cout << "\nSimulation loop timer stats:\n";
+	timer.printInfoPostRun();
 }

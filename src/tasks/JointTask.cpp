@@ -18,6 +18,8 @@ JointTask::JointTask(std::shared_ptr<Sai2Model::Sai2Model> robot,
 
 	// selection for full joint task
 	_joint_selection = MatrixXd::Identity(_robot->dof(), _robot->dof());
+
+	initialSetup();
 }
 
 JointTask::JointTask(std::shared_ptr<Sai2Model::Sai2Model> robot,
@@ -33,11 +35,13 @@ JointTask::JointTask(std::shared_ptr<Sai2Model::Sai2Model> robot,
 	}
 	// find rank of joint selection matrix
 	FullPivLU<MatrixXd> lu(joint_selection_matrix);
-	if(if lu.rank() != joint_selection_matrix.rows())
+	if(lu.rank() != joint_selection_matrix.rows())
 	{
 		throw std::invalid_argument("joint selection matrix is not full rank in JointTask constructor\n");
 	}
 	_joint_selection = joint_selection_matrix;
+
+	initialSetup();
 }
 
 void JointTask::initialSetup() {
@@ -56,6 +60,10 @@ void JointTask::initialSetup() {
 	_N_prec = MatrixXd::Identity(robot_dof, robot_dof);
 	_M_partial = MatrixXd::Identity(_task_dof, _task_dof);
 	_M_partial_modified = MatrixXd::Identity(_task_dof, _task_dof);
+	_projected_jacobian = _joint_selection;
+	_Jbar = MatrixXd::Zero(_task_dof, robot_dof);
+	_N = MatrixXd::Zero(robot_dof, robot_dof);
+	_URange = MatrixXd::Identity(_task_dof, _task_dof);
 
 	_use_internal_otg_flag = true;
 	_otg =
@@ -163,9 +171,15 @@ void JointTask::updateTaskModel(const MatrixXd& N_prec) {
 	}
 
 	_N_prec = N_prec;
-	_M_partial =
-		(_joint_selection * _robot->MInv() * _joint_selection.transpose())
-			.inverse();
+	_projected_jacobian = _joint_selection * _N_prec;
+	_URange = Sai2Model::matrixRangeBasis(_projected_jacobian);
+
+	Sai2Model::OpSpaceMatrices op_space_matrices =
+		_robot->operationalSpaceMatrices(
+			_URange.transpose() * _projected_jacobian, _N_prec);
+	_M_partial = op_space_matrices.Lambda;
+	_Jbar = op_space_matrices.Jbar;
+	_N = op_space_matrices.N;
 
 	switch (_dynamic_decoupling_type) {
 		case FULL_DYNAMIC_DECOUPLING: {
@@ -182,13 +196,14 @@ void JointTask::updateTaskModel(const MatrixXd& N_prec) {
 			}
 			MatrixXd M_inv_BIE = M_BIE.inverse();
 			_M_partial_modified =
-				(_joint_selection * M_inv_BIE * _joint_selection.transpose())
+				(_URange.transpose() * _joint_selection * M_inv_BIE *
+				 _joint_selection.transpose() * _URange)
 					.inverse();
 			break;
 		}
 
 		case IMPEDANCE: {
-			_M_partial_modified = MatrixXd::Identity(_task_dof, _task_dof);
+			_M_partial_modified = MatrixXd::Identity(_URange.cols(), _URange.cols());
 			break;
 		}
 
@@ -206,8 +221,8 @@ VectorXd JointTask::computeTorques() {
 	VectorXd partial_joint_task_torques = VectorXd::Zero(_task_dof);
 
 	// update constroller state
-	_current_position = _robot->q();
-	_current_velocity = _robot->dq();
+	_current_position = _joint_selection * _robot->q();
+	_current_velocity = _joint_selection * _robot->dq();
 
 	VectorXd tmp_desired_position = _desired_position;
 	VectorXd tmp_desired_velocity = _desired_velocity;
@@ -248,13 +263,13 @@ VectorXd JointTask::computeTorques() {
 			_ki * _integrated_position_error;
 	}
 
-	partial_joint_task_torques =
-		_M_partial * tmp_desired_acceleration +
-		_M_partial_modified * partial_joint_task_torques;
+	VectorXd partial_joint_task_torques_in_range_space =
+		_M_partial * _URange.transpose() * tmp_desired_acceleration +
+		_M_partial_modified * _URange.transpose() * partial_joint_task_torques;
 
 	// return projected task torques
-	return _N_prec.transpose() * _joint_selection.transpose() *
-		   partial_joint_task_torques;
+	return _projected_jacobian.transpose() * _URange *
+		   partial_joint_task_torques_in_range_space;
 }
 
 void JointTask::enableInternalOtgAccelerationLimited(
