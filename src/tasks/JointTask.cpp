@@ -15,8 +15,34 @@ JointTask::JointTask(std::shared_ptr<Sai2Model::Sai2Model> robot,
 					 const double loop_timestep) {
 	_loop_timestep = loop_timestep;
 	_robot = robot;
-	const int dof = _robot->dof();
 
+	// selection for full joint task
+	_joint_selection = MatrixXd::Identity(_robot->dof(), _robot->dof());
+}
+
+JointTask::JointTask(std::shared_ptr<Sai2Model::Sai2Model> robot,
+					 const MatrixXd& joint_selection_matrix,
+					 const double loop_timestep) {
+	_loop_timestep = loop_timestep;
+	_robot = robot;
+
+	// selection for partial joint task
+	if(joint_selection_matrix.cols() != _robot->dof())
+	{
+		throw std::invalid_argument("joint selection matrix size not consistent with robot dof in JointTask constructor\n");
+	}
+	// find rank of joint selection matrix
+	FullPivLU<MatrixXd> lu(joint_selection_matrix);
+	if(if lu.rank() != joint_selection_matrix.rows())
+	{
+		throw std::invalid_argument("joint selection matrix is not full rank in JointTask constructor\n");
+	}
+	_joint_selection = joint_selection_matrix;
+}
+
+void JointTask::initialSetup() {
+	const int robot_dof = _robot->dof();
+	_task_dof = _joint_selection.rows();
 	setDynamicDecouplingType(BOUNDED_INERTIA_ESTIMATES);
 
 	// default values for gains and velocity saturation
@@ -24,14 +50,16 @@ JointTask::JointTask(std::shared_ptr<Sai2Model::Sai2Model> robot,
 	setGains(50.0, 14.0, 0.0);
 
 	_use_velocity_saturation_flag = false;
-	_saturation_velocity = VectorXd::Zero(dof);
+	_saturation_velocity = VectorXd::Zero(_task_dof);
 
 	// initialize matrices sizes
-	_N_prec = MatrixXd::Identity(dof, dof);
-	_M_modified = MatrixXd::Identity(dof, dof);
+	_N_prec = MatrixXd::Identity(robot_dof, robot_dof);
+	_M_partial = MatrixXd::Identity(_task_dof, _task_dof);
+	_M_partial_modified = MatrixXd::Identity(_task_dof, _task_dof);
 
 	_use_internal_otg_flag = true;
-	_otg = make_shared<OTG_joints>(robot->q(), loop_timestep);
+	_otg =
+		make_shared<OTG_joints>(_joint_selection * _robot->q(), _loop_timestep);
 	_otg->setMaxVelocity(M_PI / 3);
 	_otg->setMaxAcceleration(M_PI);
 	_otg->disableJerkLimits();
@@ -40,27 +68,53 @@ JointTask::JointTask(std::shared_ptr<Sai2Model::Sai2Model> robot,
 }
 
 void JointTask::reInitializeTask() {
-	int dof = _robot->dof();
+	const int robot_dof = _robot->dof();
 
-	_current_position = _robot->q();
-	_current_velocity.setZero(dof);
+	_current_position = _joint_selection * _robot->q();
+	_current_velocity.setZero(_task_dof);
 
-	_desired_position = _robot->q();
-	_desired_velocity.setZero(dof);
-	_desired_acceleration.setZero(dof);
+	_desired_position = _current_position;
+	_desired_velocity.setZero(_task_dof);
+	_desired_acceleration.setZero(_task_dof);
 
-	_integrated_position_error.setZero(dof);
+	_integrated_position_error.setZero(_task_dof);
 
 	_otg->reInitialize(_current_position);
 }
 
+void JointTask::setDesiredPosition(const VectorXd& desired_position) {
+	if (desired_position.size() != _task_dof) {
+		throw std::invalid_argument(
+			"desired position vector size not consistent with task dof in "
+			"JointTask::setDesiredPosition\n");
+	}
+	_desired_position = desired_position;
+}
+
+void JointTask::setDesiredvelocity(const VectorXd& desired_velocity) {
+	if (desired_velocity.size() != _task_dof) {
+		throw std::invalid_argument(
+			"desired velocity vector size not consistent with task dof in "
+			"JointTask::setDesiredvelocity\n");
+	}
+	_desired_velocity = desired_velocity;
+}
+
+void JointTask::setDesiredAcceleration(const VectorXd& desired_acceleration) {
+	if (desired_acceleration.size() != _task_dof) {
+		throw std::invalid_argument(
+			"desired acceleration vector size not consistent with task dof in "
+			"JointTask::setDesiredAcceleration\n");
+	}
+	_desired_acceleration = desired_acceleration;
+}
+
 void JointTask::setGains(const VectorXd& kp, const VectorXd& kv,
 						 const VectorXd& ki) {
-	int dof = _robot->dof();
-
-	if (kp.size() != dof || kv.size() != dof || ki.size() != dof) {
+	if (kp.size() != _task_dof || kv.size() != _task_dof ||
+		ki.size() != _task_dof) {
 		throw std::invalid_argument(
-			"size of gain vector inconsistent with number of robot joints in "
+			"size of gain vector inconsistent with number of task dofs in "
 			"JointTask::useNonIsotropicGains\n");
 	}
 	if (kp.maxCoeff() < 0 || kv.maxCoeff() < 0 || ki.maxCoeff() < 0) {
@@ -75,9 +129,9 @@ void JointTask::setGains(const VectorXd& kp, const VectorXd& kv,
 	}
 
 	_are_gains_isotropic = false;
-	_kp = kp;
-	_kv = kv;
-	_ki = ki;
+	_kp = kp.asDiagonal();
+	_kv = kv.asDiagonal();
+	_ki = ki.asDiagonal();
 }
 
 void JointTask::setGains(const double kp, const double kv, const double ki) {
@@ -92,10 +146,9 @@ void JointTask::setGains(const double kp, const double kv, const double ki) {
 	}
 
 	_are_gains_isotropic = true;
-	int dof = _robot->dof();
-	_kp = kp * MatrixXd::Identity(dof, dof);
-	_kv = kv * MatrixXd::Identity(dof, dof);
-	_ki = ki * MatrixXd::Identity(dof, dof);
+	_kp = kp * MatrixXd::Identity(_task_dof, _task_dof);
+	_kv = kv * MatrixXd::Identity(_task_dof, _task_dof);
+	_ki = ki * MatrixXd::Identity(_task_dof, _task_dof);
 }
 
 void JointTask::updateTaskModel(const MatrixXd& N_prec) {
@@ -110,38 +163,47 @@ void JointTask::updateTaskModel(const MatrixXd& N_prec) {
 	}
 
 	_N_prec = N_prec;
+	_M_partial =
+		(_joint_selection * _robot->MInv() * _joint_selection.transpose())
+			.inverse();
 
 	switch (_dynamic_decoupling_type) {
 		case FULL_DYNAMIC_DECOUPLING: {
-			_M_modified = _robot->M();
+			_M_partial_modified = _M_partial;
 			break;
 		}
 
 		case BOUNDED_INERTIA_ESTIMATES: {
-			_M_modified = _robot->M();
+			MatrixXd M_BIE = _robot->M();
 			for (int i = 0; i < _robot->dof(); i++) {
-				if (_M_modified(i, i) < 0.1) {
-					_M_modified(i, i) = 0.1;
+				if (M_BIE(i, i) < 0.1) {
+					M_BIE(i, i) = 0.1;
 				}
 			}
+			MatrixXd M_inv_BIE = M_BIE.inverse();
+			_M_partial_modified =
+				(_joint_selection * M_inv_BIE * _joint_selection.transpose())
+					.inverse();
 			break;
 		}
 
 		case IMPEDANCE: {
-			_M_modified = MatrixXd::Identity(_robot->dof(), _robot->dof());
+			_M_partial_modified = MatrixXd::Identity(_task_dof, _task_dof);
 			break;
 		}
 
 		default: {
-			_M_modified = _robot->M();
+			// should not happen
+			throw std::invalid_argument(
+				"Dynamic decoupling type not recognized in "
+				"JointTask::updateTaskModel\n");
 			break;
 		}
 	}
 }
 
 VectorXd JointTask::computeTorques() {
-	int dof = _robot->dof();
-	VectorXd task_joint_torques = VectorXd::Zero(dof);
+	VectorXd partial_joint_task_torques = VectorXd::Zero(_task_dof);
 
 	// update constroller state
 	_current_position = _robot->q();
@@ -177,28 +239,31 @@ VectorXd JointTask::computeTorques() {
 				tmp_desired_velocity(i) = -_saturation_velocity(i);
 			}
 		}
-		task_joint_torques = -_kv * (_current_velocity - tmp_desired_velocity);
+		partial_joint_task_torques =
+			-_kv * (_current_velocity - tmp_desired_velocity);
 	} else {
-		task_joint_torques = -_kp * (_current_position - tmp_desired_position) -
-							 _kv * (_current_velocity - tmp_desired_velocity) -
-							 _ki * _integrated_position_error;
+		partial_joint_task_torques =
+			-_kp * (_current_position - tmp_desired_position) -
+			_kv * (_current_velocity - tmp_desired_velocity) -
+			_ki * _integrated_position_error;
 	}
 
-	task_joint_torques = _robot->M() * tmp_desired_acceleration +
-						 _M_modified * task_joint_torques;
+	partial_joint_task_torques =
+		_M_partial * tmp_desired_acceleration +
+		_M_partial_modified * partial_joint_task_torques;
 
 	// return projected task torques
-	return _N_prec.transpose() * task_joint_torques;
+	return _N_prec.transpose() * _joint_selection.transpose() *
+		   partial_joint_task_torques;
 }
 
 void JointTask::enableInternalOtgAccelerationLimited(
 	const VectorXd& max_velocity, const VectorXd& max_acceleration) {
-	if (max_velocity.size() != _robot->dof() ||
-		max_acceleration.size() != _robot->dof()) {
+	if (max_velocity.size() != _task_dof ||
+		max_acceleration.size() != _task_dof) {
 		throw std::invalid_argument(
 			"max velocity or max acceleration vector size not consistent with "
-			"robot dof in "
-			"JointTask::enableInternalOtgAccelerationLimited\n");
+			"task dof in JointTask::enableInternalOtgAccelerationLimited\n");
 	}
 	_use_internal_otg_flag = true;
 	_otg->reInitialize(_current_position);
@@ -210,12 +275,11 @@ void JointTask::enableInternalOtgAccelerationLimited(
 void JointTask::enableInternalOtgJerkLimited(const VectorXd& max_velocity,
 											 const VectorXd& max_acceleration,
 											 const VectorXd& max_jerk) {
-	if (max_velocity.size() != _robot->dof() ||
-		max_acceleration.size() != _robot->dof() ||
-		max_jerk.size() != _robot->dof()) {
+	if (max_velocity.size() != _task_dof ||
+		max_acceleration.size() != _task_dof || max_jerk.size() != _task_dof) {
 		throw std::invalid_argument(
 			"max velocity, max acceleration or max jerk vector size not "
-			"consistent with robot dof in "
+			"consistent with task dof in "
 			"JointTask::enableInternalOtgJerkLimited\n");
 	}
 	_use_internal_otg_flag = true;
@@ -226,9 +290,9 @@ void JointTask::enableInternalOtgJerkLimited(const VectorXd& max_velocity,
 }
 
 void JointTask::enableVelocitySaturation(const VectorXd& saturation_velocity) {
-	if(saturation_velocity.size() != _robot->dof()) {
+	if (saturation_velocity.size() != _task_dof) {
 		throw std::invalid_argument(
-			"saturation velocity vector size not consistent with robot dof in "
+			"saturation velocity vector size not consistent with task dof in "
 			"JointTask::enableVelocitySaturation\n");
 	}
 	_use_velocity_saturation_flag = true;

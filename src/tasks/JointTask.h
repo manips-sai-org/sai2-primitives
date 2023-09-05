@@ -3,7 +3,8 @@
  *
  *      This class creates a joint controller for a robotic manipulator using
  * dynamic decoupling and an underlying PID compensator. It requires a robot
- * model parsed from a urdf file to a Sai2Model object. It does not support spherical joints
+ * model parsed from a urdf file to a Sai2Model object. It does not support
+ * spherical joints
  *
  *      Author: Mikael Jorda
  */
@@ -34,7 +35,7 @@ class JointTask {
 
 public:
 	/**
-	 * @brief      Constructor
+	 * @brief      Constructor for a full joint task
 	 *
 	 * @param      robot      A pointer to a Sai2Model object for the robot that
 	 *                        is to be controlled
@@ -42,6 +43,21 @@ public:
 	 * trajectory generation
 	 */
 	JointTask(std::shared_ptr<Sai2Model::Sai2Model> robot,
+			  const double loop_timestep = 0.001);
+
+	/**
+	 * @brief Constor for a partial joint task, taking as parameter the joint
+	 * selection matrix. Ths joint selection matrix is the constant Jacobian
+	 * mapping from the full joint space to the controlled task space, where
+	 * each row is an independent degree of freedom in the robot joint space.
+	 * Typically, it will be a subset of identity matrix rows
+	 *
+	 * @param robot
+	 * @param joint_selection_matrix
+	 * @param loop_timestep
+	 */
+	JointTask(std::shared_ptr<Sai2Model::Sai2Model> robot,
+			  const MatrixXd& joint_selection_matrix,
 			  const double loop_timestep = 0.001);
 
 	/**
@@ -73,6 +89,17 @@ public:
 	void reInitializeTask();
 
 	/**
+	 * @brief Get the Joint Selection Matrix. Will be Identity for a full joint
+	 * task, and for a partial joint task, it is the constant Jacobian mapping
+	 * from the full joint space to the controlled task space
+	 *
+	 * @return const MatrixXd Joint Selection Matrix that projects the full joint space to the controlled task space
+	 */
+	const MatrixXd getJointSelectionMatrix() const {
+		return _joint_selection;
+	}
+
+	/**
 	 * @brief Get the Current Position
 	 *
 	 * @return const VectorXd&
@@ -84,9 +111,7 @@ public:
 	 *
 	 * @param desired_position
 	 */
-	void setDesiredPosition(const VectorXd& desired_position) {
-		_desired_position = desired_position;
-	}
+	void setDesiredPosition(const VectorXd& desired_position);
 
 	/**
 	 * @brief Get the Desired Position
@@ -100,9 +125,7 @@ public:
 	 *
 	 * @param desired_velocity
 	 */
-	void setDesiredvelocity(const VectorXd& desired_velocity) {
-		_desired_velocity = desired_velocity;
-	}
+	void setDesiredvelocity(const VectorXd& desired_velocity);
 
 	/**
 	 * @brief Get the Desired Velocity
@@ -116,16 +139,14 @@ public:
 	 *
 	 * @param desired_acceleration
 	 */
-	void setDesiredacceleration(const VectorXd& desired_acceleration) {
-		_desired_acceleration = desired_acceleration;
-	}
+	void setDesiredAcceleration(const VectorXd& desired_acceleration);
 
 	/**
 	 * @brief Get the Desired Acceleration
 	 *
 	 * @return desired acceleration as a VectorXd
 	 */
-	const VectorXd& getDesiredacceleration() const {
+	const VectorXd& getDesiredAcceleration() const {
 		return _desired_acceleration;
 	}
 
@@ -255,6 +276,11 @@ public:
 	//-----------------------------------------------
 
 private:
+	/**
+	 * @brief      Initializes the task. Automatically called by the constructor
+	 */
+	void initialSetup();
+
 	// robot model and control cycle duration
 	std::shared_ptr<Sai2Model::Sai2Model> _robot;
 	double _loop_timestep;
@@ -288,12 +314,17 @@ private:
 	shared_ptr<OTG_joints> _otg;
 
 	// model related variables
-	MatrixXd _N_prec;  // nullspace of the previous tasks
-	MatrixXd
-		_M_modified;  // modified mass matrix according to the decoupling type
+	int _task_dof;
+	MatrixXd _N_prec;			   // nullspace of the previous tasks
+	MatrixXd _M_partial;		   // mass matrix for the partial joint task
+	MatrixXd _M_partial_modified;  // modified mass matrix according to the
+								   // decoupling type
 	DynamicDecouplingType
 		_dynamic_decoupling_type;  // defaults to BOUNDED_INERTIA_ESTIMATES. See
 								   // the enum for more details
+
+	MatrixXd _joint_selection;	// selection matrix for the joint task, defaults
+								// to Identity
 };
 
 } /* namespace Sai2Primitives */
