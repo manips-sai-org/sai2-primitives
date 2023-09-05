@@ -77,7 +77,7 @@ int main (int argc, char** argv) {
 	// create simulated force sensor
 	Affine3d T_sensor = Affine3d::Identity();
 	T_sensor.translation() = sensor_pos_in_link;
-	sim->addSimulatedForceSensor(robot_name, link_name, T_sensor);
+	sim->addSimulatedForceSensor(robot_name, link_name, T_sensor, 5.0);
 	graphics->addForceSensorDisplay(sim->getAllForceSensorData()[0]);
 	// fsensor->enableFilter(0.005);
 
@@ -143,7 +143,7 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot, Sai2Simulation::Sai2Simulat
 
 	// create a loop timer
 	double control_freq = 1000;
-	LoopTimer timer;
+	Sai2Common::LoopTimer timer;
 	timer.setLoopFrequency(control_freq);   // 1 KHz
 	double last_time = timer.elapsedTime(); //secs
 	bool fTimerDidSleep = true;
@@ -243,7 +243,7 @@ void simulation(shared_ptr<Sai2Model::Sai2Model> robot, shared_ptr<Sai2Model::Sa
 
 	// create a timer
 	double sim_freq = 2000;
-	LoopTimer timer;
+	Sai2Common::LoopTimer timer;
 	timer.initializeTimer();
 	timer.setLoopFrequency(sim_freq); 
 	double last_time = timer.elapsedTime(); //secs

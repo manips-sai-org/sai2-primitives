@@ -117,7 +117,7 @@ void control(std::shared_ptr<Sai2Model::Sai2Model> robot, std::shared_ptr<Sai2Si
 
 	// create a loop timer
 	double control_freq = 1000;   // 1 KHz
-	LoopTimer timer(control_freq);
+	Sai2Common::LoopTimer timer(control_freq);
 	timer.initializeTimer(1000000); // 1 ms pause before starting loop
 
 	while (fSimulationRunning) { //automatically set to false when simulation is quit
@@ -193,7 +193,7 @@ void simulation(std::shared_ptr<Sai2Model::Sai2Model> robot, std::shared_ptr<Sai
 
 	// create a timer
 	double sim_freq = 2000;   // 2 kHz
-	LoopTimer timer(sim_freq);
+	Sai2Common::LoopTimer timer(sim_freq);
 	timer.initializeTimer();
 
 	sim->setTimestep(1.0 / sim_freq);

@@ -341,7 +341,7 @@ int main() {
 void simulation(Sai2Model::Sai2Model* robot, Simulation::Sai2Simulation* sim) {
 
 	// create a timer
-	LoopTimer timer;
+	Sai2Common::LoopTimer timer;
 	timer.initializeTimer();
 	timer.setLoopFrequency(1000);
 	bool fTimerDidSleep = true;
@@ -554,7 +554,7 @@ void control(Simulation::Sai2Simulation* sim)
   std::cout << "Press gripper to switch to haptic teleoperation" << std::endl;
 
 	// create a timer
-	LoopTimer timer;
+	Sai2Common::LoopTimer timer;
 	timer.initializeTimer();
 	timer.setLoopFrequency(1000);
 	double current_time = 0;

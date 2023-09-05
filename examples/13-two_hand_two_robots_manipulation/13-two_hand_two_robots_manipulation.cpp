@@ -167,7 +167,7 @@ void simulation(vector<Sai2Model::Sai2Model*> robots_sim, Sai2Simulation::Sai2Si
 
 	// create a timer
 	double sim_freq = 2000.0;
-	LoopTimer timer;
+	Sai2Common::LoopTimer timer;
 	timer.initializeTimer();
 	timer.setLoopFrequency(sim_freq); 
 	bool fTimerDidSleep = true;
@@ -386,7 +386,7 @@ void control(Sai2Simulation::Sai2Simulation* sim)
 #endif
 
 	// create a timer
-	LoopTimer timer;
+	Sai2Common::LoopTimer timer;
 	timer.initializeTimer();
 	timer.setLoopFrequency(1000); 
 	double current_time = 0;
