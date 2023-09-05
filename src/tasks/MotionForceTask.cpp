@@ -20,16 +20,16 @@ const double MAX_FEEDBACK_MOMENT_FORCE_CONTROLLER = 10.0;
 
 MotionForceTask::MotionForceTask(
 	std::shared_ptr<Sai2Model::Sai2Model> robot, const string& link_name,
-	const Affine3d& compliant_frame,
-	const bool is_force_motion_parametrization_in_compliant_frame,
+	const Affine3d& compliant_frame_in_link,
+	const bool is_force_parametrization_in_compliant_frame,
 	const double loop_timestep) {
 	_loop_timestep = loop_timestep;
 
 	_robot = robot;
 	_link_name = link_name;
-	_compliant_frame = compliant_frame;
-	_is_force_motion_parametrization_in_compliant_frame =
-		is_force_motion_parametrization_in_compliant_frame;
+	_compliant_frame_in_link = compliant_frame_in_link;
+	_is_force_parametrization_in_compliant_frame =
+		is_force_parametrization_in_compliant_frame;
 	setDynamicDecouplingType(BOUNDED_INERTIA_ESTIMATES);
 
 	int dof = _robot->dof();
@@ -41,7 +41,7 @@ MotionForceTask::MotionForceTask(
 
 	// motion
 	_current_position =
-		_robot->position(_link_name, _compliant_frame.translation());
+		_robot->position(_link_name, _compliant_frame_in_link.translation());
 	_current_orientation = _robot->rotation(_link_name);
 
 	// default values for gains and velocity saturation
@@ -87,7 +87,7 @@ void MotionForceTask::reInitializeTask() {
 
 	// motion
 	_current_position =
-		_robot->position(_link_name, _compliant_frame.translation());
+		_robot->position(_link_name, _compliant_frame_in_link.translation());
 	_desired_position = _current_position;
 	_current_orientation = _robot->rotation(_link_name);
 	_desired_orientation = _current_orientation;
@@ -129,7 +129,7 @@ void MotionForceTask::updateTaskModel(const MatrixXd N_prec) {
 
 	_N_prec = N_prec;
 
-	_jacobian = _robot->J(_link_name, _compliant_frame.translation());
+	_jacobian = _robot->J(_link_name, _compliant_frame_in_link.translation());
 	_projected_jacobian = _jacobian * _N_prec;
 
 	_URange_pos = Sai2Model::matrixRangeBasis(_projected_jacobian.topRows(3));
@@ -197,7 +197,7 @@ void MotionForceTask::updateTaskModel(const MatrixXd N_prec) {
 
 VectorXd MotionForceTask::computeTorques() {
 	VectorXd task_joint_torques = VectorXd::Zero(_robot->dof());
-	_jacobian = _robot->J(_link_name, _compliant_frame.translation());
+	_jacobian = _robot->J(_link_name, _compliant_frame_in_link.translation());
 	_projected_jacobian = _jacobian * _N_prec;
 
 	Matrix3d sigma_force = sigmaForce();
@@ -212,11 +212,11 @@ VectorXd MotionForceTask::computeTorques() {
 
 	// update controller state
 	_current_position =
-		_robot->position(_link_name, _compliant_frame.translation());
+		_robot->position(_link_name, _compliant_frame_in_link.translation());
 	_current_orientation = _robot->rotation(_link_name);
 	_current_orientation =
 		_current_orientation *
-		_compliant_frame
+		_compliant_frame_in_link
 			.linear();	// orientation of compliant frame in robot frame
 	_orientation_error =
 		Sai2Model::orientationError(_desired_orientation, _current_orientation);
@@ -229,11 +229,11 @@ VectorXd MotionForceTask::computeTorques() {
 	if (_closed_loop_force_control) {
 		// update the integrated error
 		_integrated_force_error +=
-			(_sensed_force - _desired_force) * _loop_timestep;
+			(_sensed_force - getDesiredForce()) * _loop_timestep;
 
 		// compute the feedback term and saturate it
 		Vector3d force_feedback_term =
-			-_kp_force * (_sensed_force - _desired_force) -
+			-_kp_force * (_sensed_force - getDesiredForce()) -
 			_ki_force * _integrated_force_error;
 		if (force_feedback_term.norm() > MAX_FEEDBACK_FORCE_FORCE_CONTROLLER) {
 			force_feedback_term *= MAX_FEEDBACK_FORCE_FORCE_CONTROLLER /
@@ -243,7 +243,7 @@ VectorXd MotionForceTask::computeTorques() {
 		// compute the final contribution
 		force_feedback_related_force =
 			_POPC_force->computePassivitySaturatedForce(
-				sigma_force * _desired_force, sigma_force * _sensed_force,
+				sigma_force * getDesiredForce(), sigma_force * _sensed_force,
 				sigma_force * force_feedback_term,
 				sigma_force * _current_velocity, _kv_force, _k_ff);
 	} else	// open loop force control
@@ -256,11 +256,11 @@ VectorXd MotionForceTask::computeTorques() {
 	if (_closed_loop_moment_control) {
 		// update the integrated error
 		_integrated_moment_error +=
-			(_sensed_moment - _desired_moment) * _loop_timestep;
+			(_sensed_moment - getDesiredMoment()) * _loop_timestep;
 
 		// compute the feedback term
 		Vector3d moment_feedback_term =
-			-_kp_moment * (_sensed_moment - _desired_moment) -
+			-_kp_moment * (_sensed_moment - getDesiredMoment()) -
 			_ki_moment * _integrated_moment_error;
 
 		// saturate the feedback term
@@ -459,6 +459,32 @@ bool MotionForceTask::goalOrientationReached(const double tolerance,
 	return goal_reached;
 }
 
+Vector3d MotionForceTask::getDesiredForce() const {
+	return _is_force_parametrization_in_compliant_frame
+			   ? getCompliantFrameInRobotBase().linear() * _desired_force
+			   : _desired_force;
+}
+
+Vector3d MotionForceTask::getDesiredForceInCompliantFrame() const {
+	return _is_force_parametrization_in_compliant_frame
+			   ? _desired_force
+			   : getCompliantFrameInRobotBase().linear().transpose() *
+					 _desired_force;
+}
+
+Vector3d MotionForceTask::getDesiredMoment() const {
+	return _is_force_parametrization_in_compliant_frame
+			   ? getCompliantFrameInRobotBase().linear() * _desired_moment
+			   : _desired_moment;
+}
+
+Vector3d MotionForceTask::getDesiredMomentInCompliantFrame() const {
+	return _is_force_parametrization_in_compliant_frame
+			   ? _desired_moment
+			   : getCompliantFrameInRobotBase().linear().transpose() *
+					 _desired_moment;
+}
+
 void MotionForceTask::setPosControlGains(double kp_pos, double kv_pos,
 										 double ki_pos) {
 	if (kp_pos < 0 || kv_pos < 0 || ki_pos < 0) {
@@ -492,8 +518,8 @@ void MotionForceTask::setPosControlGains(const Vector3d& kp_pos,
 			"MotionForceTask::setPosControlGains\n");
 	}
 	_are_pos_gains_isotropic = false;
-	Matrix3d rotation = _is_force_motion_parametrization_in_compliant_frame
-							? _compliant_frame.rotation()
+	Matrix3d rotation = _is_force_parametrization_in_compliant_frame
+							? _compliant_frame_in_link.rotation()
 							: Matrix3d::Identity();
 	_kp_pos = rotation * kp_pos.asDiagonal() * rotation.transpose();
 	_kv_pos = rotation * kv_pos.asDiagonal() * rotation.transpose();
@@ -505,8 +531,8 @@ vector<PIDGains> MotionForceTask::getPosControlGains() const {
 		return vector<PIDGains>(
 			1, PIDGains(_kp_pos(0, 0), _kv_pos(0, 0), _ki_pos(0, 0)));
 	}
-	Matrix3d rotation = _is_force_motion_parametrization_in_compliant_frame
-							? _compliant_frame.rotation()
+	Matrix3d rotation = _is_force_parametrization_in_compliant_frame
+							? _compliant_frame_in_link.rotation()
 							: Matrix3d::Identity();
 	Vector3d aniso_kp_robot_base =
 		(rotation.transpose() * _kp_pos * rotation).diagonal();
@@ -556,8 +582,8 @@ void MotionForceTask::setOriControlGains(const Vector3d& kp_ori,
 			"MotionForceTask::setOriControlGains\n");
 	}
 	_are_ori_gains_isotropic = false;
-	Matrix3d rotation = _is_force_motion_parametrization_in_compliant_frame
-							? _compliant_frame.rotation()
+	Matrix3d rotation = _is_force_parametrization_in_compliant_frame
+							? _compliant_frame_in_link.rotation()
 							: Matrix3d::Identity();
 	_kp_ori = rotation * kp_ori.asDiagonal() * rotation.transpose();
 	_kv_ori = rotation * kv_ori.asDiagonal() * rotation.transpose();
@@ -569,8 +595,8 @@ vector<PIDGains> MotionForceTask::getOriControlGains() const {
 		return vector<PIDGains>(
 			1, PIDGains(_kp_ori(0, 0), _kv_ori(0, 0), _ki_ori(0, 0)));
 	}
-	Matrix3d rotation = _is_force_motion_parametrization_in_compliant_frame
-							? _compliant_frame.rotation()
+	Matrix3d rotation = _is_force_parametrization_in_compliant_frame
+							? _compliant_frame_in_link.rotation()
 							: Matrix3d::Identity();
 	Vector3d aniso_kp_robot_base =
 		(rotation.transpose() * _kp_ori * rotation).diagonal();
@@ -617,7 +643,7 @@ void MotionForceTask::setForceSensorFrame(
 			"the link to which is attached the control frame in "
 			"MotionForceTask::setForceSensorFrame\n");
 	}
-	_T_control_to_sensor = _compliant_frame.inverse() * transformation_in_link;
+	_T_control_to_sensor = _compliant_frame_in_link.inverse() * transformation_in_link;
 }
 
 void MotionForceTask::updateSensedForceAndMoment(
@@ -625,7 +651,7 @@ void MotionForceTask::updateSensedForceAndMoment(
 	const Vector3d sensed_moment_sensor_frame) {
 	// find the transform from base frame to control frame
 	Affine3d T_base_link = _robot->transform(_link_name);
-	Affine3d T_base_control = T_base_link * _compliant_frame;
+	Affine3d T_base_control = T_base_link * _compliant_frame_in_link;
 
 	// find the resolved sensed force and moment in control frame
 	_sensed_force = _T_control_to_sensor.rotation() * sensed_force_sensor_frame;
@@ -680,8 +706,8 @@ void MotionForceTask::parametrizeMomentRotMotionSpaces(
 }
 
 Matrix3d MotionForceTask::sigmaForce() const {
-	Matrix3d rotation = _is_force_motion_parametrization_in_compliant_frame
-							? _compliant_frame.rotation()
+	Matrix3d rotation = _is_force_parametrization_in_compliant_frame
+							? _compliant_frame_in_link.rotation()
 							: Matrix3d::Identity();
 	switch (_force_space_dimension) {
 		case 0:
@@ -710,8 +736,8 @@ Matrix3d MotionForceTask::sigmaForce() const {
 }
 
 Matrix3d MotionForceTask::sigmaMoment() const {
-	Matrix3d rotation = _is_force_motion_parametrization_in_compliant_frame
-							? _compliant_frame.rotation()
+	Matrix3d rotation = _is_force_parametrization_in_compliant_frame
+							? _compliant_frame_in_link.rotation()
 							: Matrix3d::Identity();
 	switch (_moment_space_dimension) {
 		case 0:

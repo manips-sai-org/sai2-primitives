@@ -56,8 +56,8 @@ public:
 	 * controlled
 	 * @param link_name The name of the link in the robot at which to attach the
 	 * compliant frame
-	 * @param compliant_frame Compliant frame with respect to link frame
-	 * @param is_force_motion_parametrization_in_compliant_frame Whether the
+	 * @param compliant_frame_in_link Compliant frame with respect to link frame
+	 * @param is_force_parametrization_in_compliant_frame Whether the
 	 * force and motion space (and potential non isotropic gains) are defined
 	 * with respect to the compliant frome or the robot base frame
 	 * @param loop_timestep Time taken by a control loop. Used in trajectory
@@ -65,8 +65,8 @@ public:
 	 */
 	MotionForceTask(
 		std::shared_ptr<Sai2Model::Sai2Model> robot, const string& link_name,
-		const Affine3d& compliant_frame = Affine3d::Identity(),
-		const bool is_force_motion_parametrization_in_compliant_frame = false,
+		const Affine3d& compliant_frame_in_link = Affine3d::Identity(),
+		const bool is_force_parametrization_in_compliant_frame = false,
 		const double loop_timestep = 0.001);
 
 	//------------------------------------------------
@@ -154,6 +154,12 @@ public:
 		return _desired_angular_acceleration;
 	}
 
+	Affine3d getCompliantFrameInRobotBase() const {
+		return _robot->transform(_link_name,
+								 _compliant_frame_in_link.translation(),
+								 _compliant_frame_in_link.linear());
+	}
+
 	// Gains for motion controller
 	void setPosControlGains(const PIDGains& gains) {
 		setPosControlGains(gains.kp, gains.kv, gains.ki);
@@ -200,7 +206,8 @@ public:
 	}
 
 	/**
-	 * @brief Set the Desired Force in robot base frame
+	 * @brief Set the Desired Force in robot base frame or compliant frame
+	 * depending on the value of _is_force_parametrization_in_compliant_frame
 	 *
 	 * @param desired_force
 	 */
@@ -211,12 +218,20 @@ public:
 	/**
 	 * @brief Get the Desired Force in robot base frame
 	 *
-	 * @return const Vector3d& desired force in robot base frame
+	 * @return Vector3d desired force in robot base frame
 	 */
-	const Vector3d& getDesiredForce() const { return _desired_force; }
+	Vector3d getDesiredForce() const;
 
 	/**
-	 * @brief Set the Desired Moment in robot base frame
+	 * @brief Get the Desired Force in compliant frame
+	 *
+	 * @return Vector3d desired force in compliant frame
+	 */
+	Vector3d getDesiredForceInCompliantFrame() const;
+
+	/**
+	 * @brief Set the Desired Moment in robot base frame or compliant frame
+	 * depending on the value of _is_force_parametrization_in_compliant_frame
 	 *
 	 * @param desired_moment
 	 */
@@ -227,9 +242,16 @@ public:
 	/**
 	 * @brief Get the Desired Moment in robot base frame
 	 *
-	 * @return const Vector3d& desired moment in robot base frame
+	 * @return Vector3d desired moment in robot base frame
 	 */
-	const Vector3d& getDesiredMoment() const { return _desired_moment; }
+	Vector3d getDesiredMoment() const;
+
+	/**
+	 * @brief Get the Desired Moment In Compliant Frame
+	 * 
+	 * @return Vector3d desired moment in compliant frame
+	 */
+	Vector3d getDesiredMomentInCompliantFrame() const;
 
 	// internal otg functions
 	/**
@@ -513,9 +535,10 @@ private:
 	Matrix3d _ki_force, _ki_moment;
 
 	// desired force and moment for the force part of the controller
-	// defaults to Zero
-	Vector3d _desired_force;   // robot frame
-	Vector3d _desired_moment;  // robot frame
+	// expressed in robot frame or compliant frame depending on the value of
+	// _is_force_parametrization_in_compliant_frame
+	Vector3d _desired_force;
+	Vector3d _desired_moment;
 
 	// velocity saturation is off by default
 	bool _use_velocity_saturation_flag;
@@ -536,8 +559,8 @@ private:
 
 	// internal variables, not to be touched by the user
 	string _link_name;
-	Affine3d _compliant_frame;	// in link_frame
-	bool _is_force_motion_parametrization_in_compliant_frame;
+	Affine3d _compliant_frame_in_link;	// in link_frame
+	bool _is_force_parametrization_in_compliant_frame;
 
 	// motion quantities
 	Vector3d _current_position;		// robot frame
