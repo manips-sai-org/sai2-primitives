@@ -67,6 +67,28 @@ runs:
         # run cmake
         cmake ..
 
+    - name: Setup sai2-common
+      shell: bash
+      run: |
+        # clone repo and run cmake
+        cd ../dep
+        git clone https://github.com/manips-sai-org/sai2-common.git
+        cd  sai2-common
+        mkdir build && cd build && cmake ..
+
+        # Get the latest artifact from the master branch
+        LATEST_ARTIFACT=$(curl -s -X GET \
+          -H "Authorization: Bearer ${{ inputs.token }}" \
+          https://api.github.com/repos/manips-sai-org/sai2-common/actions/artifacts?branch=master \
+          | jq -r '.artifacts[0].id')
+
+        # Download the artifact using the latest artifact ID to get the library
+        curl -L \
+          -H "Authorization: Bearer ${{ inputs.token }}" \
+          https://api.github.com/repos/manips-sai-org/sai2-common/actions/artifacts/${LATEST_ARTIFACT}/zip --output lib.zip
+
+        unzip lib.zip
+
     - name: Setup chai3d
       shell: bash
       run: |
@@ -130,28 +152,6 @@ runs:
         curl -L \
           -H "Authorization: Bearer ${{ inputs.token }}" \
           https://api.github.com/repos/manips-sai-org/sai2-simulation-release/actions/artifacts/${LATEST_ARTIFACT}/zip --output lib.zip
-
-        unzip lib.zip
-
-    - name: Setup sai2-common
-      shell: bash
-      run: |
-        # clone repo and run cmake
-        cd ../dep
-        git clone https://github.com/manips-sai-org/sai2-common.git
-        cd  sai2-common
-        mkdir build && cd build && cmake ..
-
-        # Get the latest artifact from the master branch
-        LATEST_ARTIFACT=$(curl -s -X GET \
-          -H "Authorization: Bearer ${{ inputs.token }}" \
-          https://api.github.com/repos/manips-sai-org/sai2-common/actions/artifacts?branch=master \
-          | jq -r '.artifacts[0].id')
-
-        # Download the artifact using the latest artifact ID to get the library
-        curl -L \
-          -H "Authorization: Bearer ${{ inputs.token }}" \
-          https://api.github.com/repos/manips-sai-org/sai2-common/actions/artifacts/${LATEST_ARTIFACT}/zip --output lib.zip
 
         unzip lib.zip
 
