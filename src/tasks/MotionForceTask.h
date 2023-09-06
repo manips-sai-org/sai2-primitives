@@ -104,11 +104,18 @@ public:
 	}
 
 	/**
-	 * @brief Get the Sensed Force resolved at the control frame
+	 * @brief Get the Sensed Force expressed in robot base frame
 	 *
-	 * @return const Vector3d& current sensed force in the control frame
+	 * @return const Vector3d& current sensed force in robot base frame
 	 */
 	const Vector3d& getSensedForce() const { return _sensed_force; }
+
+	/**
+	 * @brief Get the Sensed Moment (resolved at the control point) expressed in robot base frame
+	 *
+	 * @return const Vector3d& current sensed moment in robot base frame
+	 */
+	const Vector3d& getSensedMoment() const { return _sensed_moment; }
 
 	/**
 	 * @brief Get the nullspace matrix of that task and the previous ones in the

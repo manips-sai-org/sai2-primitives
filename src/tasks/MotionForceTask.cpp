@@ -376,8 +376,8 @@ VectorXd MotionForceTask::computeTorques() {
 	_unit_mass_force = position_orientation_contribution;
 
 	VectorXd feedforward_force_moment = VectorXd::Zero(6);
-	feedforward_force_moment.head(3) = sigma_force * _desired_force;
-	feedforward_force_moment.tail(3) = sigma_moment * _desired_moment;
+	feedforward_force_moment.head(3) = sigma_force * getDesiredForce();
+	feedforward_force_moment.tail(3) = sigma_moment * getDesiredMoment();
 
 	if (_closed_loop_force_control) {
 		feedforward_force_moment *= _k_ff;
