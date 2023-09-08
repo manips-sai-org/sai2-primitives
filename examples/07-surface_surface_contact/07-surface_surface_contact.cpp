@@ -125,9 +125,7 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 	motion_force_task->enablePassivity();
 	VectorXd motion_force_task_torques = VectorXd::Zero(dof);
 	// set the force sensor location for the contact part of the task
-	Affine3d T_control_sensor = Affine3d::Identity();
-	T_control_sensor.translation() = sensor_pos_in_link - pos_in_link;
-	motion_force_task->setForceSensorFrame(link_name, T_control_sensor);
+	motion_force_task->setForceSensorFrame(Affine3d(Translation3d(sensor_pos_in_link)));
 	motion_force_task->disableInternalOtg();
 
 	// no gains setting here, using the default task values

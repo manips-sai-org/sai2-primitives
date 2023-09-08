@@ -16,33 +16,49 @@ namespace Sai2Primitives {
 namespace {
 const double MAX_FEEDBACK_FORCE_FORCE_CONTROLLER = 20.0;
 const double MAX_FEEDBACK_MOMENT_FORCE_CONTROLLER = 10.0;
+
+Affine3d transformFromVecAndMat(const Vector3d& vec, const Matrix3d& mat) {
+	Affine3d transform = Affine3d::Identity();
+	transform.translation() = vec;
+	transform.linear() = mat;
+	return transform;
+}
+
 }  // namespace
 
 MotionForceTask::MotionForceTask(
 	std::shared_ptr<Sai2Model::Sai2Model> robot, const string& link_name,
 	const Affine3d& compliant_frame_in_link,
 	const bool is_force_parametrization_in_compliant_frame,
+	const Vector3d& wrist_point_in_link,
 	const double loop_timestep) {
 	_loop_timestep = loop_timestep;
 
 	_robot = robot;
 	_link_name = link_name;
-	_compliant_frame_in_link = compliant_frame_in_link;
 	_is_force_parametrization_in_compliant_frame =
 		is_force_parametrization_in_compliant_frame;
+
 	setDynamicDecouplingType(BOUNDED_INERTIA_ESTIMATES);
+
+	_wrist_frame_in_link = Affine3d(Translation3d(wrist_point_in_link));
+	_wrist_frame_in_link.linear() = compliant_frame_in_link.rotation();
+
+	_wrist_to_compliant_frame_origin =
+		compliant_frame_in_link.rotation().transpose() *
+		(compliant_frame_in_link.translation() - wrist_point_in_link);
 
 	int dof = _robot->dof();
 
-	_T_control_to_sensor = Affine3d::Identity();
+	_force_sensor_frame_in_link = Affine3d::Identity();
 
 	// POPC force
 	_POPC_force.reset(new POPCExplicitForceControl(_loop_timestep));
 
 	// motion
-	_current_position =
-		_robot->position(_link_name, _compliant_frame_in_link.translation());
-	_current_orientation = _robot->rotation(_link_name);
+	_current_wrist_position =
+		_robot->position(_link_name, _wrist_frame_in_link.translation());
+	_current_wrist_orientation = _robot->rotation(_link_name, _wrist_frame_in_link.rotation());
 
 	// default values for gains and velocity saturation
 	setPosControlGains(50.0, 14.0, 0.0);
@@ -75,7 +91,7 @@ MotionForceTask::MotionForceTask(
 	_ori_dof = 3;
 
 	// trajectory generation
-	_otg.reset(new OTG_6dof_cartesian(_current_position, _current_orientation,
+	_otg.reset(new OTG_6dof_cartesian(_current_wrist_position, _current_wrist_orientation,
 									  _loop_timestep));
 	enableInternalOtgAccelerationLimited(0.3, 1.0, M_PI / 3, M_PI);
 
@@ -85,35 +101,38 @@ MotionForceTask::MotionForceTask(
 void MotionForceTask::reInitializeTask() {
 	int dof = _robot->dof();
 
-	// motion
-	_current_position =
-		_robot->position(_link_name, _compliant_frame_in_link.translation());
-	_desired_position = _current_position;
-	_current_orientation = _robot->rotation(_link_name);
-	_desired_orientation = _current_orientation;
+	// initialize state
+	_current_wrist_position =
+		_robot->position(_link_name, _wrist_frame_in_link.translation());
+	_current_wrist_orientation = _robot->rotation(_link_name, _wrist_frame_in_link.rotation());
 
-	_current_velocity.setZero();
-	_desired_velocity.setZero();
-	_current_angular_velocity.setZero();
-	_desired_angular_velocity.setZero();
-	_desired_acceleration.setZero();
-	_desired_angular_acceleration.setZero();
+	_current_wrist_velocity.setZero();
+	_current_wrist_angular_velocity.setZero();
 
-	_orientation_error.setZero();
 	_integrated_position_error.setZero();
 	_integrated_orientation_error.setZero();
 
-	_desired_force.setZero();
-	_sensed_force.setZero();
-	_desired_moment.setZero();
-	_sensed_moment.setZero();
+	_sensed_force_at_wrist.setZero();
+	_sensed_moment_at_wrist.setZero();
+
+	// initialize desired state
+	_desired_compliant_frame_position = _current_wrist_position + _current_wrist_orientation * _wrist_to_compliant_frame_origin;
+	_desired_compliant_frame_orientation = _current_wrist_orientation;
+
+	_desired_compliant_frame_velocity.setZero();
+	_desired_compliant_frame_angular_velocity.setZero();
+	_desired_compliant_frame_acceleration.setZero();
+	_desired_compliant_frame_angular_acceleration.setZero();
+
+	_desired_compliant_frame_force.setZero();
+	_desired_compliant_frame_moment.setZero();
 
 	resetIntegrators();
 
 	_task_force.setZero(6);
-	_unit_mass_force.setZero(6);
 
-	_otg->reInitialize(_current_position, _current_orientation);
+	// initialize otg
+	_otg->reInitialize(_current_wrist_position, _current_wrist_orientation);
 }
 
 void MotionForceTask::updateTaskModel(const MatrixXd N_prec) {
@@ -129,7 +148,7 @@ void MotionForceTask::updateTaskModel(const MatrixXd N_prec) {
 
 	_N_prec = N_prec;
 
-	_jacobian = _robot->J(_link_name, _compliant_frame_in_link.translation());
+	_jacobian = _robot->J(_link_name, _wrist_frame_in_link.translation());
 	_projected_jacobian = _jacobian * _N_prec;
 
 	_URange_pos = Sai2Model::matrixRangeBasis(_projected_jacobian.topRows(3));
@@ -197,7 +216,7 @@ void MotionForceTask::updateTaskModel(const MatrixXd N_prec) {
 
 VectorXd MotionForceTask::computeTorques() {
 	VectorXd task_joint_torques = VectorXd::Zero(_robot->dof());
-	_jacobian = _robot->J(_link_name, _compliant_frame_in_link.translation());
+	_jacobian = _robot->J(_link_name, _wrist_frame_in_link.translation());
 	_projected_jacobian = _jacobian * _N_prec;
 
 	Matrix3d sigma_force = sigmaForce();
@@ -211,29 +230,48 @@ VectorXd MotionForceTask::computeTorques() {
 	Vector3d orientation_related_force = Vector3d::Zero();
 
 	// update controller state
-	_current_position =
-		_robot->position(_link_name, _compliant_frame_in_link.translation());
-	_current_orientation = _robot->rotation(_link_name);
-	_current_orientation =
-		_current_orientation *
-		_compliant_frame_in_link
-			.linear();	// orientation of compliant frame in robot frame
-	_orientation_error =
-		Sai2Model::orientationError(_desired_orientation, _current_orientation);
-	_current_velocity =
+	_current_wrist_position =
+		_robot->position(_link_name, _wrist_frame_in_link.translation());
+	_current_wrist_orientation = _robot->rotation(_link_name, _wrist_frame_in_link.rotation());
+	_current_wrist_velocity =
 		_projected_jacobian.block(0, 0, 3, _robot->dof()) * _robot->dq();
-	_current_angular_velocity =
+	_current_wrist_angular_velocity =
 		_projected_jacobian.block(3, 0, 3, _robot->dof()) * _robot->dq();
 
+	// compute desired state at wrist point
+	Vector3d compliant_frame_to_wrist_in_base_coordinates = - _current_wrist_orientation * _wrist_to_compliant_frame_origin;
+	Vector3d desired_wrist_position = _desired_compliant_frame_position + compliant_frame_to_wrist_in_base_coordinates;
+	Matrix3d desired_wrist_orientation = _desired_compliant_frame_orientation;
+
+	Vector3d desired_wrist_linear_velocity =
+		_desired_compliant_frame_velocity +
+		_desired_compliant_frame_angular_velocity.cross(
+			compliant_frame_to_wrist_in_base_coordinates);
+	Vector3d desired_wrist_angular_velocity =
+		_desired_compliant_frame_angular_velocity;
+
+	Vector3d desired_wrist_linear_acceleration =
+		_desired_compliant_frame_acceleration +
+		_desired_compliant_frame_angular_acceleration.cross(
+			compliant_frame_to_wrist_in_base_coordinates) +
+		_desired_compliant_frame_angular_velocity.cross(
+			_desired_compliant_frame_angular_velocity.cross(
+				compliant_frame_to_wrist_in_base_coordinates));
+	Vector3d desired_wrist_angular_acceleration =
+		_desired_compliant_frame_angular_acceleration;
+
+	Vector3d desired_force_wrist = getDesiredForce();
+	Vector3d desired_moment_wrist = getDesiredMoment() - compliant_frame_to_wrist_in_base_coordinates.cross(getDesiredForce());
+	
 	// force related terms
 	if (_closed_loop_force_control) {
 		// update the integrated error
 		_integrated_force_error +=
-			(_sensed_force - getDesiredForce()) * _loop_timestep;
+			(_sensed_force_at_wrist - desired_force_wrist) * _loop_timestep;
 
 		// compute the feedback term and saturate it
 		Vector3d force_feedback_term =
-			-_kp_force * (_sensed_force - getDesiredForce()) -
+			-_kp_force * (_sensed_force_at_wrist - desired_force_wrist) -
 			_ki_force * _integrated_force_error;
 		if (force_feedback_term.norm() > MAX_FEEDBACK_FORCE_FORCE_CONTROLLER) {
 			force_feedback_term *= MAX_FEEDBACK_FORCE_FORCE_CONTROLLER /
@@ -243,24 +281,24 @@ VectorXd MotionForceTask::computeTorques() {
 		// compute the final contribution
 		force_feedback_related_force =
 			_POPC_force->computePassivitySaturatedForce(
-				sigma_force * getDesiredForce(), sigma_force * _sensed_force,
+				sigma_force * desired_force_wrist, sigma_force * _sensed_force_at_wrist,
 				sigma_force * force_feedback_term,
-				sigma_force * _current_velocity, _kv_force, _k_ff);
+				sigma_force * _current_wrist_velocity, _kv_force, _k_ff);
 	} else	// open loop force control
 	{
 		force_feedback_related_force =
-			sigma_force * (-_kv_force * _current_velocity);
+			sigma_force * (-_kv_force * _current_wrist_velocity);
 	}
 
 	// moment related terms
 	if (_closed_loop_moment_control) {
 		// update the integrated error
 		_integrated_moment_error +=
-			(_sensed_moment - getDesiredMoment()) * _loop_timestep;
+			(_sensed_moment_at_wrist - desired_moment_wrist) * _loop_timestep;
 
 		// compute the feedback term
 		Vector3d moment_feedback_term =
-			-_kp_moment * (_sensed_moment - getDesiredMoment()) -
+			-_kp_moment * (_sensed_moment_at_wrist - desired_moment_wrist) -
 			_ki_moment * _integrated_moment_error;
 
 		// saturate the feedback term
@@ -273,95 +311,87 @@ VectorXd MotionForceTask::computeTorques() {
 		// compute the final contribution
 		moment_feedback_related_force =
 			sigma_moment *
-			(moment_feedback_term - _kv_moment * _current_angular_velocity);
+			(moment_feedback_term - _kv_moment * _current_wrist_angular_velocity);
 	} else	// open loop moment control
 	{
 		moment_feedback_related_force =
-			sigma_moment * (-_kv_moment * _current_angular_velocity);
+			sigma_moment * (-_kv_moment * _current_wrist_angular_velocity);
 	}
 
 	// motion related terms
 	// compute next state from trajectory generation
-	Vector3d tmp_desired_position = _desired_position;
-	Matrix3d tmp_desired_orientation = _desired_orientation;
-	Vector3d tmp_desired_velocity = _desired_velocity;
-	Vector3d tmp_desired_angular_velocity = _desired_angular_velocity;
-	Vector3d tmp_desired_acceleration = _desired_acceleration;
-	Vector3d tmp_desired_angular_acceleration =
-		_desired_angular_acceleration;
-
 	if(_use_internal_otg_flag) {
-		_otg->setGoalPositionAndLinearVelocity(_desired_position,
-											   _desired_velocity);
-		_otg->setGoalOrientationAndAngularVelocity(_desired_orientation,
-												   _desired_angular_velocity);
+		_otg->setGoalPositionAndLinearVelocity(desired_wrist_position,
+											   desired_wrist_linear_velocity);
+		_otg->setGoalOrientationAndAngularVelocity(desired_wrist_orientation,
+												   desired_wrist_angular_velocity);
 		_otg->update();
 		
-		tmp_desired_position = _otg->getNextPosition();
-		tmp_desired_velocity = _otg->getNextLinearVelocity();
-		tmp_desired_acceleration = _otg->getNextLinearAcceleration();
-		tmp_desired_orientation = _otg->getNextOrientation();
-		tmp_desired_angular_velocity = _otg->getNextAngularVelocity();
-		tmp_desired_angular_acceleration = _otg->getNextAngularAcceleration();
+		desired_wrist_position = _otg->getNextPosition();
+		desired_wrist_linear_velocity = _otg->getNextLinearVelocity();
+		desired_wrist_linear_acceleration = _otg->getNextLinearAcceleration();
+		desired_wrist_orientation = _otg->getNextOrientation();
+		desired_wrist_angular_velocity = _otg->getNextAngularVelocity();
+		desired_wrist_angular_acceleration = _otg->getNextAngularAcceleration();
 	}
 
 	// linear motion
 	// update integrated error for I term
 	_integrated_position_error +=
-		(_current_position - tmp_desired_position) * _loop_timestep;
+		(_current_wrist_position - desired_wrist_position) * _loop_timestep;
 
 	// final contribution
 	if (_use_velocity_saturation_flag) {
-		tmp_desired_velocity =
+		desired_wrist_linear_velocity =
 			-_kp_pos * _kv_pos.inverse() *
-				(_current_position - tmp_desired_position) -
+				(_current_wrist_position - desired_wrist_position) -
 			_ki_pos * _kv_pos.inverse() * _integrated_position_error;
-		if (tmp_desired_velocity.norm() > _linear_saturation_velocity) {
-			tmp_desired_velocity *=
-				_linear_saturation_velocity / tmp_desired_velocity.norm();
+		if (desired_wrist_linear_velocity.norm() > _linear_saturation_velocity) {
+			desired_wrist_linear_velocity *=
+				_linear_saturation_velocity / desired_wrist_linear_velocity.norm();
 		}
 		position_related_force =
 			sigma_position *
-			(tmp_desired_acceleration -
-			 _kv_pos * (_current_velocity - tmp_desired_velocity));
+			(desired_wrist_linear_acceleration -
+			 _kv_pos * (_current_wrist_velocity - desired_wrist_linear_velocity));
 	} else {
 		position_related_force =
 			sigma_position *
-			(tmp_desired_acceleration -
-			 _kp_pos * (_current_position - tmp_desired_position) -
-			 _kv_pos * (_current_velocity - tmp_desired_velocity) -
+			(desired_wrist_linear_acceleration -
+			 _kp_pos * (_current_wrist_position - desired_wrist_position) -
+			 _kv_pos * (_current_wrist_velocity - desired_wrist_linear_velocity) -
 			 _ki_pos * _integrated_position_error);
 	}
 
 	// angular motion
 	// orientation error
 	Vector3d orientation_error = Sai2Model::orientationError(
-		tmp_desired_orientation, _current_orientation);
+		desired_wrist_orientation, _current_wrist_orientation);
 
 	// update integrated error for I term
 	_integrated_orientation_error += orientation_error * _loop_timestep;
 
 	// final contribution
 	if (_use_velocity_saturation_flag) {
-		tmp_desired_angular_velocity =
+		desired_wrist_angular_velocity =
 			-_kp_ori * _kv_ori.inverse() * orientation_error -
 			_ki_ori * _kv_ori.inverse() * _integrated_orientation_error;
-		if (tmp_desired_angular_velocity.norm() >
+		if (desired_wrist_angular_velocity.norm() >
 			_angular_saturation_velocity) {
-			tmp_desired_angular_velocity *=
+			desired_wrist_angular_velocity *=
 				_angular_saturation_velocity /
-				tmp_desired_angular_velocity.norm();
+				desired_wrist_angular_velocity.norm();
 		}
 		orientation_related_force =
-			sigma_orientation * (tmp_desired_angular_acceleration -
-								 _kv_ori * (_current_angular_velocity -
-											tmp_desired_angular_velocity));
+			sigma_orientation * (desired_wrist_angular_acceleration -
+								 _kv_ori * (_current_wrist_angular_velocity -
+											desired_wrist_angular_velocity));
 	} else {
 		orientation_related_force =
-			sigma_orientation * (tmp_desired_angular_acceleration -
+			sigma_orientation * (desired_wrist_angular_acceleration -
 								 _kp_ori * orientation_error -
-								 _kv_ori * (_current_angular_velocity -
-											tmp_desired_angular_velocity) -
+								 _kv_ori * (_current_wrist_angular_velocity -
+											desired_wrist_angular_velocity) -
 								 _ki_ori * _integrated_orientation_error);
 	}
 
@@ -373,11 +403,9 @@ VectorXd MotionForceTask::computeTorques() {
 	position_orientation_contribution.head(3) = position_related_force;
 	position_orientation_contribution.tail(3) = orientation_related_force;
 
-	_unit_mass_force = position_orientation_contribution;
-
 	VectorXd feedforward_force_moment = VectorXd::Zero(6);
-	feedforward_force_moment.head(3) = sigma_force * getDesiredForce();
-	feedforward_force_moment.tail(3) = sigma_moment * getDesiredMoment();
+	feedforward_force_moment.head(3) = sigma_force * desired_force_wrist;
+	feedforward_force_moment.tail(3) = sigma_moment * desired_moment_wrist;
 
 	if (_closed_loop_force_control) {
 		feedforward_force_moment *= _k_ff;
@@ -422,67 +450,16 @@ void MotionForceTask::enableInternalOtgJerkLimited(
 	_use_internal_otg_flag = true;
 }
 
-bool MotionForceTask::goalPositionReached(const double tolerance,
-										  const bool verbose) {
-	Matrix3d sigma_position = Matrix3d::Identity() - sigmaForce();
-	double position_error =
-		(_desired_position - _current_position).transpose() *
-		(_URange_pos * sigma_position * _URange_pos.transpose()) *
-		(_desired_position - _current_position);
-	position_error = sqrt(position_error);
-	bool goal_reached = position_error < tolerance;
-	if (verbose) {
-		cout << "position error in MotionForceTask : " << position_error
-			 << endl;
-		cout << "Tolerance : " << tolerance << endl;
-		cout << "Goal reached : " << goal_reached << endl << endl;
-	}
-
-	return goal_reached;
-}
-
-bool MotionForceTask::goalOrientationReached(const double tolerance,
-											 const bool verbose) {
-	Matrix3d sigma_orientation = Matrix3d::Identity() - sigmaMoment();
-	double orientation_error = _orientation_error.transpose() * _URange_ori *
-							   sigma_orientation * _URange_ori.transpose() *
-							   _orientation_error;
-	orientation_error = sqrt(orientation_error);
-	bool goal_reached = orientation_error < tolerance;
-	if (verbose) {
-		cout << "orientation error in MotionForceTask : " << orientation_error
-			 << endl;
-		cout << "Tolerance : " << tolerance << endl;
-		cout << "Goal reached : " << goal_reached << endl << endl;
-	}
-
-	return goal_reached;
-}
-
 Vector3d MotionForceTask::getDesiredForce() const {
 	return _is_force_parametrization_in_compliant_frame
-			   ? getCompliantFrameInRobotBase().linear() * _desired_force
-			   : _desired_force;
-}
-
-Vector3d MotionForceTask::getDesiredForceInCompliantFrame() const {
-	return _is_force_parametrization_in_compliant_frame
-			   ? _desired_force
-			   : getCompliantFrameInRobotBase().linear().transpose() *
-					 _desired_force;
+			   ? getCompliantFrameInRobotBase().linear() * _desired_compliant_frame_force
+			   : _desired_compliant_frame_force;
 }
 
 Vector3d MotionForceTask::getDesiredMoment() const {
 	return _is_force_parametrization_in_compliant_frame
-			   ? getCompliantFrameInRobotBase().linear() * _desired_moment
-			   : _desired_moment;
-}
-
-Vector3d MotionForceTask::getDesiredMomentInCompliantFrame() const {
-	return _is_force_parametrization_in_compliant_frame
-			   ? _desired_moment
-			   : getCompliantFrameInRobotBase().linear().transpose() *
-					 _desired_moment;
+			   ? getCompliantFrameInRobotBase().linear() * _desired_compliant_frame_moment
+			   : _desired_compliant_frame_moment;
 }
 
 void MotionForceTask::setPosControlGains(double kp_pos, double kv_pos,
@@ -519,7 +496,7 @@ void MotionForceTask::setPosControlGains(const Vector3d& kp_pos,
 	}
 	_are_pos_gains_isotropic = false;
 	Matrix3d rotation = _is_force_parametrization_in_compliant_frame
-							? _compliant_frame_in_link.rotation()
+							? _wrist_frame_in_link.rotation()
 							: Matrix3d::Identity();
 	_kp_pos = rotation * kp_pos.asDiagonal() * rotation.transpose();
 	_kv_pos = rotation * kv_pos.asDiagonal() * rotation.transpose();
@@ -532,7 +509,7 @@ vector<PIDGains> MotionForceTask::getPosControlGains() const {
 			1, PIDGains(_kp_pos(0, 0), _kv_pos(0, 0), _ki_pos(0, 0)));
 	}
 	Matrix3d rotation = _is_force_parametrization_in_compliant_frame
-							? _compliant_frame_in_link.rotation()
+							? _wrist_frame_in_link.rotation()
 							: Matrix3d::Identity();
 	Vector3d aniso_kp_robot_base =
 		(rotation.transpose() * _kp_pos * rotation).diagonal();
@@ -583,7 +560,7 @@ void MotionForceTask::setOriControlGains(const Vector3d& kp_ori,
 	}
 	_are_ori_gains_isotropic = false;
 	Matrix3d rotation = _is_force_parametrization_in_compliant_frame
-							? _compliant_frame_in_link.rotation()
+							? _wrist_frame_in_link.rotation()
 							: Matrix3d::Identity();
 	_kp_ori = rotation * kp_ori.asDiagonal() * rotation.transpose();
 	_kv_ori = rotation * kv_ori.asDiagonal() * rotation.transpose();
@@ -596,7 +573,7 @@ vector<PIDGains> MotionForceTask::getOriControlGains() const {
 			1, PIDGains(_kp_ori(0, 0), _kv_ori(0, 0), _ki_ori(0, 0)));
 	}
 	Matrix3d rotation = _is_force_parametrization_in_compliant_frame
-							? _compliant_frame_in_link.rotation()
+							? _wrist_frame_in_link.rotation()
 							: Matrix3d::Identity();
 	Vector3d aniso_kp_robot_base =
 		(rotation.transpose() * _kp_ori * rotation).diagonal();
@@ -635,33 +612,24 @@ void MotionForceTask::enableVelocitySaturation(const double linear_vel_sat,
 	_angular_saturation_velocity = angular_vel_sat;
 }
 
-void MotionForceTask::setForceSensorFrame(
-	const string link_name, const Affine3d transformation_in_link) {
-	if (link_name != _link_name) {
-		throw invalid_argument(
-			"The link to which is attached the sensor should be the same as "
-			"the link to which is attached the control frame in "
-			"MotionForceTask::setForceSensorFrame\n");
-	}
-	_T_control_to_sensor = _compliant_frame_in_link.inverse() * transformation_in_link;
-}
-
 void MotionForceTask::updateSensedForceAndMoment(
 	const Vector3d sensed_force_sensor_frame,
 	const Vector3d sensed_moment_sensor_frame) {
 	// find the transform from base frame to control frame
-	Affine3d T_base_link = _robot->transform(_link_name);
-	Affine3d T_base_control = T_base_link * _compliant_frame_in_link;
+	Affine3d T_base_wrist =
+		_robot->transform(_link_name, _wrist_frame_in_link.translation(),
+						  _wrist_frame_in_link.rotation());
+	Affine3d T_wrist_sensor = _wrist_frame_in_link.inverse() * _force_sensor_frame_in_link;
 
-	// find the resolved sensed force and moment in control frame
-	_sensed_force = _T_control_to_sensor.rotation() * sensed_force_sensor_frame;
-	_sensed_moment =
-		_T_control_to_sensor.translation().cross(_sensed_force) +
-		_T_control_to_sensor.rotation() * sensed_moment_sensor_frame;
+	// find the resolved sensed force and moment in wrist point frame
+	_sensed_force_at_wrist = T_wrist_sensor.rotation() * sensed_force_sensor_frame;
+	_sensed_moment_at_wrist =
+		T_wrist_sensor.translation().cross(_sensed_force_at_wrist) +
+		T_wrist_sensor.rotation() * sensed_moment_sensor_frame;
 
 	// rotate the quantities in base frame
-	_sensed_force = T_base_control.rotation() * _sensed_force;
-	_sensed_moment = T_base_control.rotation() * _sensed_moment;
+	_sensed_force_at_wrist = T_base_wrist.rotation() * _sensed_force_at_wrist;
+	_sensed_moment_at_wrist = T_base_wrist.rotation() * _sensed_moment_at_wrist;
 }
 
 void MotionForceTask::parametrizeForceMotionSpaces(
@@ -707,7 +675,7 @@ void MotionForceTask::parametrizeMomentRotMotionSpaces(
 
 Matrix3d MotionForceTask::sigmaForce() const {
 	Matrix3d rotation = _is_force_parametrization_in_compliant_frame
-							? _compliant_frame_in_link.rotation()
+							? _wrist_frame_in_link.rotation()
 							: Matrix3d::Identity();
 	switch (_force_space_dimension) {
 		case 0:
@@ -737,7 +705,7 @@ Matrix3d MotionForceTask::sigmaForce() const {
 
 Matrix3d MotionForceTask::sigmaMoment() const {
 	Matrix3d rotation = _is_force_parametrization_in_compliant_frame
-							? _compliant_frame_in_link.rotation()
+							? _wrist_frame_in_link.rotation()
 							: Matrix3d::Identity();
 	switch (_moment_space_dimension) {
 		case 0:

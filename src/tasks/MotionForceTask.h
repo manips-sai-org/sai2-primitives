@@ -56,10 +56,23 @@ public:
 	 * controlled
 	 * @param link_name The name of the link in the robot at which to attach the
 	 * compliant frame
-	 * @param compliant_frame_in_link Compliant frame with respect to link frame
+	 * @param compliant_frame_in_link Compliant frame with respect to link
+	 * frame. The compliant frame is the one controlled by the controller. The
+	 * desired position is the position of the origin of the compliant frame,
+	 * the desired orientation is the orientation the compliant frame should
+	 * reach, and the desired force and moments are for the compliant frame as
+	 * well.
 	 * @param is_force_parametrization_in_compliant_frame Whether the
 	 * force and motion space (and potential non isotropic gains) are defined
 	 * with respect to the compliant frome or the robot base frame
+	 * @param wrist_point_in_link The wrist point is the point at which the
+	 * control is actually computed. For robots that have a wrist point with 3
+	 * intersecting axis, using the wrist to resolve the control enables a
+	 * kinematic decoupling between the position and the orientation control
+	 * which leads to a better performance of the controller in a real world
+	 * scenario. If there is no real wrist point, a point of intersection of 2
+	 * axis, not too far from the third one can also lead to better empirical
+	 * performance than using the origin of the compliant frame.
 	 * @param loop_timestep Time taken by a control loop. Used in trajectory
 	 * generation and integral control.
 	 */
@@ -67,6 +80,7 @@ public:
 		std::shared_ptr<Sai2Model::Sai2Model> robot, const string& link_name,
 		const Affine3d& compliant_frame_in_link = Affine3d::Identity(),
 		const bool is_force_parametrization_in_compliant_frame = false,
+		const Vector3d& wrist_point_in_link = Vector3d::Zero(),
 		const double loop_timestep = 0.001);
 
 	//------------------------------------------------
@@ -76,46 +90,59 @@ public:
 	/**
 	 * @brief Get the Current Position
 	 *
-	 * @return const Vector3d& current position of the control point
+	 * @return Vector3d current position of the compliant point
 	 */
-	const Vector3d& getCurrentPosition() const { return _current_position; }
+	Vector3d getCurrentPosition() const {
+		return _current_wrist_position +
+			   _current_wrist_orientation *
+				   _wrist_to_compliant_frame_origin;
+	}
 	/**
 	 * @brief Get the Current Velocity
 	 *
-	 * @return const Vector3d& current velocity of the control point
+	 * @return Vector3d current velocity of the compliant point
 	 */
-	const Vector3d& getCurrentVelocity() const { return _current_velocity; }
+	Vector3d getCurrentVelocity() const {
+		return _current_wrist_velocity +
+			   _current_wrist_angular_velocity.cross(
+				   _current_wrist_orientation *
+				   _wrist_to_compliant_frame_origin);
+	}
 
 	/**
 	 * @brief Get the Current Orientation
 	 *
-	 * @return const Matrix3d& current orientation of the control frame
+	 * @return Matrix3d current orientation of the compliant frame
 	 */
-	const Matrix3d& getCurrentOrientation() const {
-		return _current_orientation;
+	Matrix3d getCurrentOrientation() const {
+		return _current_wrist_orientation;
 	}
 	/**
 	 * @brief Get the Current Angular Velocity
 	 *
-	 * @return const Vector3d& current angular velocity of the control frame
+	 * @return Vector3d current angular velocity of the compliant frame
 	 */
-	const Vector3d& getCurrentAngularVelocity() const {
-		return _current_angular_velocity;
+	Vector3d getCurrentAngularVelocity() const {
+		return _current_wrist_angular_velocity;
 	}
 
 	/**
 	 * @brief Get the Sensed Force expressed in robot base frame
 	 *
-	 * @return const Vector3d& current sensed force in robot base frame
+	 * @return Vector3d current sensed force in robot base frame
 	 */
-	const Vector3d& getSensedForce() const { return _sensed_force; }
+	Vector3d getSensedForce() const { return _sensed_force_at_wrist; }
 
 	/**
-	 * @brief Get the Sensed Moment (resolved at the control point) expressed in robot base frame
+	 * @brief Get the Sensed Moment (resolved at the compliant frame origin) expressed in robot base frame
 	 *
-	 * @return const Vector3d& current sensed moment in robot base frame
+	 * @return Vector3d current sensed moment in robot base frame
 	 */
-	const Vector3d& getSensedMoment() const { return _sensed_moment; }
+	Vector3d getSensedMoment() const {
+		return _sensed_moment_at_wrist -
+			   (_current_wrist_orientation * _wrist_to_compliant_frame_origin)
+				   .cross(_sensed_force_at_wrist);
+	}
 
 	/**
 	 * @brief Get the nullspace matrix of that task and the previous ones in the
@@ -126,45 +153,45 @@ public:
 	const MatrixXd& getN() const { return _N; }
 
 	void setDesiredPosition(const Vector3d& desired_position) {
-		_desired_position = desired_position;
+		_desired_compliant_frame_position = desired_position;
 	}
-	const Vector3d& getDesiredPosition() const { return _desired_position; }
+	const Vector3d& getDesiredPosition() const { return _desired_compliant_frame_position; }
 
 	void setDesiredOrientation(const Matrix3d& desired_orientation) {
-		_desired_orientation = desired_orientation;
+		_desired_compliant_frame_orientation = desired_orientation;
 	}
-	Matrix3d getDesiredOrientation() const { return _desired_orientation; }
+	Matrix3d getDesiredOrientation() const { return _desired_compliant_frame_orientation; }
 
 	void setDesiredVelocity(const Vector3d& desired_velocity) {
-		_desired_velocity = desired_velocity;
+		_desired_compliant_frame_velocity = desired_velocity;
 	}
-	const Vector3d& getDesiredVelocity() const { return _desired_velocity; }
+	const Vector3d& getDesiredVelocity() const { return _desired_compliant_frame_velocity; }
 
 	void setDesiredAngularVelocity(const Vector3d& desired_angvel) {
-		_desired_angular_velocity = desired_angvel;
+		_desired_compliant_frame_angular_velocity = desired_angvel;
 	}
 	const Vector3d& getDesiredAngularVelocity() const {
-		return _desired_angular_velocity;
+		return _desired_compliant_frame_angular_velocity;
 	}
 
 	void setDesiredAcceleration(const Vector3d& desired_acceleration) {
-		_desired_acceleration = desired_acceleration;
+		_desired_compliant_frame_acceleration = desired_acceleration;
 	}
 	const Vector3d& getDesiredAcceleration() const {
-		return _desired_acceleration;
+		return _desired_compliant_frame_acceleration;
 	}
 
 	void setDesiredAngularAcceleration(const Vector3d& desired_angaccel) {
-		_desired_angular_acceleration = desired_angaccel;
+		_desired_compliant_frame_angular_acceleration = desired_angaccel;
 	}
 	const Vector3d& getDesiredAngularAcceleration() const {
-		return _desired_angular_acceleration;
+		return _desired_compliant_frame_angular_acceleration;
 	}
 
 	Affine3d getCompliantFrameInRobotBase() const {
-		return _robot->transform(_link_name,
-								 _compliant_frame_in_link.translation(),
-								 _compliant_frame_in_link.linear());
+		return _robot->transform(
+			_link_name, _wrist_frame_in_link * _wrist_to_compliant_frame_origin,
+			_wrist_frame_in_link.rotation());
 	}
 
 	// Gains for motion controller
@@ -219,7 +246,7 @@ public:
 	 * @param desired_force
 	 */
 	void setDesiredForce(const Vector3d& desired_force) {
-		_desired_force = desired_force;
+		_desired_compliant_frame_force = desired_force;
 	}
 
 	/**
@@ -230,20 +257,13 @@ public:
 	Vector3d getDesiredForce() const;
 
 	/**
-	 * @brief Get the Desired Force in compliant frame
-	 *
-	 * @return Vector3d desired force in compliant frame
-	 */
-	Vector3d getDesiredForceInCompliantFrame() const;
-
-	/**
 	 * @brief Set the Desired Moment in robot base frame or compliant frame
 	 * depending on the value of _is_force_parametrization_in_compliant_frame
 	 *
 	 * @param desired_moment
 	 */
 	void setDesiredMoment(const Vector3d& desired_moment) {
-		_desired_moment = desired_moment;
+		_desired_compliant_frame_moment = desired_moment;
 	}
 
 	/**
@@ -252,13 +272,6 @@ public:
 	 * @return Vector3d desired moment in robot base frame
 	 */
 	Vector3d getDesiredMoment() const;
-
-	/**
-	 * @brief Get the Desired Moment In Compliant Frame
-	 * 
-	 * @return Vector3d desired moment in compliant frame
-	 */
-	Vector3d getDesiredMomentInCompliantFrame() const;
 
 	// internal otg functions
 	/**
@@ -399,13 +412,11 @@ public:
 	/**
 	 * @brief      Sets the force sensor frame.
 	 *
-	 * @param[in]  link_name               The link name on which the sensor is
-	 * attached
-	 * @param[in]  transformation_in_link  The transformation in link of the
-	 * sensor
+	 * @param[in]  frame  Force sensor frame in link frame
 	 */
-	void setForceSensorFrame(const string link_name,
-							 const Affine3d transformation_in_link);
+	void setForceSensorFrame(const Affine3d frame) {
+		_force_sensor_frame_in_link = frame;
+	}
 
 	/**
 	 * @brief      Updates the velues of the sensed force and sensed moment from
@@ -517,12 +528,12 @@ public:
 	// inputs to be defined by the user
 private:
 	// desired pose defaults to the configuration when the task is created
-	Vector3d _desired_position;			 // in robot frame
-	Matrix3d _desired_orientation;		 // in robot frame
-	Vector3d _desired_velocity;			 // in robot frame
-	Vector3d _desired_angular_velocity;	 // in robot frame
-	Vector3d _desired_acceleration;
-	Vector3d _desired_angular_acceleration;
+	Vector3d _desired_compliant_frame_position;			 // in robot frame
+	Matrix3d _desired_compliant_frame_orientation;		 // in robot frame
+	Vector3d _desired_compliant_frame_velocity;			 // in robot frame
+	Vector3d _desired_compliant_frame_angular_velocity;	 // in robot frame
+	Vector3d _desired_compliant_frame_acceleration;
+	Vector3d _desired_compliant_frame_angular_acceleration;
 
 	// gains for motion controller
 	// defaults to isptropic 50 for p gains, 14 for d gains and 0 for i gains
@@ -541,11 +552,11 @@ private:
 	Matrix3d _kv_force, _kv_moment;
 	Matrix3d _ki_force, _ki_moment;
 
-	// desired force and moment for the force part of the controller
-	// expressed in robot frame or compliant frame depending on the value of
-	// _is_force_parametrization_in_compliant_frame
-	Vector3d _desired_force;
-	Vector3d _desired_moment;
+	// desired force and moment of the compliant frame for the force part
+	// of the controller expressed in robot frame or compliant frame depending
+	// on the value of _is_force_parametrization_in_compliant_frame
+	Vector3d _desired_compliant_frame_force;
+	Vector3d _desired_compliant_frame_moment;
 
 	// velocity saturation is off by default
 	bool _use_velocity_saturation_flag;
@@ -566,17 +577,22 @@ private:
 
 	// internal variables, not to be touched by the user
 	string _link_name;
-	Affine3d _compliant_frame_in_link;	// in link_frame
+	// Affine3d _compliant_frame_in_link;	  // in link_frame
+	// the wrist frame has the same orientation as the compliant frame, but its
+	// origin is located at the wrist point defined in the task constructor
+	Affine3d _wrist_frame_in_link;
+	Vector3d _wrist_to_compliant_frame_origin;
+	// Affine3d _compliant_frame_in_wrist;
+	// Affine3d _wrist_in_compliant_frame;
 	bool _is_force_parametrization_in_compliant_frame;
 
 	// motion quantities
-	Vector3d _current_position;		// robot frame
-	Matrix3d _current_orientation;	// robot frame
+	Vector3d _current_wrist_position;		// robot frame
+	Matrix3d _current_wrist_orientation;	// robot frame
 
-	Vector3d _current_velocity;			 // robot frame
-	Vector3d _current_angular_velocity;	 // robot frame
+	Vector3d _current_wrist_velocity;			 // robot frame
+	Vector3d _current_wrist_angular_velocity;	 // robot frame
 
-	Vector3d _orientation_error;			 // robot frame
 	Vector3d _integrated_orientation_error;	 // robot frame
 	Vector3d _integrated_position_error;	 // robot frame
 
@@ -584,10 +600,10 @@ private:
 	Matrix3d _sigma_orientation;  // robot frame
 
 	// force quantities
-	Affine3d _T_control_to_sensor;
+	Affine3d _force_sensor_frame_in_link;	// in link frame
 
-	Vector3d _sensed_force;	  // robot frame
-	Vector3d _sensed_moment;  // robot frame
+	Vector3d _sensed_force_at_wrist;	  // robot frame
+	Vector3d _sensed_moment_at_wrist;	  // robot frame
 
 	Vector3d _integrated_force_error;	// robot frame
 	Vector3d _integrated_moment_error;	// robot frame
@@ -626,8 +642,6 @@ private:
 	MatrixXd _URange_ori;
 	MatrixXd _URange;
 	int _pos_dof, _ori_dof;
-
-	VectorXd _unit_mass_force;
 };
 
 } /* namespace Sai2Primitives */
