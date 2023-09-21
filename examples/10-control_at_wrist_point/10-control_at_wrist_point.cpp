@@ -104,8 +104,8 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 	// Position plus orientation task
 	string link_name = "end-effector";
 	Vector3d pos_in_link = Vector3d(0.0, 0.0, 0.0);
-	Vector3d wrist_pos_in_link = Vector3d(0.0, 0.0, -0.131000);
-	// Vector3d wrist_pos_in_link = Vector3d::Zero();
+	// Vector3d wrist_pos_in_link = Vector3d(0.0, 0.0, -0.131000);
+	Vector3d wrist_pos_in_link = Vector3d::Zero();
 	Affine3d compliant_frame = Affine3d(Translation3d(pos_in_link));
 	auto motion_force_task = make_unique<Sai2Primitives::MotionForceTask>(
 		robot, link_name, compliant_frame, false, wrist_pos_in_link);
@@ -148,40 +148,48 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 
 		joint_task->updateTaskModel(N_prec);
 
-		// -------- set task goals and compute control torques
-		// first the posori task.
-		// orientation: oscillation around Y
-		double w_ori_traj = 2 * M_PI * 0.2;
-		double amp_ori_traj = M_PI / 8;
-		double angle_ori_traj = amp_ori_traj * sin(w_ori_traj * time);
-		double ang_vel_traj =
-			amp_ori_traj * w_ori_traj * cos(w_ori_traj * time);
-		double ang_accel_traj =
-			amp_ori_traj * w_ori_traj * w_ori_traj * -sin(w_ori_traj * time);
+		// // -------- set task goals and compute control torques
+		// // first the posori task.
+		// // orientation: oscillation around Y
+		// double w_ori_traj = 2 * M_PI * 0.2;
+		// double amp_ori_traj = M_PI / 8;
+		// double angle_ori_traj = amp_ori_traj * sin(w_ori_traj * time);
+		// double ang_vel_traj =
+		// 	amp_ori_traj * w_ori_traj * cos(w_ori_traj * time);
+		// double ang_accel_traj =
+		// 	amp_ori_traj * w_ori_traj * w_ori_traj * -sin(w_ori_traj * time);
 
-		Matrix3d R =
-			AngleAxisd(angle_ori_traj, Vector3d::UnitY()).toRotationMatrix();
+		// Matrix3d R =
+		// 	AngleAxisd(angle_ori_traj, Vector3d::UnitY()).toRotationMatrix();
 
-		motion_force_task->setDesiredOrientation(R.transpose() *
-												 initial_orientation);
-		motion_force_task->setDesiredAngularVelocity(ang_vel_traj *
-													 Vector3d::UnitY());
-		motion_force_task->setDesiredAngularAcceleration(ang_accel_traj *
-														 Vector3d::UnitY());
+		// motion_force_task->setDesiredOrientation(R.transpose() *
+		// 										 initial_orientation);
+		// motion_force_task->setDesiredAngularVelocity(ang_vel_traj *
+		// 											 Vector3d::UnitY());
+		// motion_force_task->setDesiredAngularAcceleration(ang_accel_traj *
+		// 												 Vector3d::UnitY());
 
-		// position: circle in the y-z plane
-		double radius_circle_pos = 0.05;
-		double w_circle_pos = 2 * M_PI * 0.33;
-		motion_force_task->setDesiredPosition(
-			initial_position +
-			radius_circle_pos * Vector3d(0.0, sin(w_circle_pos * time),
-										 1 - cos(w_circle_pos * time)));
-		motion_force_task->setDesiredVelocity(
-			radius_circle_pos * w_circle_pos *
-			Vector3d(0.0, cos(w_circle_pos * time), sin(w_circle_pos * time)));
-		motion_force_task->setDesiredAcceleration(
-			radius_circle_pos * w_circle_pos * w_circle_pos *
-			Vector3d(0.0, -sin(w_circle_pos * time), cos(w_circle_pos * time)));
+		// // position: circle in the y-z plane
+		// double radius_circle_pos = 0.05;
+		// double w_circle_pos = 2 * M_PI * 0.33;
+		// motion_force_task->setDesiredPosition(
+		// 	initial_position +
+		// 	radius_circle_pos * Vector3d(0.0, sin(w_circle_pos * time),
+		// 								 1 - cos(w_circle_pos * time)));
+		// motion_force_task->setDesiredVelocity(
+		// 	radius_circle_pos * w_circle_pos *
+		// 	Vector3d(0.0, cos(w_circle_pos * time), sin(w_circle_pos * time)));
+		// motion_force_task->setDesiredAcceleration(
+		// 	radius_circle_pos * w_circle_pos * w_circle_pos *
+		// 	Vector3d(0.0, -sin(w_circle_pos * time), cos(w_circle_pos * time)));
+
+		if(timer.elapsedCycles() % 4000 == 2000) {
+			// motion_force_task->setDesiredPosition(initial_position + Vector3d(0,0,-0.15));
+			motion_force_task->setDesiredOrientation(initial_orientation * AngleAxisd(-M_PI/4, Vector3d::UnitY()));
+		} else if (timer.elapsedCycles() % 4000 == 0) {
+			// motion_force_task->setDesiredPosition(initial_position);
+			motion_force_task->setDesiredOrientation(initial_orientation);
+		}
 
 		// compute torques for the different tasks
 		motion_force_task_torques = motion_force_task->computeTorques();
