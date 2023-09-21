@@ -30,6 +30,7 @@ FIND_LIBRARY(RUCKIG_LIBRARIES ruckig PATHS ${RUCKIG_LOCAL_DIR}/build NO_DEFAULT_
 
 # add tasks
 SET(TASKS_SOURCE 
+	${PROJECT_SOURCE_DIR}/src/RobotController.cpp
 	# ${PROJECT_SOURCE_DIR}/src/tasks/PositionTask.cpp
 	# ${PROJECT_SOURCE_DIR}/src/tasks/OrientationTask.cpp
 	${PROJECT_SOURCE_DIR}/src/tasks/MotionForceTask.cpp

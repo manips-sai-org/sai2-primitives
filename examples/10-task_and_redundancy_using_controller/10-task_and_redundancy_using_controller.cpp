@@ -14,6 +14,7 @@
 #include <string>
 #include <thread>
 
+#include "RobotController.h"
 #include "Sai2Graphics.h"
 #include "Sai2Model.h"
 #include "Sai2Simulation.h"
@@ -105,7 +106,7 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 	string link_name = "end-effector";
 	Vector3d pos_in_link = Vector3d(0.0, 0.0, 0.07);
 	Affine3d compliant_frame = Affine3d(Translation3d(pos_in_link));
-	auto motion_force_task = make_unique<Sai2Primitives::MotionForceTask>(
+	auto motion_force_task = make_shared<Sai2Primitives::MotionForceTask>(
 		robot, link_name, compliant_frame);
 	VectorXd motion_force_task_torques = VectorXd::Zero(dof);
 	motion_force_task->disableInternalOtg();
@@ -116,10 +117,16 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 
 	// joint task to control the redundancy
 	// using default gains and interpolation settings
-	auto joint_task = make_unique<Sai2Primitives::JointTask>(robot);
+	auto joint_task = make_shared<Sai2Primitives::JointTask>(robot);
 	VectorXd joint_task_torques = VectorXd::Zero(dof);
 
 	VectorXd initial_q = robot->q();
+
+	// robot controller to automatize the task update and control computation
+	std::vector<std::shared_ptr<Sai2Primitives::TemplateTask>> task_list = {
+		motion_force_task, joint_task};
+	auto robot_controller =
+		make_unique<Sai2Primitives::RobotController>(robot, task_list);
 
 	// create a loop timer
 	double control_freq = 1000;
@@ -130,21 +137,13 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 		timer.waitForNextLoop();
 		const double time = timer.elapsedSimTime();
 
-		// read joint positions, velocities, update model
+		// read joint positions, velocities, update robot model
 		robot->setQ(sim->getJointPositions(robot_name));
 		robot->setDq(sim->getJointVelocities(robot_name));
 		robot->updateModel();
 
 		// update tasks model. Order is important to define the hierarchy
-		N_prec = MatrixXd::Identity(dof, dof);
-
-		motion_force_task->updateTaskModel(N_prec);
-		N_prec = motion_force_task->getTaskAndPreviousNullspace();
-		// after each task, need to update the nullspace
-		// of the previous tasks in order to garantee
-		// the dyamic consistency
-
-		joint_task->updateTaskModel(N_prec);
+		robot_controller->updateControllerTaskModels();
 
 		// -------- set task goals and compute control torques
 		// first the posori task.
@@ -181,10 +180,6 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 			radius_circle_pos * w_circle_pos * w_circle_pos *
 			Vector3d(0.0, -sin(w_circle_pos * time), cos(w_circle_pos * time)));
 
-		// compute torques for the different tasks
-		motion_force_task_torques = motion_force_task->computeTorques();
-		joint_task_torques = joint_task->computeTorques();
-
 		// activate joint task only after 5 seconds and try to rotate the first
 		// joint
 		if (timer.elapsedCycles() < 5000) {
@@ -200,7 +195,7 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 		//------ compute the final torques
 		{
 			lock_guard<mutex> lock(mutex_torques);
-			control_torques = motion_force_task_torques + joint_task_torques;
+			control_torques = robot_controller->computeControlTorques();
 		}
 
 		// -------------------------------------------

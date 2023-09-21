@@ -27,13 +27,14 @@
 #include <string>
 
 #include "Sai2Model.h"
+#include "TemplateTask.h"
 
 using namespace Eigen;
 using namespace std;
 
 namespace Sai2Primitives {
 
-class MotionForceTask {
+class MotionForceTask : public TemplateTask {
 	enum DynamicDecouplingType {
 		FULL_DYNAMIC_DECOUPLING,	 // use the real Lambda matrix
 		PARTIAL_DYNAMIC_DECOUPLING,	 // Use Lambda for position part, Identity
@@ -64,7 +65,7 @@ public:
 	 * generation and integral control.
 	 */
 	MotionForceTask(
-		std::shared_ptr<Sai2Model::Sai2Model> robot, const string& link_name,
+		std::shared_ptr<Sai2Model::Sai2Model>& robot, const string& link_name,
 		const Affine3d& compliant_frame = Affine3d::Identity(),
 		const bool is_force_motion_parametrization_in_compliant_frame = false,
 		const double loop_timestep = 0.001);
@@ -111,12 +112,21 @@ public:
 	const Vector3d& getSensedForce() const { return _sensed_force; }
 
 	/**
-	 * @brief Get the nullspace matrix of that task and the previous ones in the
-	 * hierarchy
+	 * @brief Get the nullspace of this task. Will be 0 if ths
+	 * is a full joint task
 	 *
-	 * @return const MatrixXd& Nulspace matrix of the task and the previous ones
+	 * @return const MatrixXd& Nullspace matrix
 	 */
-	const MatrixXd& getN() const { return _N; }
+	MatrixXd getTaskNullspace() const override { return _N; }
+
+	/**
+	 * @brief Get the nullspace of this and the previous tasks. Concretely, it
+	 * is the task nullspace multiplied by the nullspace of the previous tasks
+	 *
+	 */
+	MatrixXd getTaskAndPreviousNullspace() const override {
+		return _N * _N_prec;
+	}
 
 	void setDesiredPosition(const Vector3d& desired_position) {
 		_desired_position = desired_position;
@@ -311,7 +321,7 @@ public:
 	 *                     identity of size n*n where n in the number of DoF of
 	 *                     the robot.
 	 */
-	void updateTaskModel(const MatrixXd N_prec);
+	void updateTaskModel(const MatrixXd& N_prec) override;
 
 	/**
 	 * @brief      Computes the torques associated with this task.
@@ -321,7 +331,7 @@ public:
 	 *             angular velocity has been updated
 	 *
 	 */
-	VectorXd computeTorques();
+	VectorXd computeTorques() override;
 
 	/**
 	 * @brief      reinitializes the desired state to the current robot
@@ -526,10 +536,6 @@ private:
 	// trajectory
 	bool _use_internal_otg_flag;
 	std::unique_ptr<OTG_6dof_cartesian> _otg;
-
-	// robot model
-	std::shared_ptr<Sai2Model::Sai2Model> _robot;
-	double _loop_timestep;
 
 	Eigen::VectorXd _task_force;
 	Eigen::MatrixXd _N_prec;

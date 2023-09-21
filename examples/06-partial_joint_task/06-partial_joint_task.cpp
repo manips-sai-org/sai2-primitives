@@ -136,7 +136,7 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 		N_prec = MatrixXd::Identity(dof, dof);
 
 		partial_joint_task->updateTaskModel(N_prec);
-		N_prec = partial_joint_task->getN();
+		N_prec = partial_joint_task->getTaskAndPreviousNullspace();
 
 		motion_force_task->updateTaskModel(N_prec);
 

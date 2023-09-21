@@ -20,11 +20,12 @@
 #include <string>
 
 #include "Sai2Model.h"
+#include "TemplateTask.h"
 
 using namespace Eigen;
 namespace Sai2Primitives {
 
-class JointTask {
+class JointTask : public TemplateTask {
 	enum DynamicDecouplingType {
 		FULL_DYNAMIC_DECOUPLING,	// use the real Mass matrix
 		BOUNDED_INERTIA_ESTIMATES,	// use a Mass matrix computed from
@@ -42,7 +43,7 @@ public:
 	 * @param[in]  loop_timestep  time taken by a control loop. Used only in
 	 * trajectory generation
 	 */
-	JointTask(std::shared_ptr<Sai2Model::Sai2Model> robot,
+	JointTask(std::shared_ptr<Sai2Model::Sai2Model>& robot,
 			  const double loop_timestep = 0.001);
 
 	/**
@@ -56,7 +57,7 @@ public:
 	 * @param joint_selection_matrix
 	 * @param loop_timestep
 	 */
-	JointTask(std::shared_ptr<Sai2Model::Sai2Model> robot,
+	JointTask(std::shared_ptr<Sai2Model::Sai2Model>& robot,
 			  const MatrixXd& joint_selection_matrix,
 			  const double loop_timestep = 0.001);
 
@@ -68,7 +69,7 @@ public:
 	 *                     identity of size n*n where n in the number of DoF of
 	 *                     the robot.
 	 */
-	void updateTaskModel(const MatrixXd& N_prec);
+	void updateTaskModel(const MatrixXd& N_prec) override;
 
 	/**
 	 * @brief      Computes the torques associated with this task.
@@ -80,7 +81,7 @@ public:
 	 * @param      task_joint_torques  the vector to be filled with the new
 	 *                                 joint torques to apply for the task
 	 */
-	VectorXd computeTorques();
+	VectorXd computeTorques() override;
 
 	/**
 	 * @brief      reinitializes the desired state to the current robot
@@ -93,11 +94,10 @@ public:
 	 * task, and for a partial joint task, it is the constant Jacobian mapping
 	 * from the full joint space to the controlled task space
 	 *
-	 * @return const MatrixXd Joint Selection Matrix that projects the full joint space to the controlled task space
+	 * @return const MatrixXd Joint Selection Matrix that projects the full
+	 * joint space to the controlled task space
 	 */
-	const MatrixXd getJointSelectionMatrix() const {
-		return _joint_selection;
-	}
+	const MatrixXd getJointSelectionMatrix() const { return _joint_selection; }
 
 	/**
 	 * @brief Get the Current Position
@@ -151,12 +151,21 @@ public:
 	}
 
 	/**
-	 * @brief Get the nullspace of this and the previous tasks. Will be 0 if ths
+	 * @brief Get the nullspace of this task. Will be 0 if ths
 	 * is a full joint task
 	 *
 	 * @return const MatrixXd& Nullspace matrix
 	 */
-	const MatrixXd& getN() const { return _N; }
+	MatrixXd getTaskNullspace() const override { return _N; }
+
+	/**
+	 * @brief Get the nullspace of this and the previous tasks. Concretely, it
+	 * is the task nullspace multiplied by the nullspace of the previous tasks
+	 *
+	 */
+	MatrixXd getTaskAndPreviousNullspace() const override {
+		return _N * _N_prec;
+	}
 
 	/**
 	 * @brief Set non isotropic gains
@@ -174,7 +183,7 @@ public:
 	 * @param kv
 	 */
 	void setGains(const VectorXd& kp, const VectorXd& kv) {
-		setGains(kp, kv, VectorXd::Zero(_robot->dof()));
+		setGains(kp, kv, VectorXd::Zero(getConstRobotModel()->dof()));
 	}
 
 	/**
@@ -206,8 +215,8 @@ public:
 	void enableInternalOtgAccelerationLimited(const double max_velocity,
 											  const double max_acceleration) {
 		enableInternalOtgAccelerationLimited(
-			max_velocity * VectorXd::Ones(_robot->dof()),
-			max_acceleration * VectorXd::Ones(_robot->dof()));
+			max_velocity * VectorXd::Ones(getConstRobotModel()->dof()),
+			max_acceleration * VectorXd::Ones(getConstRobotModel()->dof()));
 	}
 
 	/**
@@ -234,9 +243,9 @@ public:
 									  const double max_acceleration,
 									  const double max_jerk) {
 		enableInternalOtgJerkLimited(
-			max_velocity * VectorXd::Ones(_robot->dof()),
-			max_acceleration * VectorXd::Ones(_robot->dof()),
-			max_jerk * VectorXd::Ones(_robot->dof()));
+			max_velocity * VectorXd::Ones(getConstRobotModel()->dof()),
+			max_acceleration * VectorXd::Ones(getConstRobotModel()->dof()),
+			max_jerk * VectorXd::Ones(getConstRobotModel()->dof()));
 	}
 
 	/**
@@ -261,7 +270,7 @@ public:
 	 */
 	void enableVelocitySaturation(const double saturation_velocity) {
 		enableVelocitySaturation(saturation_velocity *
-								 VectorXd::Ones(_robot->dof()));
+								 VectorXd::Ones(getConstRobotModel()->dof()));
 	}
 
 	/**
@@ -288,10 +297,6 @@ private:
 	 * @brief      Initializes the task. Automatically called by the constructor
 	 */
 	void initialSetup();
-
-	// robot model and control cycle duration
-	std::shared_ptr<Sai2Model::Sai2Model> _robot;
-	double _loop_timestep;
 
 	// desired controller state
 	VectorXd _desired_position;
@@ -337,7 +342,6 @@ private:
 	MatrixXd _Jbar;
 	MatrixXd _N;
 	MatrixXd _URange;
-
 };
 
 } /* namespace Sai2Primitives */

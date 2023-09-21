@@ -19,30 +19,28 @@ const double MAX_FEEDBACK_MOMENT_FORCE_CONTROLLER = 10.0;
 }  // namespace
 
 MotionForceTask::MotionForceTask(
-	std::shared_ptr<Sai2Model::Sai2Model> robot, const string& link_name,
+	std::shared_ptr<Sai2Model::Sai2Model>& robot, const string& link_name,
 	const Affine3d& compliant_frame,
 	const bool is_force_motion_parametrization_in_compliant_frame,
-	const double loop_timestep) {
-	_loop_timestep = loop_timestep;
-
-	_robot = robot;
+	const double loop_timestep)
+	: TemplateTask(robot, loop_timestep) {
 	_link_name = link_name;
 	_compliant_frame = compliant_frame;
 	_is_force_motion_parametrization_in_compliant_frame =
 		is_force_motion_parametrization_in_compliant_frame;
 	setDynamicDecouplingType(BOUNDED_INERTIA_ESTIMATES);
 
-	int dof = _robot->dof();
+	int dof = getConstRobotModel()->dof();
 
 	_T_control_to_sensor = Affine3d::Identity();
 
 	// POPC force
-	_POPC_force.reset(new POPCExplicitForceControl(_loop_timestep));
+	_POPC_force.reset(new POPCExplicitForceControl(getLoopTimestep()));
 
 	// motion
 	_current_position =
-		_robot->position(_link_name, _compliant_frame.translation());
-	_current_orientation = _robot->rotation(_link_name);
+		getConstRobotModel()->position(_link_name, _compliant_frame.translation());
+	_current_orientation = getConstRobotModel()->rotation(_link_name);
 
 	// default values for gains and velocity saturation
 	setPosControlGains(50.0, 14.0, 0.0);
@@ -76,20 +74,20 @@ MotionForceTask::MotionForceTask(
 
 	// trajectory generation
 	_otg.reset(new OTG_6dof_cartesian(_current_position, _current_orientation,
-									  _loop_timestep));
+									  getLoopTimestep()));
 	enableInternalOtgAccelerationLimited(0.3, 1.0, M_PI / 3, M_PI);
 
 	reInitializeTask();
 }
 
 void MotionForceTask::reInitializeTask() {
-	int dof = _robot->dof();
+	int dof = getConstRobotModel()->dof();
 
 	// motion
 	_current_position =
-		_robot->position(_link_name, _compliant_frame.translation());
+		getConstRobotModel()->position(_link_name, _compliant_frame.translation());
 	_desired_position = _current_position;
-	_current_orientation = _robot->rotation(_link_name);
+	_current_orientation = getConstRobotModel()->rotation(_link_name);
 	_desired_orientation = _current_orientation;
 
 	_current_velocity.setZero();
@@ -116,12 +114,12 @@ void MotionForceTask::reInitializeTask() {
 	_otg->reInitialize(_current_position, _current_orientation);
 }
 
-void MotionForceTask::updateTaskModel(const MatrixXd N_prec) {
+void MotionForceTask::updateTaskModel(const MatrixXd& N_prec) {
 	if (N_prec.rows() != N_prec.cols()) {
 		throw invalid_argument(
 			"N_prec matrix not square in MotionForceTask::updateTaskModel\n");
 	}
-	if (N_prec.rows() != _robot->dof()) {
+	if (N_prec.rows() != getConstRobotModel()->dof()) {
 		throw invalid_argument(
 			"N_prec matrix size not consistent with robot dof in "
 			"MotionForceTask::updateTaskModel\n");
@@ -129,7 +127,7 @@ void MotionForceTask::updateTaskModel(const MatrixXd N_prec) {
 
 	_N_prec = N_prec;
 
-	_jacobian = _robot->J(_link_name, _compliant_frame.translation());
+	_jacobian = getConstRobotModel()->J(_link_name, _compliant_frame.translation());
 	_projected_jacobian = _jacobian * _N_prec;
 
 	_URange_pos = Sai2Model::matrixRangeBasis(_projected_jacobian.topRows(3));
@@ -144,8 +142,8 @@ void MotionForceTask::updateTaskModel(const MatrixXd N_prec) {
 	_URange.block(3, _pos_dof, 3, _ori_dof) = _URange_ori;
 
 	Sai2Model::OpSpaceMatrices op_space_matrices =
-		_robot->operationalSpaceMatrices(
-			_URange.transpose() * _projected_jacobian, _N_prec);
+		getConstRobotModel()->operationalSpaceMatrices(
+			_URange.transpose() * _projected_jacobian);
 	_Lambda = op_space_matrices.Lambda;
 	_Jbar = op_space_matrices.Jbar;
 	_N = op_space_matrices.N;
@@ -174,8 +172,8 @@ void MotionForceTask::updateTaskModel(const MatrixXd N_prec) {
 		}
 
 		case BOUNDED_INERTIA_ESTIMATES: {
-			MatrixXd M_BIE = _robot->M();
-			for (int i = 0; i < _robot->dof(); i++) {
+			MatrixXd M_BIE = getConstRobotModel()->M();
+			for (int i = 0; i < getConstRobotModel()->dof(); i++) {
 				if (M_BIE(i, i) < 0.1) {
 					M_BIE(i, i) = 0.1;
 				}
@@ -196,8 +194,8 @@ void MotionForceTask::updateTaskModel(const MatrixXd N_prec) {
 }
 
 VectorXd MotionForceTask::computeTorques() {
-	VectorXd task_joint_torques = VectorXd::Zero(_robot->dof());
-	_jacobian = _robot->J(_link_name, _compliant_frame.translation());
+	VectorXd task_joint_torques = VectorXd::Zero(getConstRobotModel()->dof());
+	_jacobian = getConstRobotModel()->J(_link_name, _compliant_frame.translation());
 	_projected_jacobian = _jacobian * _N_prec;
 
 	Matrix3d sigma_force = sigmaForce();
@@ -212,8 +210,8 @@ VectorXd MotionForceTask::computeTorques() {
 
 	// update controller state
 	_current_position =
-		_robot->position(_link_name, _compliant_frame.translation());
-	_current_orientation = _robot->rotation(_link_name);
+		getConstRobotModel()->position(_link_name, _compliant_frame.translation());
+	_current_orientation = getConstRobotModel()->rotation(_link_name);
 	_current_orientation =
 		_current_orientation *
 		_compliant_frame
@@ -221,15 +219,15 @@ VectorXd MotionForceTask::computeTorques() {
 	_orientation_error =
 		Sai2Model::orientationError(_desired_orientation, _current_orientation);
 	_current_velocity =
-		_projected_jacobian.block(0, 0, 3, _robot->dof()) * _robot->dq();
+		_projected_jacobian.block(0, 0, 3, getConstRobotModel()->dof()) * getConstRobotModel()->dq();
 	_current_angular_velocity =
-		_projected_jacobian.block(3, 0, 3, _robot->dof()) * _robot->dq();
+		_projected_jacobian.block(3, 0, 3, getConstRobotModel()->dof()) * getConstRobotModel()->dq();
 
 	// force related terms
 	if (_closed_loop_force_control) {
 		// update the integrated error
 		_integrated_force_error +=
-			(_sensed_force - _desired_force) * _loop_timestep;
+			(_sensed_force - _desired_force) * getLoopTimestep();
 
 		// compute the feedback term and saturate it
 		Vector3d force_feedback_term =
@@ -256,7 +254,7 @@ VectorXd MotionForceTask::computeTorques() {
 	if (_closed_loop_moment_control) {
 		// update the integrated error
 		_integrated_moment_error +=
-			(_sensed_moment - _desired_moment) * _loop_timestep;
+			(_sensed_moment - _desired_moment) * getLoopTimestep();
 
 		// compute the feedback term
 		Vector3d moment_feedback_term =
@@ -287,16 +285,15 @@ VectorXd MotionForceTask::computeTorques() {
 	Vector3d tmp_desired_velocity = _desired_velocity;
 	Vector3d tmp_desired_angular_velocity = _desired_angular_velocity;
 	Vector3d tmp_desired_acceleration = _desired_acceleration;
-	Vector3d tmp_desired_angular_acceleration =
-		_desired_angular_acceleration;
+	Vector3d tmp_desired_angular_acceleration = _desired_angular_acceleration;
 
-	if(_use_internal_otg_flag) {
+	if (_use_internal_otg_flag) {
 		_otg->setGoalPositionAndLinearVelocity(_desired_position,
 											   _desired_velocity);
 		_otg->setGoalOrientationAndAngularVelocity(_desired_orientation,
 												   _desired_angular_velocity);
 		_otg->update();
-		
+
 		tmp_desired_position = _otg->getNextPosition();
 		tmp_desired_velocity = _otg->getNextLinearVelocity();
 		tmp_desired_acceleration = _otg->getNextLinearAcceleration();
@@ -308,7 +305,7 @@ VectorXd MotionForceTask::computeTorques() {
 	// linear motion
 	// update integrated error for I term
 	_integrated_position_error +=
-		(_current_position - tmp_desired_position) * _loop_timestep;
+		(_current_position - tmp_desired_position) * getLoopTimestep();
 
 	// final contribution
 	if (_use_velocity_saturation_flag) {
@@ -339,7 +336,7 @@ VectorXd MotionForceTask::computeTorques() {
 		tmp_desired_orientation, _current_orientation);
 
 	// update integrated error for I term
-	_integrated_orientation_error += orientation_error * _loop_timestep;
+	_integrated_orientation_error += orientation_error * getLoopTimestep();
 
 	// final contribution
 	if (_use_velocity_saturation_flag) {
@@ -348,9 +345,8 @@ VectorXd MotionForceTask::computeTorques() {
 			_ki_ori * _kv_ori.inverse() * _integrated_orientation_error;
 		if (tmp_desired_angular_velocity.norm() >
 			_angular_saturation_velocity) {
-			tmp_desired_angular_velocity *=
-				_angular_saturation_velocity /
-				tmp_desired_angular_velocity.norm();
+			tmp_desired_angular_velocity *= _angular_saturation_velocity /
+											tmp_desired_angular_velocity.norm();
 		}
 		orientation_related_force =
 			sigma_orientation * (tmp_desired_angular_acceleration -
@@ -358,11 +354,11 @@ VectorXd MotionForceTask::computeTorques() {
 											tmp_desired_angular_velocity));
 	} else {
 		orientation_related_force =
-			sigma_orientation * (tmp_desired_angular_acceleration -
-								 _kp_ori * orientation_error -
-								 _kv_ori * (_current_angular_velocity -
-											tmp_desired_angular_velocity) -
-								 _ki_ori * _integrated_orientation_error);
+			sigma_orientation *
+			(tmp_desired_angular_acceleration - _kp_ori * orientation_error -
+			 _kv_ori *
+				 (_current_angular_velocity - tmp_desired_angular_velocity) -
+			 _ki_ori * _integrated_orientation_error);
 	}
 
 	// compute task force
@@ -624,7 +620,7 @@ void MotionForceTask::updateSensedForceAndMoment(
 	const Vector3d sensed_force_sensor_frame,
 	const Vector3d sensed_moment_sensor_frame) {
 	// find the transform from base frame to control frame
-	Affine3d T_base_link = _robot->transform(_link_name);
+	Affine3d T_base_link = getConstRobotModel()->transform(_link_name);
 	Affine3d T_base_control = T_base_link * _compliant_frame;
 
 	// find the resolved sensed force and moment in control frame

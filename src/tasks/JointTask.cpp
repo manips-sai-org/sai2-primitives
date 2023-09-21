@@ -11,33 +11,31 @@
 using namespace Eigen;
 namespace Sai2Primitives {
 
-JointTask::JointTask(std::shared_ptr<Sai2Model::Sai2Model> robot,
-					 const double loop_timestep) {
-	_loop_timestep = loop_timestep;
-	_robot = robot;
-
+JointTask::JointTask(std::shared_ptr<Sai2Model::Sai2Model>& robot,
+					 const double loop_timestep)
+	: TemplateTask(robot, loop_timestep) {
 	// selection for full joint task
-	_joint_selection = MatrixXd::Identity(_robot->dof(), _robot->dof());
+	_joint_selection = MatrixXd::Identity(getConstRobotModel()->dof(), getConstRobotModel()->dof());
 
 	initialSetup();
 }
 
-JointTask::JointTask(std::shared_ptr<Sai2Model::Sai2Model> robot,
+JointTask::JointTask(std::shared_ptr<Sai2Model::Sai2Model>& robot,
 					 const MatrixXd& joint_selection_matrix,
-					 const double loop_timestep) {
-	_loop_timestep = loop_timestep;
-	_robot = robot;
-
+					 const double loop_timestep)
+	: TemplateTask(robot, loop_timestep) {
 	// selection for partial joint task
-	if(joint_selection_matrix.cols() != _robot->dof())
-	{
-		throw std::invalid_argument("joint selection matrix size not consistent with robot dof in JointTask constructor\n");
+	if (joint_selection_matrix.cols() != getConstRobotModel()->dof()) {
+		throw std::invalid_argument(
+			"joint selection matrix size not consistent with robot dof in "
+			"JointTask constructor\n");
 	}
 	// find rank of joint selection matrix
 	FullPivLU<MatrixXd> lu(joint_selection_matrix);
-	if(lu.rank() != joint_selection_matrix.rows())
-	{
-		throw std::invalid_argument("joint selection matrix is not full rank in JointTask constructor\n");
+	if (lu.rank() != joint_selection_matrix.rows()) {
+		throw std::invalid_argument(
+			"joint selection matrix is not full rank in JointTask "
+			"constructor\n");
 	}
 	_joint_selection = joint_selection_matrix;
 
@@ -45,7 +43,7 @@ JointTask::JointTask(std::shared_ptr<Sai2Model::Sai2Model> robot,
 }
 
 void JointTask::initialSetup() {
-	const int robot_dof = _robot->dof();
+	const int robot_dof = getConstRobotModel()->dof();
 	_task_dof = _joint_selection.rows();
 	setDynamicDecouplingType(BOUNDED_INERTIA_ESTIMATES);
 
@@ -67,7 +65,7 @@ void JointTask::initialSetup() {
 
 	_use_internal_otg_flag = true;
 	_otg =
-		make_shared<OTG_joints>(_joint_selection * _robot->q(), _loop_timestep);
+		make_shared<OTG_joints>(_joint_selection * getConstRobotModel()->q(), getLoopTimestep());
 	_otg->setMaxVelocity(M_PI / 3);
 	_otg->setMaxAcceleration(M_PI);
 	_otg->disableJerkLimits();
@@ -76,9 +74,9 @@ void JointTask::initialSetup() {
 }
 
 void JointTask::reInitializeTask() {
-	const int robot_dof = _robot->dof();
+	const int robot_dof = getConstRobotModel()->dof();
 
-	_current_position = _joint_selection * _robot->q();
+	_current_position = _joint_selection * getConstRobotModel()->q();
 	_current_velocity.setZero(_task_dof);
 
 	_desired_position = _current_position;
@@ -164,7 +162,7 @@ void JointTask::updateTaskModel(const MatrixXd& N_prec) {
 		throw std::invalid_argument(
 			"N_prec matrix not square in JointTask::updateTaskModel\n");
 	}
-	if (N_prec.rows() != _robot->dof()) {
+	if (N_prec.rows() != getConstRobotModel()->dof()) {
 		throw std::invalid_argument(
 			"N_prec matrix size not consistent with robot dof in "
 			"JointTask::updateTaskModel\n");
@@ -175,8 +173,8 @@ void JointTask::updateTaskModel(const MatrixXd& N_prec) {
 	_URange = Sai2Model::matrixRangeBasis(_projected_jacobian);
 
 	Sai2Model::OpSpaceMatrices op_space_matrices =
-		_robot->operationalSpaceMatrices(
-			_URange.transpose() * _projected_jacobian, _N_prec);
+		getConstRobotModel()->operationalSpaceMatrices(
+			_URange.transpose() * _projected_jacobian);
 	_M_partial = op_space_matrices.Lambda;
 	_Jbar = op_space_matrices.Jbar;
 	_N = op_space_matrices.N;
@@ -188,8 +186,8 @@ void JointTask::updateTaskModel(const MatrixXd& N_prec) {
 		}
 
 		case BOUNDED_INERTIA_ESTIMATES: {
-			MatrixXd M_BIE = _robot->M();
-			for (int i = 0; i < _robot->dof(); i++) {
+			MatrixXd M_BIE = getConstRobotModel()->M();
+			for (int i = 0; i < getConstRobotModel()->dof(); i++) {
 				if (M_BIE(i, i) < 0.1) {
 					M_BIE(i, i) = 0.1;
 				}
@@ -203,7 +201,8 @@ void JointTask::updateTaskModel(const MatrixXd& N_prec) {
 		}
 
 		case IMPEDANCE: {
-			_M_partial_modified = MatrixXd::Identity(_URange.cols(), _URange.cols());
+			_M_partial_modified =
+				MatrixXd::Identity(_URange.cols(), _URange.cols());
 			break;
 		}
 
@@ -221,8 +220,8 @@ VectorXd JointTask::computeTorques() {
 	VectorXd partial_joint_task_torques = VectorXd::Zero(_task_dof);
 
 	// update constroller state
-	_current_position = _joint_selection * _robot->q();
-	_current_velocity = _joint_selection * _robot->dq();
+	_current_position = _joint_selection * getConstRobotModel()->q();
+	_current_velocity = _joint_selection * getConstRobotModel()->dq();
 
 	VectorXd tmp_desired_position = _desired_position;
 	VectorXd tmp_desired_velocity = _desired_velocity;
@@ -240,14 +239,14 @@ VectorXd JointTask::computeTorques() {
 
 	// compute error for I term
 	_integrated_position_error +=
-		(_current_position - tmp_desired_position) * _loop_timestep;
+		(_current_position - tmp_desired_position) * getLoopTimestep();
 
 	// compute task force (with velocity saturation if asked)
 	if (_use_velocity_saturation_flag) {
 		tmp_desired_velocity =
 			-_kp * _kv.inverse() * (_current_position - tmp_desired_position) -
 			_ki * _kv.inverse() * _integrated_position_error;
-		for (int i = 0; i < _robot->dof(); i++) {
+		for (int i = 0; i < getConstRobotModel()->dof(); i++) {
 			if (tmp_desired_velocity(i) > _saturation_velocity(i)) {
 				tmp_desired_velocity(i) = _saturation_velocity(i);
 			} else if (tmp_desired_velocity(i) < -_saturation_velocity(i)) {
