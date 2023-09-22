@@ -70,6 +70,14 @@ public:
 		const bool is_force_motion_parametrization_in_compliant_frame = false,
 		const double loop_timestep = 0.001);
 
+	MotionForceTask(
+		std::shared_ptr<Sai2Model::Sai2Model>& robot, const string& link_name,
+		std::vector<Vector3d> controlled_directions_translation,
+		std::vector<Vector3d> controlled_directions_rotation,
+		const Affine3d& compliant_frame = Affine3d::Identity(),
+		const bool is_force_motion_parametrization_in_compliant_frame = false,
+		const double loop_timestep = 0.001);
+
 	//------------------------------------------------
 	// Getters Setters
 	//------------------------------------------------
@@ -445,7 +453,9 @@ public:
 		const Vector3d& moment_or_rot_motion_single_axis = Vector3d::Zero());
 
 	Matrix3d sigmaForce() const;
+	Matrix3d sigmaPosition() const;
 	Matrix3d sigmaMoment() const;
+	Matrix3d sigmaOrientation() const;
 
 	/**
 	 * @brief      Changes the behavior to closed loop force/moment control for
@@ -491,12 +501,22 @@ public:
 	 */
 	void resetIntegratorsAngular();
 
-	//-----------------------------------------------
-	//         Member variables
-	//-----------------------------------------------
+	Matrix3d posSelectionProjector() const {
+		return _partial_task_projection.block<3, 3>(0, 0);
+	}
 
-	// inputs to be defined by the user
+	Matrix3d oriSelectionProjector() const {
+		return _partial_task_projection.block<3, 3>(3, 3);
+	}
+
 private:
+	/**
+	 * @brief Initial setup of the task, called in the constructor to avoid
+	 * duplicated code
+	 *
+	 */
+	void initialSetup();
+
 	// desired pose defaults to the configuration when the task is created
 	Vector3d _desired_position;			 // in robot frame
 	Matrix3d _desired_orientation;		 // in robot frame
@@ -556,9 +576,6 @@ private:
 	Vector3d _integrated_orientation_error;	 // robot frame
 	Vector3d _integrated_position_error;	 // robot frame
 
-	Matrix3d _sigma_position;	  // robot frame
-	Matrix3d _sigma_orientation;  // robot frame
-
 	// force quantities
 	Affine3d _T_control_to_sensor;
 
@@ -570,8 +587,6 @@ private:
 
 	int _force_space_dimension, _moment_space_dimension;
 	Vector3d _force_or_motion_axis, _moment_or_rotmotion_axis;
-	Matrix3d _sigma_force;	 // robot frame
-	Matrix3d _sigma_moment;	 // robot frame
 
 	bool _closed_loop_force_control;
 	bool _closed_loop_moment_control;
@@ -598,10 +613,10 @@ private:
 	MatrixXd _Jbar;
 	MatrixXd _N;
 
-	MatrixXd _URange_pos;
-	MatrixXd _URange_ori;
-	MatrixXd _URange;
-	int _pos_dof, _ori_dof;
+	MatrixXd _current_task_range;
+	int _pos_range, _ori_range;
+
+	Matrix<double, 6, 6> _partial_task_projection;
 
 	VectorXd _unit_mass_force;
 };

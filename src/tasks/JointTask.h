@@ -276,7 +276,7 @@ public:
 	/**
 	 * @brief      Disables the velocity saturation
 	 */
-	void disableVelocitySaturation(const VectorXd& saturation_velocity) {
+	void disableVelocitySaturation() {
 		_use_velocity_saturation_flag = false;
 	}
 

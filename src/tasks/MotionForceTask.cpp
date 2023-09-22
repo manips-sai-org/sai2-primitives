@@ -28,18 +28,81 @@ MotionForceTask::MotionForceTask(
 	_compliant_frame = compliant_frame;
 	_is_force_motion_parametrization_in_compliant_frame =
 		is_force_motion_parametrization_in_compliant_frame;
+
+	_partial_task_projection = Matrix<double, 6, 6>::Identity(6, 6);
+
+	initialSetup();
+}
+
+MotionForceTask::MotionForceTask(
+	std::shared_ptr<Sai2Model::Sai2Model>& robot, const string& link_name,
+	std::vector<Vector3d> controlled_directions_translation,
+	std::vector<Vector3d> controlled_directions_rotation,
+	const Affine3d& compliant_frame,
+	const bool is_force_motion_parametrization_in_compliant_frame,
+	const double loop_timestep)
+	: TemplateTask(robot, loop_timestep) {
+	_link_name = link_name;
+	_compliant_frame = compliant_frame;
+	_is_force_motion_parametrization_in_compliant_frame =
+		is_force_motion_parametrization_in_compliant_frame;
+
+	if(controlled_directions_translation.empty() && controlled_directions_rotation.empty())
+	{
+		throw invalid_argument(
+			"controlled_directions_translation and controlled_directions_rotation cannot both be empty in "
+			"MotionForceTask::MotionForceTask\n");
+	}
+
+	MatrixXd controlled_translation_range_basis = MatrixXd::Zero(3,1);
+	MatrixXd controlled_rotation_range_basis = MatrixXd::Zero(3,1);
+
+	if (controlled_directions_translation.size() != 0) {
+		MatrixXd controlled_translation_vectors =
+			MatrixXd::Zero(3, controlled_directions_translation.size());
+		for (int i = 0; i < controlled_directions_translation.size(); i++) {
+			controlled_translation_vectors.col(i) =
+				controlled_directions_translation[i];
+		}
+		controlled_translation_range_basis =
+			Sai2Model::matrixRangeBasis(controlled_translation_vectors);
+	}
+
+	if (controlled_directions_rotation.size() != 0) {
+		MatrixXd controlled_rotation_vectors =
+			MatrixXd::Zero(3, controlled_directions_rotation.size());
+		for (int i = 0; i < controlled_directions_rotation.size(); i++) {
+			controlled_rotation_vectors.col(i) =
+				controlled_directions_rotation[i];
+		}
+
+		controlled_rotation_range_basis =
+			Sai2Model::matrixRangeBasis(controlled_rotation_vectors);
+	}
+
+	_partial_task_projection.setZero();
+	_partial_task_projection.block<3, 3>(0, 0) =
+		controlled_translation_range_basis *
+		controlled_translation_range_basis.transpose();
+	_partial_task_projection.block<3, 3>(3, 3) =
+		controlled_rotation_range_basis *
+		controlled_rotation_range_basis.transpose();
+
+	initialSetup();
+}
+
+void MotionForceTask::initialSetup() {
 	setDynamicDecouplingType(BOUNDED_INERTIA_ESTIMATES);
 
 	int dof = getConstRobotModel()->dof();
-
 	_T_control_to_sensor = Affine3d::Identity();
 
 	// POPC force
 	_POPC_force.reset(new POPCExplicitForceControl(getLoopTimestep()));
 
 	// motion
-	_current_position =
-		getConstRobotModel()->position(_link_name, _compliant_frame.translation());
+	_current_position = getConstRobotModel()->position(
+		_link_name, _compliant_frame.translation());
 	_current_orientation = getConstRobotModel()->rotation(_link_name);
 
 	// default values for gains and velocity saturation
@@ -65,16 +128,34 @@ MotionForceTask::MotionForceTask(
 	_N.setZero(dof, dof);
 	_N_prec = MatrixXd::Identity(dof, dof);
 
-	_URange_pos = MatrixXd::Identity(3, 3);
-	_URange_ori = MatrixXd::Identity(3, 3);
-	_URange = MatrixXd::Identity(6, 6);
+	MatrixXd range_pos =
+		Sai2Model::matrixRangeBasis(_partial_task_projection.block<3, 3>(0, 0));
+	MatrixXd range_ori =
+		Sai2Model::matrixRangeBasis(_partial_task_projection.block<3, 3>(3, 3));
 
-	_pos_dof = 3;
-	_ori_dof = 3;
+	_pos_range = range_pos.norm() == 0 ? 0 : range_pos.cols();
+	_ori_range = range_ori.norm() == 0 ? 0 : range_ori.cols();
+
+	if(_pos_range + _ori_range == 0) // should not happen
+	{
+		throw invalid_argument(
+			"controlled_directions_translation and controlled_directions_rotation cannot both be empty in "
+			"MotionForceTask::MotionForceTask\n");
+	}
+
+	_current_task_range.setZero(6, _pos_range + _ori_range);
+	if(_pos_range > 0)
+	{
+		_current_task_range.block(0, 0, 3, _pos_range) = range_pos;
+	}
+	if(_ori_range > 0)
+	{
+		_current_task_range.block(3, _pos_range, 3, _ori_range) = range_ori;
+	}
 
 	// trajectory generation
-	_otg.reset(new OTG_6dof_cartesian(_current_position, _current_orientation,
-									  getLoopTimestep()));
+	_otg = make_unique<OTG_6dof_cartesian>(
+		_current_position, _current_orientation, getLoopTimestep());
 	enableInternalOtgAccelerationLimited(0.3, 1.0, M_PI / 3, M_PI);
 
 	reInitializeTask();
@@ -84,8 +165,8 @@ void MotionForceTask::reInitializeTask() {
 	int dof = getConstRobotModel()->dof();
 
 	// motion
-	_current_position =
-		getConstRobotModel()->position(_link_name, _compliant_frame.translation());
+	_current_position = getConstRobotModel()->position(
+		_link_name, _compliant_frame.translation());
 	_desired_position = _current_position;
 	_current_orientation = getConstRobotModel()->rotation(_link_name);
 	_desired_orientation = _current_orientation;
@@ -127,23 +208,39 @@ void MotionForceTask::updateTaskModel(const MatrixXd& N_prec) {
 
 	_N_prec = N_prec;
 
-	_jacobian = getConstRobotModel()->J(_link_name, _compliant_frame.translation());
+	_jacobian =
+		_partial_task_projection *
+		getConstRobotModel()->J(_link_name, _compliant_frame.translation());
 	_projected_jacobian = _jacobian * _N_prec;
 
-	_URange_pos = Sai2Model::matrixRangeBasis(_projected_jacobian.topRows(3));
-	_URange_ori =
+	MatrixXd range_pos =
+		Sai2Model::matrixRangeBasis(_projected_jacobian.topRows(3));
+	MatrixXd range_ori =
 		Sai2Model::matrixRangeBasis(_projected_jacobian.bottomRows(3));
 
-	_pos_dof = _URange_pos.cols();
-	_ori_dof = _URange_ori.cols();
+	_pos_range = range_pos.norm() == 0 ? 0 : range_pos.cols();
+	_ori_range = range_ori.norm() == 0 ? 0 : range_ori.cols();
 
-	_URange.setZero(6, _pos_dof + _ori_dof);
-	_URange.block(0, 0, 3, _pos_dof) = _URange_pos;
-	_URange.block(3, _pos_dof, 3, _ori_dof) = _URange_ori;
+	if(_pos_range + _ori_range == 0)
+	{
+		// there is no controllable degree of freedom for the task, just return
+		// should maybe print a warning here
+		return;
+	}
+
+	_current_task_range.setZero(6, _pos_range + _ori_range);
+	if(_pos_range > 0)
+	{
+		_current_task_range.block(0, 0, 3, _pos_range) = range_pos;
+	}
+	if(_ori_range > 0)
+	{
+		_current_task_range.block(3, _pos_range, 3, _ori_range) = range_ori;
+	}
 
 	Sai2Model::OpSpaceMatrices op_space_matrices =
 		getConstRobotModel()->operationalSpaceMatrices(
-			_URange.transpose() * _projected_jacobian);
+			_current_task_range.transpose() * _projected_jacobian);
 	_Lambda = op_space_matrices.Lambda;
 	_Jbar = op_space_matrices.Jbar;
 	_N = op_space_matrices.N;
@@ -156,18 +253,26 @@ void MotionForceTask::updateTaskModel(const MatrixXd& N_prec) {
 
 		case PARTIAL_DYNAMIC_DECOUPLING: {
 			_Lambda_modified = _Lambda;
-			_Lambda_modified.block(_pos_dof, _pos_dof, _ori_dof, _ori_dof) =
-				MatrixXd::Identity(_ori_dof, _ori_dof);
-			_Lambda_modified.block(0, _pos_dof, _pos_dof, _ori_dof) =
-				MatrixXd::Zero(_pos_dof, _ori_dof);
-			_Lambda_modified.block(_pos_dof, 0, _ori_dof, _pos_dof) =
-				MatrixXd::Zero(_ori_dof, _pos_dof);
+			if (_ori_range > 0) {
+				_Lambda_modified.block(_pos_range, _pos_range, _ori_range,
+									   _ori_range) =
+					MatrixXd::Identity(_ori_range, _ori_range);
+				if (_pos_range > 0) {
+					_Lambda_modified.block(0, _pos_range, _pos_range,
+										   _ori_range) =
+						MatrixXd::Zero(_pos_range, _ori_range);
+					_Lambda_modified.block(_pos_range, 0, _ori_range,
+										   _pos_range) =
+						MatrixXd::Zero(_ori_range, _pos_range);
+				}
+			}
+
 			break;
 		}
 
 		case IMPEDANCE: {
-			_Lambda_modified =
-				MatrixXd::Identity(_pos_dof + _ori_dof, _pos_dof + _ori_dof);
+			_Lambda_modified = MatrixXd::Identity(_pos_range + _ori_range,
+												  _pos_range + _ori_range);
 			break;
 		}
 
@@ -180,8 +285,9 @@ void MotionForceTask::updateTaskModel(const MatrixXd& N_prec) {
 			}
 			MatrixXd M_inv_BIE = M_BIE.inverse();
 			MatrixXd Lambda_inv_BIE =
-				_URange.transpose() * _projected_jacobian *
-				(M_inv_BIE * _projected_jacobian.transpose()) * _URange;
+				_current_task_range.transpose() * _projected_jacobian *
+				(M_inv_BIE * _projected_jacobian.transpose()) *
+				_current_task_range;
 			_Lambda_modified = Lambda_inv_BIE.inverse();
 			break;
 		}
@@ -195,13 +301,20 @@ void MotionForceTask::updateTaskModel(const MatrixXd& N_prec) {
 
 VectorXd MotionForceTask::computeTorques() {
 	VectorXd task_joint_torques = VectorXd::Zero(getConstRobotModel()->dof());
-	_jacobian = getConstRobotModel()->J(_link_name, _compliant_frame.translation());
+	if (_pos_range + _ori_range == 0) {
+		// there is no controllable degree of freedom for the task, just return
+		// zero torques. should maybe print a warning here
+		return task_joint_torques;
+	}
+	_jacobian =
+		_partial_task_projection *
+		getConstRobotModel()->J(_link_name, _compliant_frame.translation());
 	_projected_jacobian = _jacobian * _N_prec;
 
 	Matrix3d sigma_force = sigmaForce();
 	Matrix3d sigma_moment = sigmaMoment();
-	Matrix3d sigma_position = Matrix3d::Identity() - sigma_force;
-	Matrix3d sigma_orientation = Matrix3d::Identity() - sigma_moment;
+	Matrix3d sigma_position = sigmaPosition();
+	Matrix3d sigma_orientation = sigmaOrientation();
 
 	Vector3d force_feedback_related_force = Vector3d::Zero();
 	Vector3d position_related_force = Vector3d::Zero();
@@ -209,19 +322,19 @@ VectorXd MotionForceTask::computeTorques() {
 	Vector3d orientation_related_force = Vector3d::Zero();
 
 	// update controller state
-	_current_position =
-		getConstRobotModel()->position(_link_name, _compliant_frame.translation());
-	_current_orientation = getConstRobotModel()->rotation(_link_name);
+	_current_position = getConstRobotModel()->position(
+		_link_name, _compliant_frame.translation());
 	_current_orientation =
-		_current_orientation *
-		_compliant_frame
-			.linear();	// orientation of compliant frame in robot frame
+		getConstRobotModel()->rotation(_link_name, _compliant_frame.rotation());
+
 	_orientation_error =
 		Sai2Model::orientationError(_desired_orientation, _current_orientation);
 	_current_velocity =
-		_projected_jacobian.block(0, 0, 3, getConstRobotModel()->dof()) * getConstRobotModel()->dq();
+		_projected_jacobian.block(0, 0, 3, getConstRobotModel()->dof()) *
+		getConstRobotModel()->dq();
 	_current_angular_velocity =
-		_projected_jacobian.block(3, 0, 3, getConstRobotModel()->dof()) * getConstRobotModel()->dq();
+		_projected_jacobian.block(3, 0, 3, getConstRobotModel()->dof()) *
+		getConstRobotModel()->dq();
 
 	// force related terms
 	if (_closed_loop_force_control) {
@@ -231,8 +344,8 @@ VectorXd MotionForceTask::computeTorques() {
 
 		// compute the feedback term and saturate it
 		Vector3d force_feedback_term =
-			-_kp_force * (_sensed_force - _desired_force) -
-			_ki_force * _integrated_force_error;
+			sigma_force * (-_kp_force * (_sensed_force - _desired_force) -
+						   _ki_force * _integrated_force_error);
 		if (force_feedback_term.norm() > MAX_FEEDBACK_FORCE_FORCE_CONTROLLER) {
 			force_feedback_term *= MAX_FEEDBACK_FORCE_FORCE_CONTROLLER /
 								   force_feedback_term.norm();
@@ -258,8 +371,8 @@ VectorXd MotionForceTask::computeTorques() {
 
 		// compute the feedback term
 		Vector3d moment_feedback_term =
-			-_kp_moment * (_sensed_moment - _desired_moment) -
-			_ki_moment * _integrated_moment_error;
+			sigma_moment * (-_kp_moment * (_sensed_moment - _desired_moment) -
+							_ki_moment * _integrated_moment_error);
 
 		// saturate the feedback term
 		if (moment_feedback_term.norm() >
@@ -304,13 +417,14 @@ VectorXd MotionForceTask::computeTorques() {
 
 	// linear motion
 	// update integrated error for I term
-	_integrated_position_error +=
-		(_current_position - tmp_desired_position) * getLoopTimestep();
+	_integrated_position_error += posSelectionProjector() *
+								  (_current_position - tmp_desired_position) *
+								  getLoopTimestep();
 
 	// final contribution
 	if (_use_velocity_saturation_flag) {
 		tmp_desired_velocity =
-			-_kp_pos * _kv_pos.inverse() *
+			-_kp_pos * _kv_pos.inverse() * posSelectionProjector() *
 				(_current_position - tmp_desired_position) -
 			_ki_pos * _kv_pos.inverse() * _integrated_position_error;
 		if (tmp_desired_velocity.norm() > _linear_saturation_velocity) {
@@ -332,16 +446,18 @@ VectorXd MotionForceTask::computeTorques() {
 
 	// angular motion
 	// orientation error
-	Vector3d orientation_error = Sai2Model::orientationError(
-		tmp_desired_orientation, _current_orientation);
+	Vector3d step_orientation_error =
+		oriSelectionProjector() *
+		Sai2Model::orientationError(tmp_desired_orientation,
+									_current_orientation);
 
 	// update integrated error for I term
-	_integrated_orientation_error += orientation_error * getLoopTimestep();
+	_integrated_orientation_error += step_orientation_error * getLoopTimestep();
 
 	// final contribution
 	if (_use_velocity_saturation_flag) {
 		tmp_desired_angular_velocity =
-			-_kp_ori * _kv_ori.inverse() * orientation_error -
+			-_kp_ori * _kv_ori.inverse() * step_orientation_error -
 			_ki_ori * _kv_ori.inverse() * _integrated_orientation_error;
 		if (tmp_desired_angular_velocity.norm() >
 			_angular_saturation_velocity) {
@@ -354,11 +470,11 @@ VectorXd MotionForceTask::computeTorques() {
 											tmp_desired_angular_velocity));
 	} else {
 		orientation_related_force =
-			sigma_orientation *
-			(tmp_desired_angular_acceleration - _kp_ori * orientation_error -
-			 _kv_ori *
-				 (_current_angular_velocity - tmp_desired_angular_velocity) -
-			 _ki_ori * _integrated_orientation_error);
+			sigma_orientation * (tmp_desired_angular_acceleration -
+								 _kp_ori * step_orientation_error -
+								 _kv_ori * (_current_angular_velocity -
+											tmp_desired_angular_velocity) -
+								 _ki_ori * _integrated_orientation_error);
 	}
 
 	// compute task force
@@ -383,14 +499,14 @@ VectorXd MotionForceTask::computeTorques() {
 		force_feedback_related_force + feedforward_force_moment.head(3);
 	_linear_motion_control = position_related_force;
 
-	_task_force = _Lambda_modified * _URange.transpose() *
+	_task_force = _Lambda_modified * _current_task_range.transpose() *
 					  (position_orientation_contribution) +
-				  _URange.transpose() *
+				  _current_task_range.transpose() *
 					  (force_moment_contribution + feedforward_force_moment);
 
 	// compute task torques
 	task_joint_torques =
-		_projected_jacobian.transpose() * _URange * _task_force;
+		_projected_jacobian.transpose() * _current_task_range * _task_force;
 
 	return task_joint_torques;
 }
@@ -420,10 +536,8 @@ void MotionForceTask::enableInternalOtgJerkLimited(
 
 bool MotionForceTask::goalPositionReached(const double tolerance,
 										  const bool verbose) {
-	Matrix3d sigma_position = Matrix3d::Identity() - sigmaForce();
 	double position_error =
-		(_desired_position - _current_position).transpose() *
-		(_URange_pos * sigma_position * _URange_pos.transpose()) *
+		(_desired_position - _current_position).transpose() * sigmaPosition() *
 		(_desired_position - _current_position);
 	position_error = sqrt(position_error);
 	bool goal_reached = position_error < tolerance;
@@ -439,10 +553,8 @@ bool MotionForceTask::goalPositionReached(const double tolerance,
 
 bool MotionForceTask::goalOrientationReached(const double tolerance,
 											 const bool verbose) {
-	Matrix3d sigma_orientation = Matrix3d::Identity() - sigmaMoment();
-	double orientation_error = _orientation_error.transpose() * _URange_ori *
-							   sigma_orientation * _URange_ori.transpose() *
-							   _orientation_error;
+	double orientation_error = _orientation_error.transpose() *
+							   sigmaOrientation() * _orientation_error;
 	orientation_error = sqrt(orientation_error);
 	bool goal_reached = orientation_error < tolerance;
 	if (verbose) {
@@ -684,16 +796,20 @@ Matrix3d MotionForceTask::sigmaForce() const {
 			return Matrix3d::Zero();
 			break;
 		case 1:
-			return rotation * _force_or_motion_axis *
-				   _force_or_motion_axis.transpose() * rotation.transpose();
+			return posSelectionProjector() * rotation * _force_or_motion_axis *
+				   _force_or_motion_axis.transpose() * rotation.transpose() *
+				   posSelectionProjector().transpose();
 			break;
 		case 2:
-			return Matrix3d::Identity() -
-				   rotation * _force_or_motion_axis *
-					   _force_or_motion_axis.transpose() * rotation.transpose();
+			return posSelectionProjector() *
+				   (Matrix3d::Identity() -
+					rotation * _force_or_motion_axis *
+						_force_or_motion_axis.transpose() *
+						rotation.transpose()) *
+				   posSelectionProjector().transpose();
 			break;
 		case 3:
-			return Matrix3d::Identity();
+			return posSelectionProjector();
 			break;
 
 		default:
@@ -705,6 +821,11 @@ Matrix3d MotionForceTask::sigmaForce() const {
 	}
 }
 
+Matrix3d MotionForceTask::sigmaPosition() const {
+	return posSelectionProjector() * (Matrix3d::Identity() - sigmaForce()) *
+		   posSelectionProjector().transpose();
+}
+
 Matrix3d MotionForceTask::sigmaMoment() const {
 	Matrix3d rotation = _is_force_motion_parametrization_in_compliant_frame
 							? _compliant_frame.rotation()
@@ -714,17 +835,21 @@ Matrix3d MotionForceTask::sigmaMoment() const {
 			return Matrix3d::Zero();
 			break;
 		case 1:
-			return rotation * _moment_or_rotmotion_axis *
-				   _moment_or_rotmotion_axis.transpose() * rotation.transpose();
+			return oriSelectionProjector() * rotation *
+				   _moment_or_rotmotion_axis *
+				   _moment_or_rotmotion_axis.transpose() *
+				   rotation.transpose() * oriSelectionProjector().transpose();
 			break;
 		case 2:
-			return Matrix3d::Identity() -
-				   rotation * _moment_or_rotmotion_axis *
-					   _moment_or_rotmotion_axis.transpose() *
-					   rotation.transpose();
+			return oriSelectionProjector() *
+				   (Matrix3d::Identity() -
+					rotation * _moment_or_rotmotion_axis *
+						_moment_or_rotmotion_axis.transpose() *
+						rotation.transpose()) *
+				   oriSelectionProjector().transpose();
 			break;
 		case 3:
-			return Matrix3d::Identity();
+			return oriSelectionProjector();
 			break;
 
 		default:
@@ -734,6 +859,11 @@ Matrix3d MotionForceTask::sigmaMoment() const {
 				"MotionForceTask::sigmaMoment\n");
 			break;
 	}
+}
+
+Matrix3d MotionForceTask::sigmaOrientation() const {
+	return oriSelectionProjector() * (Matrix3d::Identity() - sigmaMoment()) *
+		   oriSelectionProjector().transpose();
 }
 
 void MotionForceTask::resetIntegrators() {
