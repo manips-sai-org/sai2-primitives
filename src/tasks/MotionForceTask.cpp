@@ -339,7 +339,7 @@ VectorXd MotionForceTask::computeTorques() {
 	// force related terms
 	if (_closed_loop_force_control) {
 		// update the integrated error
-		_integrated_force_error +=
+		_integrated_force_error += sigma_force *
 			(_sensed_force - _desired_force) * getLoopTimestep();
 
 		// compute the feedback term and saturate it
@@ -366,7 +366,7 @@ VectorXd MotionForceTask::computeTorques() {
 	// moment related terms
 	if (_closed_loop_moment_control) {
 		// update the integrated error
-		_integrated_moment_error +=
+		_integrated_moment_error += sigma_moment *
 			(_sensed_moment - _desired_moment) * getLoopTimestep();
 
 		// compute the feedback term
@@ -417,14 +417,14 @@ VectorXd MotionForceTask::computeTorques() {
 
 	// linear motion
 	// update integrated error for I term
-	_integrated_position_error += posSelectionProjector() *
+	_integrated_position_error += sigma_position *
 								  (_current_position - tmp_desired_position) *
 								  getLoopTimestep();
 
 	// final contribution
 	if (_use_velocity_saturation_flag) {
 		tmp_desired_velocity =
-			-_kp_pos * _kv_pos.inverse() * posSelectionProjector() *
+			-_kp_pos * _kv_pos.inverse() * sigma_position *
 				(_current_position - tmp_desired_position) -
 			_ki_pos * _kv_pos.inverse() * _integrated_position_error;
 		if (tmp_desired_velocity.norm() > _linear_saturation_velocity) {
@@ -447,7 +447,7 @@ VectorXd MotionForceTask::computeTorques() {
 	// angular motion
 	// orientation error
 	Vector3d step_orientation_error =
-		oriSelectionProjector() *
+		sigma_orientation *
 		Sai2Model::orientationError(tmp_desired_orientation,
 									_current_orientation);
 

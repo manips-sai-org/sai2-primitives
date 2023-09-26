@@ -26,6 +26,7 @@ using namespace Eigen;
 namespace Sai2Primitives {
 
 class JointTask : public TemplateTask {
+public:
 	enum DynamicDecouplingType {
 		FULL_DYNAMIC_DECOUPLING,	// use the real Mass matrix
 		BOUNDED_INERTIA_ESTIMATES,	// use a Mass matrix computed from
@@ -34,7 +35,6 @@ class JointTask : public TemplateTask {
 		IMPEDANCE,					// use Identity for the Mass matrix
 	};
 
-public:
 	/**
 	 * @brief      Constructor for a full joint task
 	 *

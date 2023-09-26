@@ -35,6 +35,7 @@ using namespace std;
 namespace Sai2Primitives {
 
 class MotionForceTask : public TemplateTask {
+public:
 	enum DynamicDecouplingType {
 		FULL_DYNAMIC_DECOUPLING,	 // use the real Lambda matrix
 		PARTIAL_DYNAMIC_DECOUPLING,	 // Use Lambda for position part, Identity
@@ -45,7 +46,6 @@ class MotionForceTask : public TemplateTask {
 									 // joint space mass matrix
 	};
 
-public:
 	//------------------------------------------------
 	// Constructor
 	//------------------------------------------------

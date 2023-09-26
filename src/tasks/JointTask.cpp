@@ -194,8 +194,8 @@ void JointTask::updateTaskModel(const MatrixXd& N_prec) {
 			}
 			MatrixXd M_inv_BIE = M_BIE.inverse();
 			_M_partial_modified =
-				(_URange.transpose() * _joint_selection * M_inv_BIE *
-				 _joint_selection.transpose() * _URange)
+				(_URange.transpose() * _projected_jacobian * M_inv_BIE *
+				 _projected_jacobian.transpose() * _URange)
 					.inverse();
 			break;
 		}
@@ -218,10 +218,11 @@ void JointTask::updateTaskModel(const MatrixXd& N_prec) {
 
 VectorXd JointTask::computeTorques() {
 	VectorXd partial_joint_task_torques = VectorXd::Zero(_task_dof);
+	_projected_jacobian = _joint_selection * _N_prec;
 
 	// update constroller state
 	_current_position = _joint_selection * getConstRobotModel()->q();
-	_current_velocity = _joint_selection * getConstRobotModel()->dq();
+	_current_velocity = _projected_jacobian * getConstRobotModel()->dq();
 
 	VectorXd tmp_desired_position = _desired_position;
 	VectorXd tmp_desired_velocity = _desired_velocity;

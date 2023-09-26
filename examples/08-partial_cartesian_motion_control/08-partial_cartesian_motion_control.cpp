@@ -119,7 +119,6 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 	vector<Vector3d> controlled_directions_translation = {Vector3d::UnitY(),
 														  Vector3d::UnitZ()};
 	vector<Vector3d> controlled_directions_rotation = {Vector3d::UnitX()};
-	// vector<Vector3d> controlled_directions_rotation = {};
 	auto motion_force_task = make_shared<Sai2Primitives::MotionForceTask>(
 		robot, link_name, controlled_directions_translation,
 		controlled_directions_rotation, compliant_frame_in_link);
