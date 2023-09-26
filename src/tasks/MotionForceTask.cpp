@@ -47,15 +47,16 @@ MotionForceTask::MotionForceTask(
 	_is_force_motion_parametrization_in_compliant_frame =
 		is_force_motion_parametrization_in_compliant_frame;
 
-	if(controlled_directions_translation.empty() && controlled_directions_rotation.empty())
-	{
+	if (controlled_directions_translation.empty() &&
+		controlled_directions_rotation.empty()) {
 		throw invalid_argument(
-			"controlled_directions_translation and controlled_directions_rotation cannot both be empty in "
+			"controlled_directions_translation and "
+			"controlled_directions_rotation cannot both be empty in "
 			"MotionForceTask::MotionForceTask\n");
 	}
 
-	MatrixXd controlled_translation_range_basis = MatrixXd::Zero(3,1);
-	MatrixXd controlled_rotation_range_basis = MatrixXd::Zero(3,1);
+	MatrixXd controlled_translation_range_basis = MatrixXd::Zero(3, 1);
+	MatrixXd controlled_rotation_range_basis = MatrixXd::Zero(3, 1);
 
 	if (controlled_directions_translation.size() != 0) {
 		MatrixXd controlled_translation_vectors =
@@ -103,7 +104,8 @@ void MotionForceTask::initialSetup() {
 	// motion
 	_current_position = getConstRobotModel()->position(
 		_link_name, _compliant_frame.translation());
-	_current_orientation = getConstRobotModel()->rotation(_link_name);
+	_current_orientation =
+		getConstRobotModel()->rotation(_link_name, _compliant_frame.rotation());
 
 	// default values for gains and velocity saturation
 	setPosControlGains(50.0, 14.0, 0.0);
@@ -136,20 +138,19 @@ void MotionForceTask::initialSetup() {
 	_pos_range = range_pos.norm() == 0 ? 0 : range_pos.cols();
 	_ori_range = range_ori.norm() == 0 ? 0 : range_ori.cols();
 
-	if(_pos_range + _ori_range == 0) // should not happen
+	if (_pos_range + _ori_range == 0)  // should not happen
 	{
 		throw invalid_argument(
-			"controlled_directions_translation and controlled_directions_rotation cannot both be empty in "
+			"controlled_directions_translation and "
+			"controlled_directions_rotation cannot both be empty in "
 			"MotionForceTask::MotionForceTask\n");
 	}
 
 	_current_task_range.setZero(6, _pos_range + _ori_range);
-	if(_pos_range > 0)
-	{
+	if (_pos_range > 0) {
 		_current_task_range.block(0, 0, 3, _pos_range) = range_pos;
 	}
-	if(_ori_range > 0)
-	{
+	if (_ori_range > 0) {
 		_current_task_range.block(3, _pos_range, 3, _ori_range) = range_ori;
 	}
 
@@ -168,7 +169,8 @@ void MotionForceTask::reInitializeTask() {
 	_current_position = getConstRobotModel()->position(
 		_link_name, _compliant_frame.translation());
 	_desired_position = _current_position;
-	_current_orientation = getConstRobotModel()->rotation(_link_name);
+	_current_orientation =
+		getConstRobotModel()->rotation(_link_name, _compliant_frame.rotation());
 	_desired_orientation = _current_orientation;
 
 	_current_velocity.setZero();
@@ -221,20 +223,17 @@ void MotionForceTask::updateTaskModel(const MatrixXd& N_prec) {
 	_pos_range = range_pos.norm() == 0 ? 0 : range_pos.cols();
 	_ori_range = range_ori.norm() == 0 ? 0 : range_ori.cols();
 
-	if(_pos_range + _ori_range == 0)
-	{
+	if (_pos_range + _ori_range == 0) {
 		// there is no controllable degree of freedom for the task, just return
 		// should maybe print a warning here
 		return;
 	}
 
 	_current_task_range.setZero(6, _pos_range + _ori_range);
-	if(_pos_range > 0)
-	{
+	if (_pos_range > 0) {
 		_current_task_range.block(0, 0, 3, _pos_range) = range_pos;
 	}
-	if(_ori_range > 0)
-	{
+	if (_ori_range > 0) {
 		_current_task_range.block(3, _pos_range, 3, _ori_range) = range_ori;
 	}
 
@@ -339,8 +338,8 @@ VectorXd MotionForceTask::computeTorques() {
 	// force related terms
 	if (_closed_loop_force_control) {
 		// update the integrated error
-		_integrated_force_error += sigma_force *
-			(_sensed_force - _desired_force) * getLoopTimestep();
+		_integrated_force_error +=
+			sigma_force * (_sensed_force - _desired_force) * getLoopTimestep();
 
 		// compute the feedback term and saturate it
 		Vector3d force_feedback_term =
@@ -367,7 +366,8 @@ VectorXd MotionForceTask::computeTorques() {
 	if (_closed_loop_moment_control) {
 		// update the integrated error
 		_integrated_moment_error += sigma_moment *
-			(_sensed_moment - _desired_moment) * getLoopTimestep();
+									(_sensed_moment - _desired_moment) *
+									getLoopTimestep();
 
 		// compute the feedback term
 		Vector3d moment_feedback_term =
@@ -447,9 +447,8 @@ VectorXd MotionForceTask::computeTorques() {
 	// angular motion
 	// orientation error
 	Vector3d step_orientation_error =
-		sigma_orientation *
-		Sai2Model::orientationError(tmp_desired_orientation,
-									_current_orientation);
+		sigma_orientation * Sai2Model::orientationError(tmp_desired_orientation,
+														_current_orientation);
 
 	// update integrated error for I term
 	_integrated_orientation_error += step_orientation_error * getLoopTimestep();
