@@ -1,4 +1,4 @@
-set(EXAMPLE_NAME 08-partial_cartesian_motion_control)
+set(EXAMPLE_NAME 05-using_robot_controller)
 # create an executable
 ADD_EXECUTABLE (${EXAMPLE_NAME} ${EXAMPLE_NAME}.cpp)
 
@@ -9,7 +9,6 @@ TARGET_LINK_LIBRARIES (${EXAMPLE_NAME}
 	)
 
 # export resources such as model files.
-# NOTE: this requires an install build
 SET(RESOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/resources)
 FILE(MAKE_DIRECTORY ${RESOURCE_DIR})
-FILE(COPY world.urdf puma.urdf DESTINATION ${RESOURCE_DIR})
+FILE(COPY world.urdf panda_arm.urdf DESTINATION ${RESOURCE_DIR})

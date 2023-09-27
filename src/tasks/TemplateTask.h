@@ -38,6 +38,12 @@ public:
 	 */
 	virtual Eigen::VectorXd computeTorques() = 0;
 
+	/**
+	 * @brief Re initializes the task by setting the desired state to the current state.
+	 * 
+	 */
+	virtual void reInitializeTask() = 0;
+
     /**
      * @brief Get the Nullspace projector of this task
      * 

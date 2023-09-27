@@ -1,16 +1,10 @@
 <?xml version="1.0" ?>
 
 <world name="demo_world" gravity="0.0 0.0 0.0">
-<!-- <world name="demo_world" gravity="0.0 0.0 -9.81"> -->
 
-	<robot name="PANDA">
-		<model dir="./resources" path="panda_arm.urdf" name="panda" />
-	</robot>
-
-	<!-- treat the moving plate as a rr robot -->
-	<robot name="Plate">
-		<model dir="./resources" path="plate.urdf" name="plate" />
-		<origin xyz="0.4 0.0 0.35" rpy="0 0 0" />
+	<robot name="PUMA">
+		<model dir="./resources" path="puma.urdf" name="Puma" />
+		<origin xyz="0.0 0.0 0.0" rpy="0 0 0" />
 	</robot>
 
 	<static_object name="Floor">
@@ -27,17 +21,17 @@
 	</static_object>
 
 	<light name="light1" type="directional">
-		<position xyz="2.0 -2.0 2.0" />
+		<position xyz="-2.0 -2.0 2.0" />
 		<lookat xyz="0.0 0.0 0.0" />
 	</light>
 
 	<light name="light2" type="directional">
-		<position xyz="2.0 2.0 2.0" />
+		<position xyz="-2.0 2.0 2.0" />
 		<lookat xyz="0.0 0.0 0.0" />
 	</light>
 
 	<camera name="camera">
-		<position xyz="1.0 0.9 1.0" />
+		<position xyz="-2.0 0.0 1.0" />
 		<vertical xyz="0.0 0.0 1.0" />
 		<lookat xyz="0.0 0.0 0.5" />
 	</camera>

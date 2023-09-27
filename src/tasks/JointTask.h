@@ -87,7 +87,7 @@ public:
 	 * @brief      reinitializes the desired state to the current robot
 	 *             configuration as well as the integrator terms
 	 */
-	void reInitializeTask();
+	void reInitializeTask() override;
 
 	/**
 	 * @brief Get the Joint Selection Matrix. Will be Identity for a full joint
@@ -341,7 +341,7 @@ private:
 	MatrixXd _projected_jacobian;
 	MatrixXd _Jbar;
 	MatrixXd _N;
-	MatrixXd _URange;
+	MatrixXd _current_task_range;
 };
 
 } /* namespace Sai2Primitives */

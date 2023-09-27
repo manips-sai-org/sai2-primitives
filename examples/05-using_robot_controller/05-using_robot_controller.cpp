@@ -18,9 +18,9 @@
 #include "Sai2Graphics.h"
 #include "Sai2Model.h"
 #include "Sai2Simulation.h"
-#include "tasks/JointTask.h"
 #include "tasks/MotionForceTask.h"
 #include "timer/LoopTimer.h"
+
 bool fSimulationRunning = false;
 void sighandler(int) { fSimulationRunning = false; }
 
@@ -114,24 +114,17 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 	// no gains setting here, using the default task values
 	const Matrix3d initial_orientation = robot->rotation(link_name);
 	const Vector3d initial_position = robot->position(link_name, pos_in_link);
-
-	// joint task to control the redundancy
-	// using default gains and interpolation settings
-	auto joint_task = make_shared<Sai2Primitives::JointTask>(robot);
-	VectorXd joint_task_torques = VectorXd::Zero(dof);
-
-	VectorXd initial_q = robot->q();
+	const VectorXd initial_q = robot->q();
 
 	// robot controller to automatize the task update and control computation
-	std::vector<std::shared_ptr<Sai2Primitives::TemplateTask>> task_list = {
-		motion_force_task, joint_task};
+	vector<shared_ptr<Sai2Primitives::TemplateTask>> task_list = {
+		motion_force_task};
 	auto robot_controller =
 		make_unique<Sai2Primitives::RobotController>(robot, task_list);
 
 	// create a loop timer
 	double control_freq = 1000;
-	Sai2Common::LoopTimer timer(control_freq);
-	timer.initializeTimer(1e6);
+	Sai2Common::LoopTimer timer(control_freq, 1e6);
 
 	while (fSimulationRunning) {
 		timer.waitForNextLoop();
@@ -180,16 +173,11 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 			radius_circle_pos * w_circle_pos * w_circle_pos *
 			Vector3d(0.0, -sin(w_circle_pos * time), cos(w_circle_pos * time)));
 
-		// activate joint task only after 5 seconds and try to rotate the first
-		// joint
-		if (timer.elapsedCycles() < 5000) {
-			joint_task_torques.setZero();
-		}
 		if (timer.elapsedCycles() == 5000) {
-			joint_task->reInitializeTask();
 			VectorXd desired_joint_pos = initial_q;
 			desired_joint_pos(0) += 1.5;
-			joint_task->setDesiredPosition(desired_joint_pos);
+			robot_controller->getRedundancyCompletionTask()->setDesiredPosition(
+				desired_joint_pos);
 		}
 
 		//------ compute the final torques
@@ -222,7 +210,6 @@ void simulation(shared_ptr<Sai2Model::Sai2Model> robot,
 	// create a timer
 	double sim_freq = 2000;
 	Sai2Common::LoopTimer timer(sim_freq);
-	timer.initializeTimer();
 
 	sim->setTimestep(1.0 / sim_freq);
 

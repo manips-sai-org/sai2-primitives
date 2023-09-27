@@ -123,8 +123,7 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 
 	// create a loop timer
 	double control_freq = 1000;
-	Sai2Common::LoopTimer timer(control_freq);
-	timer.initializeTimer(1e6);
+	Sai2Common::LoopTimer timer(control_freq, 1e6);
 
 	while (fSimulationRunning) {
 		timer.waitForNextLoop();
@@ -227,7 +226,6 @@ void simulation(shared_ptr<Sai2Model::Sai2Model> robot,
 	// create a timer
 	double sim_freq = 2000;
 	Sai2Common::LoopTimer timer(sim_freq);
-	timer.initializeTimer();
 
 	sim->setTimestep(1.0 / sim_freq);
 

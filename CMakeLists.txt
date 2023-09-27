@@ -31,8 +31,6 @@ FIND_LIBRARY(RUCKIG_LIBRARIES ruckig PATHS ${RUCKIG_LOCAL_DIR}/build NO_DEFAULT_
 # add tasks
 SET(TASKS_SOURCE 
 	${PROJECT_SOURCE_DIR}/src/RobotController.cpp
-	# ${PROJECT_SOURCE_DIR}/src/tasks/PositionTask.cpp
-	# ${PROJECT_SOURCE_DIR}/src/tasks/OrientationTask.cpp
 	${PROJECT_SOURCE_DIR}/src/tasks/MotionForceTask.cpp
 	${PROJECT_SOURCE_DIR}/src/tasks/JointTask.cpp
 	# ${PROJECT_SOURCE_DIR}/src/tasks/TwoHandTwoRobotsTask.cpp
@@ -92,8 +90,6 @@ EXPORT (PACKAGE SAI2-PRIMITIVES)
 SET (CONF_INCLUDE_DIRS ${SAI2-PRIMITIVES_INCLUDE_DIRS} ${RUCKIG_INCLUDE_DIRS})
 SET (CONF_LIBRARIES ${SAI2-PRIMITIVES_LIBRARIES})
 SET (CONF_DEFINITIONS ${SAI2-PRIMITIVES_DEFINITIONS})
-
-# message(Project definitions : \n ${SAI2-PRIMITIVES_DEFINITIONS} \n\n)
 
 # create package configuration and version files
 CONFIGURE_FILE(SAI2-PRIMITIVESConfig.cmake.in "${PROJECT_BINARY_DIR}/SAI2-PRIMITIVESConfig.cmake" @ONLY)

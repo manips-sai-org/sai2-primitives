@@ -120,6 +120,13 @@ public:
 	const Vector3d& getSensedForce() const { return _sensed_force; }
 
 	/**
+	 * @brief Get the Sensed Moment resolved at the control frame
+	 *
+	 * @return const Vector3d& current sensed moment in the control frame
+	 */
+	const Vector3d& getSensedMoment() const { return _sensed_moment; }
+
+	/**
 	 * @brief Get the nullspace of this task. Will be 0 if ths
 	 * is a full joint task
 	 *
@@ -231,7 +238,7 @@ public:
 	 *
 	 * @return const Vector3d& desired force in robot base frame
 	 */
-	const Vector3d& getDesiredForce() const { return _desired_force; }
+	Vector3d getDesiredForce() const;
 
 	/**
 	 * @brief Set the Desired Moment in robot base frame
@@ -247,7 +254,7 @@ public:
 	 *
 	 * @return const Vector3d& desired moment in robot base frame
 	 */
-	const Vector3d& getDesiredMoment() const { return _desired_moment; }
+	Vector3d getDesiredMoment() const;
 
 	// internal otg functions
 	/**
@@ -345,7 +352,7 @@ public:
 	 * @brief      reinitializes the desired state to the current robot
 	 *             configuration as well as the integrator terms
 	 */
-	void reInitializeTask();
+	void reInitializeTask() override;
 
 	/**
 	 * @brief      Checks if the desired position is reached op to a certain

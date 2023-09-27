@@ -1,4 +1,4 @@
-set(EXAMPLE_NAME 10-task_and_redundancy_using_controller)
+set(EXAMPLE_NAME 04-task_and_redundancy)
 # create an executable
 ADD_EXECUTABLE (${EXAMPLE_NAME} ${EXAMPLE_NAME}.cpp)
 

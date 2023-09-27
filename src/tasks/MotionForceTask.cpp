@@ -117,9 +117,11 @@ void MotionForceTask::initialSetup() {
 	_linear_saturation_velocity = 0;
 	_angular_saturation_velocity = 0;
 
-	_k_ff = 1.0;
+	_k_ff = 0.95;
 
 	parametrizeForceMotionSpaces(0);
+	setClosedLoopForceControl(false);
+	setClosedLoopMomentControl(false);
 
 	// initialize matrices sizes
 	_jacobian.setZero(6, dof);
@@ -198,11 +200,12 @@ void MotionForceTask::reInitializeTask() {
 }
 
 void MotionForceTask::updateTaskModel(const MatrixXd& N_prec) {
+	const int robot_dof = getConstRobotModel()->dof();
 	if (N_prec.rows() != N_prec.cols()) {
 		throw invalid_argument(
 			"N_prec matrix not square in MotionForceTask::updateTaskModel\n");
 	}
-	if (N_prec.rows() != getConstRobotModel()->dof()) {
+	if (N_prec.rows() != robot_dof) {
 		throw invalid_argument(
 			"N_prec matrix size not consistent with robot dof in "
 			"MotionForceTask::updateTaskModel\n");
@@ -226,6 +229,7 @@ void MotionForceTask::updateTaskModel(const MatrixXd& N_prec) {
 	if (_pos_range + _ori_range == 0) {
 		// there is no controllable degree of freedom for the task, just return
 		// should maybe print a warning here
+		_N.setIdentity(robot_dof, robot_dof);
 		return;
 	}
 
@@ -300,25 +304,11 @@ void MotionForceTask::updateTaskModel(const MatrixXd& N_prec) {
 
 VectorXd MotionForceTask::computeTorques() {
 	VectorXd task_joint_torques = VectorXd::Zero(getConstRobotModel()->dof());
-	if (_pos_range + _ori_range == 0) {
-		// there is no controllable degree of freedom for the task, just return
-		// zero torques. should maybe print a warning here
-		return task_joint_torques;
-	}
 	_jacobian =
 		_partial_task_projection *
 		getConstRobotModel()->J(_link_name, _compliant_frame.translation());
 	_projected_jacobian = _jacobian * _N_prec;
 
-	Matrix3d sigma_force = sigmaForce();
-	Matrix3d sigma_moment = sigmaMoment();
-	Matrix3d sigma_position = sigmaPosition();
-	Matrix3d sigma_orientation = sigmaOrientation();
-
-	Vector3d force_feedback_related_force = Vector3d::Zero();
-	Vector3d position_related_force = Vector3d::Zero();
-	Vector3d moment_feedback_related_force = Vector3d::Zero();
-	Vector3d orientation_related_force = Vector3d::Zero();
 
 	// update controller state
 	_current_position = getConstRobotModel()->position(
@@ -335,15 +325,38 @@ VectorXd MotionForceTask::computeTorques() {
 		_projected_jacobian.block(3, 0, 3, getConstRobotModel()->dof()) *
 		getConstRobotModel()->dq();
 
+	if (_pos_range + _ori_range == 0) {
+		// there is no controllable degree of freedom for the task, just return
+		// zero torques. should maybe print a warning here
+		return task_joint_torques;
+	}
+
+	Matrix3d sigma_force = sigmaForce();
+	Matrix3d sigma_moment = sigmaMoment();
+	Matrix3d sigma_position = sigmaPosition();
+	Matrix3d sigma_orientation = sigmaOrientation();
+
+	Vector3d desired_force = getDesiredForce();
+	Vector3d desired_moment = getDesiredMoment();
+
+	Vector3d force_feedback_related_force = Vector3d::Zero();
+	Vector3d position_related_force = Vector3d::Zero();
+	Vector3d moment_feedback_related_force = Vector3d::Zero();
+	Vector3d orientation_related_force = Vector3d::Zero();
+
+	Matrix3d kp_pos = _current_orientation * _kp_pos * _current_orientation.transpose();
+	Matrix3d kv_pos = _current_orientation * _kv_pos * _current_orientation.transpose();
+	Matrix3d ki_pos = _current_orientation * _ki_pos * _current_orientation.transpose();
+
 	// force related terms
 	if (_closed_loop_force_control) {
 		// update the integrated error
 		_integrated_force_error +=
-			sigma_force * (_sensed_force - _desired_force) * getLoopTimestep();
+			sigma_force * (_sensed_force - desired_force) * getLoopTimestep();
 
 		// compute the feedback term and saturate it
 		Vector3d force_feedback_term =
-			sigma_force * (-_kp_force * (_sensed_force - _desired_force) -
+			sigma_force * (-_kp_force * (_sensed_force - desired_force) -
 						   _ki_force * _integrated_force_error);
 		if (force_feedback_term.norm() > MAX_FEEDBACK_FORCE_FORCE_CONTROLLER) {
 			force_feedback_term *= MAX_FEEDBACK_FORCE_FORCE_CONTROLLER /
@@ -353,7 +366,7 @@ VectorXd MotionForceTask::computeTorques() {
 		// compute the final contribution
 		force_feedback_related_force =
 			_POPC_force->computePassivitySaturatedForce(
-				sigma_force * _desired_force, sigma_force * _sensed_force,
+				sigma_force * desired_force, sigma_force * _sensed_force,
 				sigma_force * force_feedback_term,
 				sigma_force * _current_velocity, _kv_force, _k_ff);
 	} else	// open loop force control
@@ -366,12 +379,12 @@ VectorXd MotionForceTask::computeTorques() {
 	if (_closed_loop_moment_control) {
 		// update the integrated error
 		_integrated_moment_error += sigma_moment *
-									(_sensed_moment - _desired_moment) *
+									(_sensed_moment - desired_moment) *
 									getLoopTimestep();
 
 		// compute the feedback term
 		Vector3d moment_feedback_term =
-			sigma_moment * (-_kp_moment * (_sensed_moment - _desired_moment) -
+			sigma_moment * (-_kp_moment * (_sensed_moment - desired_moment) -
 							_ki_moment * _integrated_moment_error);
 
 		// saturate the feedback term
@@ -487,8 +500,8 @@ VectorXd MotionForceTask::computeTorques() {
 	_unit_mass_force = position_orientation_contribution;
 
 	VectorXd feedforward_force_moment = VectorXd::Zero(6);
-	feedforward_force_moment.head(3) = sigma_force * _desired_force;
-	feedforward_force_moment.tail(3) = sigma_moment * _desired_moment;
+	feedforward_force_moment.head(3) = sigma_force * desired_force;
+	feedforward_force_moment.tail(3) = sigma_moment * desired_moment;
 
 	if (_closed_loop_force_control) {
 		feedforward_force_moment *= _k_ff;
@@ -599,12 +612,9 @@ void MotionForceTask::setPosControlGains(const Vector3d& kp_pos,
 			"MotionForceTask::setPosControlGains\n");
 	}
 	_are_pos_gains_isotropic = false;
-	Matrix3d rotation = _is_force_motion_parametrization_in_compliant_frame
-							? _compliant_frame.rotation()
-							: Matrix3d::Identity();
-	_kp_pos = rotation * kp_pos.asDiagonal() * rotation.transpose();
-	_kv_pos = rotation * kv_pos.asDiagonal() * rotation.transpose();
-	_ki_pos = rotation * ki_pos.asDiagonal() * rotation.transpose();
+	_kp_pos = kp_pos.asDiagonal();
+	_kv_pos = kv_pos.asDiagonal();
+	_ki_pos = ki_pos.asDiagonal();
 }
 
 vector<PIDGains> MotionForceTask::getPosControlGains() const {
@@ -612,15 +622,12 @@ vector<PIDGains> MotionForceTask::getPosControlGains() const {
 		return vector<PIDGains>(
 			1, PIDGains(_kp_pos(0, 0), _kv_pos(0, 0), _ki_pos(0, 0)));
 	}
-	Matrix3d rotation = _is_force_motion_parametrization_in_compliant_frame
-							? _compliant_frame.rotation()
-							: Matrix3d::Identity();
 	Vector3d aniso_kp_robot_base =
-		(rotation.transpose() * _kp_pos * rotation).diagonal();
+		_kp_pos.diagonal();
 	Vector3d aniso_kv_robot_base =
-		(rotation.transpose() * _kv_pos * rotation).diagonal();
+		_kv_pos.diagonal();
 	Vector3d aniso_ki_robot_base =
-		(rotation.transpose() * _ki_pos * rotation).diagonal();
+		_ki_pos.diagonal();
 	return vector<PIDGains>{
 		PIDGains(aniso_kp_robot_base(0), aniso_kv_robot_base(0),
 				 aniso_ki_robot_base(0)),
@@ -663,12 +670,9 @@ void MotionForceTask::setOriControlGains(const Vector3d& kp_ori,
 			"MotionForceTask::setOriControlGains\n");
 	}
 	_are_ori_gains_isotropic = false;
-	Matrix3d rotation = _is_force_motion_parametrization_in_compliant_frame
-							? _compliant_frame.rotation()
-							: Matrix3d::Identity();
-	_kp_ori = rotation * kp_ori.asDiagonal() * rotation.transpose();
-	_kv_ori = rotation * kv_ori.asDiagonal() * rotation.transpose();
-	_ki_ori = rotation * ki_ori.asDiagonal() * rotation.transpose();
+	_kp_ori = kp_ori.asDiagonal();
+	_kv_ori = kv_ori.asDiagonal();
+	_ki_ori = ki_ori.asDiagonal();
 }
 
 vector<PIDGains> MotionForceTask::getOriControlGains() const {
@@ -676,15 +680,12 @@ vector<PIDGains> MotionForceTask::getOriControlGains() const {
 		return vector<PIDGains>(
 			1, PIDGains(_kp_ori(0, 0), _kv_ori(0, 0), _ki_ori(0, 0)));
 	}
-	Matrix3d rotation = _is_force_motion_parametrization_in_compliant_frame
-							? _compliant_frame.rotation()
-							: Matrix3d::Identity();
 	Vector3d aniso_kp_robot_base =
-		(rotation.transpose() * _kp_ori * rotation).diagonal();
+		_kp_ori.diagonal();
 	Vector3d aniso_kv_robot_base =
-		(rotation.transpose() * _kv_ori * rotation).diagonal();
+		_kv_ori.diagonal();
 	Vector3d aniso_ki_robot_base =
-		(rotation.transpose() * _ki_ori * rotation).diagonal();
+		_ki_ori.diagonal();
 	return vector<PIDGains>{
 		PIDGains(aniso_kp_robot_base(0), aniso_kv_robot_base(0),
 				 aniso_ki_robot_base(0)),
@@ -692,6 +693,20 @@ vector<PIDGains> MotionForceTask::getOriControlGains() const {
 				 aniso_ki_robot_base(1)),
 		PIDGains(aniso_kp_robot_base(2), aniso_kv_robot_base(2),
 				 aniso_ki_robot_base(2))};
+}
+
+Vector3d MotionForceTask::getDesiredForce() const {
+	Matrix3d rotation = _is_force_motion_parametrization_in_compliant_frame
+							? getConstRobotModel()->rotation(_link_name, _compliant_frame.rotation())
+							: Matrix3d::Identity();
+	return rotation * _desired_force;	
+}
+
+Vector3d MotionForceTask::getDesiredMoment() const {
+	Matrix3d rotation = _is_force_motion_parametrization_in_compliant_frame
+							? getConstRobotModel()->rotation(_link_name, _compliant_frame.rotation())
+							: Matrix3d::Identity();
+	return rotation * _desired_moment;	
 }
 
 void MotionForceTask::enableVelocitySaturation(const double linear_vel_sat,
@@ -788,7 +803,7 @@ void MotionForceTask::parametrizeMomentRotMotionSpaces(
 
 Matrix3d MotionForceTask::sigmaForce() const {
 	Matrix3d rotation = _is_force_motion_parametrization_in_compliant_frame
-							? _compliant_frame.rotation()
+							? getConstRobotModel()->rotation(_link_name, _compliant_frame.rotation())
 							: Matrix3d::Identity();
 	switch (_force_space_dimension) {
 		case 0:
@@ -827,7 +842,7 @@ Matrix3d MotionForceTask::sigmaPosition() const {
 
 Matrix3d MotionForceTask::sigmaMoment() const {
 	Matrix3d rotation = _is_force_motion_parametrization_in_compliant_frame
-							? _compliant_frame.rotation()
+							? getConstRobotModel()->rotation(_link_name, _compliant_frame.rotation())
 							: Matrix3d::Identity();
 	switch (_moment_space_dimension) {
 		case 0:

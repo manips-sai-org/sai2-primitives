@@ -1,0 +1,168 @@
+<?xml version="1.0" ?>
+
+<robot name="RRRRBot">
+
+    <link name="link0">
+        <inertial>
+            <origin xyz="0.0 0.0 0.0" rpy="0 0 0" />
+            <mass value="1" />
+            <inertia ixx="0.084167" iyy="0.083467" izz="0.000967" ixy="0" ixz="0" iyz="0" />
+        </inertial>
+        <visual>
+            <origin xyz="-0.045 0.0 0.0" rpy="0 0 0" />
+            <geometry>
+                <box size="0.04 1.0 0.1" />
+            </geometry>
+            <material name="material_red_custom" >
+                <color rgba="0.6 0.1 0.1 1.0" />
+            </material>  
+        </visual>
+        <visual>
+            <origin xyz="0.0 0.0 -0.02" rpy="0 0 0" />
+            <geometry>
+                <cylinder radius="0.05" length="0.04" />
+            </geometry>
+            <material name="material_green_custom" >
+                <color rgba="0.1 0.3 0.1 1.0" />
+            </material>  
+        </visual>
+    </link>
+
+    <link name="link1">
+        <inertial>
+            <origin xyz="0.25 0.0 0.0" rpy="0 0 0" />
+            <mass value="1" />
+            <inertia ixx="0.084167" iyy="0.083467" izz="0.000967" ixy="0" ixz="0" iyz="0" />
+        </inertial>
+        <visual>
+            <origin xyz="0.25 0.0 0.0" rpy="0 0 0" />
+            <geometry>
+                <box size="0.5 0.1 0.03" />
+            </geometry>
+            <material name="material_green_custom" >
+                <color rgba="0.1 0.3 0.1 1.0" />
+            </material>   
+        </visual>
+        <visual>
+            <origin xyz="0.5 0.0 -0.02" rpy="0 0 0" />
+            <geometry>
+                <cylinder radius="0.1" length="0.04" />
+            </geometry>
+            <material name="material_red_custom" >
+                <color rgba="0.6 0.1 0.1 1.0" />
+            </material>  
+        </visual>
+    </link>
+
+    <link name="link2">
+        <inertial>
+            <origin xyz="0.25 0.0 0.0" rpy="0 0 0" />
+            <mass value="1" />
+            <inertia ixx="0.084167" iyy="0.083467" izz="0.000967" ixy="0" ixz="0" iyz="0" />
+        </inertial>
+        <visual>
+            <origin xyz="0.25 0.0 0.0" rpy="0 0 0" />
+            <geometry>
+                <box size="0.5 0.1 0.03" />
+            </geometry>
+            <material name="material_green_custom" >
+                <color rgba="0.1 0.3 0.1 1.0" />
+            </material>   
+        </visual>
+        <visual>
+            <origin xyz="0.5 0.0 -0.02" rpy="0 0 0" />
+            <geometry>
+                <cylinder radius="0.1" length="0.04" />
+            </geometry>
+            <material name="material_red_custom" >
+                <color rgba="0.6 0.1 0.1 1.0" />
+            </material>  
+        </visual>
+    </link>
+
+    <link name="link3">
+        <inertial>
+            <origin xyz="0.25 0.0 0.0" rpy="0 0 0" />
+            <mass value="1" />
+            <inertia ixx="0.084167" iyy="0.083467" izz="0.000967" ixy="0" ixz="0" iyz="0" />
+        </inertial>
+        <visual>
+            <origin xyz="0.25 0.0 0.0" rpy="0 0 0" />
+            <geometry>
+                <box size="0.5 0.1 0.03" />
+            </geometry>
+            <material name="material_green_custom" >
+                <color rgba="0.1 0.3 0.1 1.0" />
+            </material>   
+        </visual>
+        <visual>
+            <origin xyz="0.5 0.0 -0.02" rpy="0 0 0" />
+            <geometry>
+                <cylinder radius="0.1" length="0.04" />
+            </geometry>
+            <material name="material_red_custom" >
+                <color rgba="0.6 0.1 0.1 1.0" />
+            </material>  
+        </visual>
+    </link>
+
+    <link name="link4">
+        <inertial>
+            <origin xyz="0.25 0.0 0.0" rpy="0 0 0" />
+            <mass value="1" />
+            <inertia ixx="0.084167" iyy="0.083467" izz="0.000967" ixy="0" ixz="0" iyz="0" />
+        </inertial>
+        <visual>
+            <origin xyz="0.25 0.0 0.0" rpy="0 0 0" />
+            <geometry>
+                <box size="0.5 0.1 0.03" />
+            </geometry>
+            <material name="material_green_custom" >
+                <color rgba="0.1 0.3 0.1 1.0" />
+            </material>   
+        </visual>
+        <visual>
+            <origin xyz="0.5 0.0 -0.02" rpy="0 0 0" />
+            <geometry>
+                <cylinder radius="0.07" length="0.04" />
+            </geometry>
+            <material name="material_blue_custom" >
+                <color rgba="0.1 0.1 0.6 1.0" />
+            </material>  
+        </visual>
+    </link>
+
+    <joint name="j0" type="revolute">
+        <parent link="link0" />
+        <child link="link1" />
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <axis xyz="0 0 1" />
+        <calibration falling="50.0"/>
+        <limit lower="-2.9" upper="2.9" effort="176" velocity="1.7104" />
+    </joint>    
+    <joint name="j1" type="revolute">
+        <parent link="link1" />
+        <child link="link2" />
+        <origin xyz="0.5 0 0" rpy="0 0 0" />
+        <axis xyz="0 0 1" />
+        <calibration falling="-100.0"/>
+        <limit lower="-2.9" upper="2.9" effort="176" velocity="1.7104" />
+    </joint>        
+    <joint name="j3" type="revolute">
+        <parent link="link2" />
+        <child link="link3" />
+        <origin xyz="0.5 0 0" rpy="0 0 0" />
+        <axis xyz="0 0 1" />
+        <calibration falling="75.0"/>
+        <limit lower="-2.9" upper="2.9" effort="176" velocity="1.7104" />
+    </joint> 
+    <joint name="j4" type="revolute">
+        <parent link="link3" />
+        <child link="link4" />
+        <origin xyz="0.5 0 0" rpy="0 0 0" />
+        <axis xyz="0 0 1" />
+        <calibration falling="-60.0"/>
+        <limit lower="-2.9" upper="2.9" effort="176" velocity="1.7104" />
+    </joint> 
+    
+</robot>

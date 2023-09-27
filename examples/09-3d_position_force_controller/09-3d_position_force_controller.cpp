@@ -1,9 +1,3 @@
-/*
- * Example of a controller for a Puma arm made with a 6DoF position and
- * orientation task at the end effector Here, the position and orientation tasks
- * are dynamically decoupled with the bounded inertia estimates method.
- */
-
 // some standard library includes
 #include <math.h>
 
@@ -21,6 +15,7 @@
 #include "timer/LoopTimer.h"
 
 // control tasks from sai2-primitives
+#include "RobotController.h"
 #include "tasks/MotionForceTask.h"
 
 // for handling ctrl+c and interruptions properly
@@ -34,8 +29,8 @@ using namespace Eigen;
 
 // config file names and object names
 const string world_file = "resources/world.urdf";
-const string robot_file = "resources/puma.urdf";
-const string robot_name = "PUMA";  // name in the workd file
+const string robot_file = "resources/panda_arm.urdf";
+const string robot_name = "PANDA";
 
 // simulation and control loop
 void control(shared_ptr<Sai2Model::Sai2Model> robot,
@@ -44,16 +39,12 @@ void simulation(shared_ptr<Sai2Model::Sai2Model> robot,
 				shared_ptr<Sai2Simulation::Sai2Simulation> sim);
 
 VectorXd control_torques, ui_torques;
+Vector3d sensed_force;
+string link_name = "end-effector";
 
 // mutex to read and write the control torques
-mutex mmutex_torques;
+mutex mutex_torques;
 
-/*
- * Main function
- * initializes everything,
- * handles the visualization thread
- * and starts the control and simulation threads
- */
 int main(int argc, char** argv) {
 	cout << "Loading URDF world model file: " << world_file << endl;
 
@@ -67,6 +58,9 @@ int main(int argc, char** argv) {
 
 	// load simulation world
 	auto sim = make_shared<Sai2Simulation::Sai2Simulation>(world_file);
+	sim->setCoeffFrictionStatic(0.0);
+	sim->addSimulatedForceSensor(robot_name, link_name, Affine3d::Identity(),
+								 15.0);
 
 	// load robots
 	auto robot = make_shared<Sai2Model::Sai2Model>(robot_file);
@@ -77,6 +71,7 @@ int main(int argc, char** argv) {
 
 	ui_torques.setZero(robot->dof());
 	graphics->addUIForceInteraction(robot_name);
+	graphics->addForceSensorDisplay(sim->getAllForceSensorData()[0]);
 
 	// start the simulation thread first
 	fSimulationRunning = true;
@@ -88,9 +83,10 @@ int main(int argc, char** argv) {
 	// while window is open:
 	while (graphics->isWindowOpen()) {
 		graphics->updateRobotGraphics(robot_name, robot->q());
+		graphics->updateDisplayedForceSensor(sim->getAllForceSensorData()[0]);
 		graphics->renderGraphicsWorld();
 		{
-			lock_guard<mutex> guard(mmutex_torques);
+			lock_guard<mutex> guard(mutex_torques);
 			ui_torques = graphics->getUITorques(robot_name);
 		}
 	}
@@ -109,35 +105,31 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 	// update robot model and initialize control vectors
 	robot->updateModel();
 	int dof = robot->dof();
-	MatrixXd N_prec = MatrixXd::Identity(dof, dof);
 
-	// prepare the task
-	string link_name =
-		"end-effector";	 // link where we attach the control frame
-	Vector3d pos_in_link =
-		Vector3d(0.07, 0.0, 0.0);  // position of control frame in link
-	Affine3d compliant_frame_in_link =
-		Affine3d(Translation3d(pos_in_link));  // control frame in link
-	Sai2Primitives::MotionForceTask* motion_force_task =
-		new Sai2Primitives::MotionForceTask(robot, link_name,
-											compliant_frame_in_link);
-
-	// gains for the position and orientation parts of the controller
-	motion_force_task->setPosControlGains(100.0, 20.0);
-	motion_force_task->setOriControlGains(100.0, 20.0);
+	// prepare the task to control y-z position and rotation around z
+	vector<Vector3d> controlled_directions_translation = {
+		Vector3d::UnitX(), Vector3d::UnitY(), Vector3d::UnitZ()};
+	vector<Vector3d> controlled_directions_rotation = {};
+	auto motion_force_task = make_shared<Sai2Primitives::MotionForceTask>(
+		robot, link_name, controlled_directions_translation,
+		controlled_directions_rotation);
+	bool force_control = false;
 
 	// initial position and orientation
-	Matrix3d initial_orientation = robot->rotation(link_name);
-	Vector3d initial_position = robot->position(link_name, pos_in_link);
+	const Vector3d initial_position = robot->position(link_name);
 	Vector3d desired_position = initial_position;
-	Matrix3d desired_orientation = initial_orientation;
+
+	// joint task to control the nullspace
+	vector<shared_ptr<Sai2Primitives::TemplateTask>> task_list = {
+		motion_force_task};
+	auto robot_controller =
+		make_unique<Sai2Primitives::RobotController>(robot, task_list);
 
 	// create a loop timer
 	double control_freq = 1000;
 	Sai2Common::LoopTimer timer(control_freq, 1e6);
 
-	while (fSimulationRunning) {  // automatically set to false when simulation
-								  // is quit
+	while (fSimulationRunning) {
 		timer.waitForNextLoop();
 
 		// read joint positions, velocities, update model
@@ -146,59 +138,56 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 		robot->updateModel();
 
 		// update tasks model
-		N_prec = MatrixXd::Identity(dof, dof);
-		motion_force_task->updateTaskModel(N_prec);
+		robot_controller->updateControllerTaskModels();
+
+		// update sensed force
+		{
+			lock_guard<mutex> guard(mutex_torques);
+			motion_force_task->updateSensedForceAndMoment(sensed_force,
+														  Vector3d::Zero());
+		}
 
 		// -------- set task goals and compute control torques
 		double time = timer.elapsedSimTime();
 
-		Matrix3d R;
-		double theta = M_PI / 4.0;
-		R << cos(theta), sin(theta), 0, -sin(theta), cos(theta), 0, 0, 0, 1;
-		if (timer.elapsedCycles() % 3000 == 2000) {
-			desired_position(2) += 0.1;
-			desired_orientation = R * desired_orientation;
-
-		} else if (timer.elapsedCycles() % 3000 == 500) {
-			desired_position(2) -= 0.1;
-			desired_orientation = R.transpose() * desired_orientation;
+		// move in x and y plane back and forth
+		if (timer.elapsedCycles() % 2000 == 0) {
+			desired_position(0) += 0.07;
+			desired_position(1) += 0.07;
+		} else if (timer.elapsedCycles() % 2000 == 1000) {
+			desired_position(0) -= 0.07;
+			desired_position(1) -= 0.07;
+		}
+		if (timer.elapsedCycles() > 2000 && timer.elapsedCycles() < 3000) {
+			desired_position(2) -= 0.00015;
 		}
 		motion_force_task->setDesiredPosition(desired_position);
-		motion_force_task->setDesiredOrientation(desired_orientation);
 
-		// disable otg after 6.5 seconds
-		if (timer.elapsedCycles() == 6500) {
-			motion_force_task->disableInternalOtg();
+		if (!force_control && motion_force_task->getSensedForce()(2) <= -1.0) {
+			force_control = true;
+			motion_force_task->parametrizeForceMotionSpaces(1,
+															Vector3d::UnitZ());
+			motion_force_task->setDesiredForce(Vector3d(0, 0, -5.0));
+			motion_force_task->setClosedLoopForceControl();
+			motion_force_task->enablePassivity();
 		}
 
-		// enable interpolation with jerk limits after 12.5 seconds
-		if (timer.elapsedCycles() == 12500) {
-			motion_force_task->enableInternalOtgJerkLimited(
-				0.3, 1.0, 3.0, M_PI / 3, M_PI, 3 * M_PI);
+		if (timer.elapsedCycles() % 1000 == 999) {
+			cout << "desired position: "
+				 << motion_force_task->getDesiredPosition().transpose() << endl;
+			cout << "current position: "
+				 << motion_force_task->getCurrentPosition().transpose() << endl;
+			cout << "desired force: "
+				 << motion_force_task->getDesiredForce().transpose() << endl;
+			cout << "sensed force: "
+				 << motion_force_task->getSensedForce().transpose() << endl;
+			cout << endl;
 		}
-
-		VectorXd motion_force_task_torques =
-			motion_force_task->computeTorques();
 
 		//------ Control torques
 		{
-			lock_guard<mutex> guard(mmutex_torques);
-			control_torques = motion_force_task_torques;
-		}
-
-		// -------------------------------------------
-		if (timer.elapsedCycles() % 500 == 0) {
-			cout << time << endl;
-			cout << "desired position : "
-				 << motion_force_task->getDesiredPosition().transpose() << endl;
-			cout << "current position : "
-				 << motion_force_task->getCurrentPosition().transpose() << endl;
-			cout << "position error : "
-				 << (motion_force_task->getDesiredPosition() -
-					 motion_force_task->getCurrentPosition())
-						.norm()
-				 << endl;
-			cout << endl;
+			lock_guard<mutex> guard(mutex_torques);
+			control_torques = robot_controller->computeControlTorques();
 		}
 	}
 	timer.stop();
@@ -212,7 +201,7 @@ void simulation(shared_ptr<Sai2Model::Sai2Model> robot,
 	fSimulationRunning = true;
 
 	// create a timer
-	double sim_freq = 2000;	 // 2 kHz
+	double sim_freq = 2000;
 	Sai2Common::LoopTimer timer(sim_freq);
 
 	sim->setTimestep(1.0 / sim_freq);
@@ -221,8 +210,9 @@ void simulation(shared_ptr<Sai2Model::Sai2Model> robot,
 		timer.waitForNextLoop();
 
 		{
-			lock_guard<mutex> guard(mmutex_torques);
+			lock_guard<mutex> guard(mutex_torques);
 			sim->setJointTorques(robot_name, control_torques + ui_torques);
+			sensed_force = sim->getSensedForce(robot_name, link_name);
 		}
 		sim->integrate();
 	}

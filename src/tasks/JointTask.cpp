@@ -61,7 +61,7 @@ void JointTask::initialSetup() {
 	_projected_jacobian = _joint_selection;
 	_Jbar = MatrixXd::Zero(_task_dof, robot_dof);
 	_N = MatrixXd::Zero(robot_dof, robot_dof);
-	_URange = MatrixXd::Identity(_task_dof, _task_dof);
+	_current_task_range = MatrixXd::Identity(_task_dof, _task_dof);
 
 	_use_internal_otg_flag = true;
 	_otg =
@@ -158,11 +158,12 @@ void JointTask::setGains(const double kp, const double kv, const double ki) {
 }
 
 void JointTask::updateTaskModel(const MatrixXd& N_prec) {
+	const int robot_dof = getConstRobotModel()->dof();
 	if (N_prec.rows() != N_prec.cols()) {
 		throw std::invalid_argument(
 			"N_prec matrix not square in JointTask::updateTaskModel\n");
 	}
-	if (N_prec.rows() != getConstRobotModel()->dof()) {
+	if (N_prec.rows() != robot_dof) {
 		throw std::invalid_argument(
 			"N_prec matrix size not consistent with robot dof in "
 			"JointTask::updateTaskModel\n");
@@ -170,11 +171,18 @@ void JointTask::updateTaskModel(const MatrixXd& N_prec) {
 
 	_N_prec = N_prec;
 	_projected_jacobian = _joint_selection * _N_prec;
-	_URange = Sai2Model::matrixRangeBasis(_projected_jacobian);
+	_current_task_range = Sai2Model::matrixRangeBasis(_projected_jacobian);
+	if(_current_task_range.norm() == 0)
+	{
+		// there is no controllable degree of freedom for the task, just return
+		// should maybe print a warning here
+		_N.setIdentity(robot_dof, robot_dof);
+		return;
+	}
 
 	Sai2Model::OpSpaceMatrices op_space_matrices =
 		getConstRobotModel()->operationalSpaceMatrices(
-			_URange.transpose() * _projected_jacobian);
+			_current_task_range.transpose() * _projected_jacobian);
 	_M_partial = op_space_matrices.Lambda;
 	_Jbar = op_space_matrices.Jbar;
 	_N = op_space_matrices.N;
@@ -194,15 +202,15 @@ void JointTask::updateTaskModel(const MatrixXd& N_prec) {
 			}
 			MatrixXd M_inv_BIE = M_BIE.inverse();
 			_M_partial_modified =
-				(_URange.transpose() * _projected_jacobian * M_inv_BIE *
-				 _projected_jacobian.transpose() * _URange)
+				(_current_task_range.transpose() * _projected_jacobian * M_inv_BIE *
+				 _projected_jacobian.transpose() * _current_task_range)
 					.inverse();
 			break;
 		}
 
 		case IMPEDANCE: {
 			_M_partial_modified =
-				MatrixXd::Identity(_URange.cols(), _URange.cols());
+				MatrixXd::Identity(_current_task_range.cols(), _current_task_range.cols());
 			break;
 		}
 
@@ -223,6 +231,13 @@ VectorXd JointTask::computeTorques() {
 	// update constroller state
 	_current_position = _joint_selection * getConstRobotModel()->q();
 	_current_velocity = _projected_jacobian * getConstRobotModel()->dq();
+
+	if(_current_task_range.norm() == 0)
+	{
+		// there is no controllable degree of freedom for the task, just return
+		// zero torques. should maybe print a warning here
+		return partial_joint_task_torques;
+	}
 
 	VectorXd tmp_desired_position = _desired_position;
 	VectorXd tmp_desired_velocity = _desired_velocity;
@@ -264,11 +279,11 @@ VectorXd JointTask::computeTorques() {
 	}
 
 	VectorXd partial_joint_task_torques_in_range_space =
-		_M_partial * _URange.transpose() * tmp_desired_acceleration +
-		_M_partial_modified * _URange.transpose() * partial_joint_task_torques;
+		_M_partial * _current_task_range.transpose() * tmp_desired_acceleration +
+		_M_partial_modified * _current_task_range.transpose() * partial_joint_task_torques;
 
 	// return projected task torques
-	return _projected_jacobian.transpose() * _URange *
+	return _projected_jacobian.transpose() * _current_task_range *
 		   partial_joint_task_torques_in_range_space;
 }
 

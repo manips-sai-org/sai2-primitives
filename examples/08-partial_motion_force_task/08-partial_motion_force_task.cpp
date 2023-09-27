@@ -1,10 +1,3 @@
-/*
- * Example of a controller for a Puma arm made with a 6DoF position and
- * orientation task at the end effector Here, the position and orientation tasks
- * are dynamically decoupled with the bounded inertia estimates method.
- */
-
-// some standard library includes
 #include <math.h>
 
 #include <iostream>
@@ -21,8 +14,9 @@
 #include "timer/LoopTimer.h"
 
 // control tasks from sai2-primitives
-#include "tasks/MotionForceTask.h"
+#include "RobotController.h"
 #include "tasks/JointTask.h"
+#include "tasks/MotionForceTask.h"
 
 // for handling ctrl+c and interruptions properly
 #include <signal.h>
@@ -110,7 +104,6 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 	// update robot model and initialize control vectors
 	robot->updateModel();
 	int dof = robot->dof();
-	MatrixXd N_prec = MatrixXd::Identity(dof, dof);
 
 	// prepare the task to control y-z position and rotation around z
 	string link_name = "end-effector";
@@ -137,15 +130,15 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 	Matrix3d desired_orientation = initial_orientation;
 
 	// joint task to control the nullspace
-	auto joint_task = make_shared<Sai2Primitives::JointTask>(robot);
-	joint_task->setGains(100.0, 20.0);
-	joint_task->disableInternalOtg();
-	joint_task->disableVelocitySaturation();
+	vector<shared_ptr<Sai2Primitives::TemplateTask>> task_list = {
+		motion_force_task};
+	auto robot_controller =
+		make_unique<Sai2Primitives::RobotController>(robot, task_list);
+	robot_controller->getRedundancyCompletionTask()->setGains(100.0, 20.0);
 
 	// create a loop timer
 	double control_freq = 1000;
-	Sai2Common::LoopTimer timer(control_freq);
-	timer.initializeTimer(1000000);	 // 1 ms pause before starting loop
+	Sai2Common::LoopTimer timer(control_freq, 1e6);
 
 	while (fSimulationRunning) {
 		timer.waitForNextLoop();
@@ -156,50 +149,47 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 		robot->updateModel();
 
 		// update tasks model
-		N_prec = MatrixXd::Identity(dof, dof);
-		motion_force_task->updateTaskModel(N_prec);
-		N_prec = motion_force_task->getTaskAndPreviousNullspace();
-		joint_task->updateTaskModel(N_prec);
+		robot_controller->updateControllerTaskModels();
 
 		// -------- set task goals and compute control torques
 		double time = timer.elapsedSimTime();
 
-		// try to move in X, cannot do it because the partial task does not control X direction
-		if(timer.elapsedCycles() == 1000) {
+		// try to move in X, cannot do it because the partial task does not
+		// control X direction
+		if (timer.elapsedCycles() == 1000) {
 			desired_position += Vector3d(0.1, 0.0, 0.0);
 		}
 		// then move in Y and Z, this should be doable
-		if(timer.elapsedCycles() == 2000) {
+		if (timer.elapsedCycles() == 2000) {
 			desired_position += Vector3d(0.0, 0.1, 0.1);
 		}
 
 		// try to rotate around Z, should not be able to do it
-		if(timer.elapsedCycles() == 3000) {
-			desired_orientation = AngleAxisd(M_PI/6, Vector3d::UnitZ()) * initial_orientation;
+		if (timer.elapsedCycles() == 3000) {
+			desired_orientation =
+				AngleAxisd(M_PI / 6, Vector3d::UnitZ()) * initial_orientation;
 		}
 		// then rotate around X, this should be doable
-		if(timer.elapsedCycles() == 4000) {
-			desired_orientation = AngleAxisd(M_PI/6, Vector3d::UnitX()) * initial_orientation;
+		if (timer.elapsedCycles() == 4000) {
+			desired_orientation =
+				AngleAxisd(M_PI / 6, Vector3d::UnitX()) * initial_orientation;
 		}
 
 		// move the first joint in the nullspace of the partial task
 		if (timer.elapsedCycles() == 8000) {
 			VectorXd q_des = robot->q();
 			q_des(0) += 0.5;
-			joint_task->setDesiredPosition(q_des);
+			robot_controller->getRedundancyCompletionTask()->setDesiredPosition(
+				q_des);
 		}
 
 		motion_force_task->setDesiredPosition(desired_position);
 		motion_force_task->setDesiredOrientation(desired_orientation);
 
-		VectorXd motion_force_task_torques =
-			motion_force_task->computeTorques();
-		VectorXd joint_task_torques = joint_task->computeTorques();
-
 		//------ Control torques
 		{
 			lock_guard<mutex> guard(mmutex_torques);
-			control_torques = motion_force_task_torques + joint_task_torques;
+			control_torques = robot_controller->computeControlTorques();
 		}
 
 		// -------------------------------------------
@@ -208,14 +198,21 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 			cout << "desired position : "
 				 << motion_force_task->getDesiredPosition().transpose() << endl;
 			cout << "desired position projected in controlled space: "
-				 << (motion_force_task->posSelectionProjector() * motion_force_task->getDesiredPosition()).transpose() << endl;				 
+				 << (motion_force_task->posSelectionProjector() *
+					 motion_force_task->getDesiredPosition())
+						.transpose()
+				 << endl;
 			cout << "current position : "
 				 << motion_force_task->getCurrentPosition().transpose() << endl;
 			cout << "current position projected in controlled space: "
-				 << (motion_force_task->posSelectionProjector()*motion_force_task->getCurrentPosition()).transpose() << endl;
+				 << (motion_force_task->posSelectionProjector() *
+					 motion_force_task->getCurrentPosition())
+						.transpose()
+				 << endl;
 			cout << "position error : "
-				 << (motion_force_task->posSelectionProjector()*(motion_force_task->getDesiredPosition() -
-					 motion_force_task->getCurrentPosition()))
+				 << (motion_force_task->posSelectionProjector() *
+					 (motion_force_task->getDesiredPosition() -
+					  motion_force_task->getCurrentPosition()))
 						.norm()
 				 << endl;
 			cout << endl;
@@ -234,7 +231,6 @@ void simulation(shared_ptr<Sai2Model::Sai2Model> robot,
 	// create a timer
 	double sim_freq = 2000;	 // 2 kHz
 	Sai2Common::LoopTimer timer(sim_freq);
-	timer.initializeTimer();
 
 	sim->setTimestep(1.0 / sim_freq);
 

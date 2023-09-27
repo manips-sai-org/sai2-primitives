@@ -21,6 +21,8 @@ RobotController::RobotController(std::shared_ptr<Sai2Model::Sai2Model>& robot,
 				"All tasks must have the same loop timestep in RobotController");
 		}
 	}
+	_redundancy_completion_task =
+		std::make_shared<JointTask>(_robot, _tasks[0]->getLoopTimestep());
 }
 
 void RobotController::updateControllerTaskModels() {
@@ -30,6 +32,7 @@ void RobotController::updateControllerTaskModels() {
 		task->updateTaskModel(N_prec);
         N_prec = task->getTaskAndPreviousNullspace();
 	}
+	_redundancy_completion_task->updateTaskModel(N_prec);
 }
 
 Eigen::VectorXd RobotController::computeControlTorques() {
@@ -40,10 +43,20 @@ Eigen::VectorXd RobotController::computeControlTorques() {
         previous_tasks_disturbance = (MatrixXd::Identity(dof, dof) - task->getTaskNullspace().transpose()) * control_torques;
         control_torques += task->computeTorques() - previous_tasks_disturbance;
     }
+	previous_tasks_disturbance = (MatrixXd::Identity(dof, dof) - _redundancy_completion_task->getTaskNullspace().transpose()) * control_torques;
+	control_torques += _redundancy_completion_task->computeTorques() - previous_tasks_disturbance;
+
     if (_enable_gravity_compensation) {
-        control_torques += _robot->coriolisPlusGravity();
+        control_torques += _robot->jointGravityVector();
     }
     return control_torques;
+}
+
+void RobotController::reinitializeTasks() {
+	for (auto& task : _tasks) {
+		task->reInitializeTask();
+	}
+	_redundancy_completion_task->reInitializeTask();
 }
 
 } /* namespace Sai2Primitives */

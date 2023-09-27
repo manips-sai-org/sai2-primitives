@@ -1,41 +1,36 @@
-/*
- * Example of a controller for a Panda arm (7DoF robot) on a 1dof sliding base,
- * where the sliding and elbow angle are controlled by a partial joint task, and
- * the position and orientation of the end effector are controlled by a
- * MotionForceTask
- */
-
+// some standard library includes
 #include <math.h>
-#include <signal.h>
 
 #include <iostream>
 #include <mutex>
 #include <string>
 #include <thread>
 
-#include "RobotController.h"
+// sai2 main libraries includes
 #include "Sai2Graphics.h"
 #include "Sai2Model.h"
 #include "Sai2Simulation.h"
-#include "tasks/JointTask.h"
-#include "tasks/MotionForceTask.h"
+
+// sai2 utilities from sai2-common
 #include "timer/LoopTimer.h"
+
+// control tasks from sai2-primitives
+#include "RobotController.h"
+#include "tasks/MotionForceTask.h"
+
+// for handling ctrl+c and interruptions properly
+#include <signal.h>
 bool fSimulationRunning = false;
 void sighandler(int) { fSimulationRunning = false; }
 
+// namespaces for compactness of code
 using namespace std;
 using namespace Eigen;
 
+// config file names and object names
 const string world_file = "resources/world.urdf";
-const string robot_file = "resources/panda_arm_sliding_base.urdf";
+const string robot_file = "resources/panda_arm.urdf";
 const string robot_name = "PANDA";
-
-// ui and control torques
-VectorXd UI_torques;
-VectorXd control_torques;
-
-// mutex to read and write the control torques
-mutex mutex_torques;
 
 // simulation and control loop
 void control(shared_ptr<Sai2Model::Sai2Model> robot,
@@ -43,7 +38,12 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 void simulation(shared_ptr<Sai2Model::Sai2Model> robot,
 				shared_ptr<Sai2Simulation::Sai2Simulation> sim);
 
-//------------ main function
+VectorXd control_torques, ui_torques;
+string link_name = "end-effector";
+
+// mutex to read and write the control torques
+mutex mutex_torques;
+
 int main(int argc, char** argv) {
 	cout << "Loading URDF world model file: " << world_file << endl;
 
@@ -54,18 +54,19 @@ int main(int argc, char** argv) {
 
 	// load graphics scene
 	auto graphics = make_shared<Sai2Graphics::Sai2Graphics>(world_file);
-	graphics->addUIForceInteraction(robot_name);
 
 	// load simulation world
 	auto sim = make_shared<Sai2Simulation::Sai2Simulation>(world_file);
 
 	// load robots
-	auto robot = make_shared<Sai2Model::Sai2Model>(robot_file, false);
+	auto robot = make_shared<Sai2Model::Sai2Model>(robot_file);
+	// update robot model from simulation configuration
 	robot->setQ(sim->getJointPositions(robot_name));
 	robot->updateModel();
+	control_torques.setZero(robot->dof());
 
-	UI_torques = VectorXd::Zero(robot->dof());
-	control_torques = VectorXd::Zero(robot->dof());
+	ui_torques.setZero(robot->dof());
+	graphics->addUIForceInteraction(robot_name);
 
 	// start the simulation thread first
 	fSimulationRunning = true;
@@ -79,8 +80,8 @@ int main(int argc, char** argv) {
 		graphics->updateRobotGraphics(robot_name, robot->q());
 		graphics->renderGraphicsWorld();
 		{
-			lock_guard<mutex> lock_guard_torques(mutex_torques);
-			UI_torques = graphics->getUITorques(robot_name);
+			lock_guard<mutex> guard(mutex_torques);
+			ui_torques = graphics->getUITorques(robot_name);
 		}
 	}
 
@@ -92,34 +93,28 @@ int main(int argc, char** argv) {
 	return 0;
 }
 
-//------------------------------------------------------------------------------
+//------------------ Controller main function
 void control(shared_ptr<Sai2Model::Sai2Model> robot,
 			 shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 	// update robot model and initialize control vectors
 	robot->updateModel();
 	int dof = robot->dof();
-	MatrixXd N_prec = MatrixXd::Identity(dof, dof);
 
-	// partial joint task to control slider and elbow
-	MatrixXd joint_selection = MatrixXd::Zero(2, dof);
-	joint_selection(0, 0) = 1;
-	joint_selection(1, 7) = 1;
-	auto partial_joint_task =
-		make_shared<Sai2Primitives::JointTask>(robot, joint_selection);
-	VectorXd joint_desired_pos = partial_joint_task->getCurrentPosition();
-
-	// Motion task for end effector
-	string link_name = "end-effector";
-	Vector3d pos_in_link = Vector3d(0.0, 0.0, 0.07);
-	Affine3d compliant_frame = Affine3d(Translation3d(pos_in_link));
+	// prepare the task to control y-z position and rotation around z
+	vector<Vector3d> controlled_directions_translation = {};
+	vector<Vector3d> controlled_directions_rotation = {
+		Vector3d::UnitX(), Vector3d::UnitY(), Vector3d::UnitZ()};
 	auto motion_force_task = make_shared<Sai2Primitives::MotionForceTask>(
-		robot, link_name, compliant_frame);
-	motion_force_task->disableInternalOtg();
-	const Vector3d initial_position = motion_force_task->getCurrentPosition();
+		robot, link_name, controlled_directions_translation,
+		controlled_directions_rotation);
 
-	// make controller
+	// initial orientation
+	const Matrix3d initial_orientation = robot->rotation(link_name);
+	Matrix3d desired_orientation = initial_orientation;
+
+	// robot controller
 	vector<shared_ptr<Sai2Primitives::TemplateTask>> task_list = {
-		partial_joint_task, motion_force_task};
+		motion_force_task};
 	auto robot_controller =
 		make_unique<Sai2Primitives::RobotController>(robot, task_list);
 
@@ -127,8 +122,7 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 	double control_freq = 1000;
 	Sai2Common::LoopTimer timer(control_freq, 1e6);
 
-	while (fSimulationRunning) {  // automatically set to false when simulation
-								  // is quit
+	while (fSimulationRunning) {
 		timer.waitForNextLoop();
 
 		// read joint positions, velocities, update model
@@ -140,25 +134,27 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 		robot_controller->updateControllerTaskModels();
 
 		// -------- set task goals and compute control torques
-		// partial joint task
-		if (timer.elapsedCycles() % 4000 == 1000) {
-			joint_desired_pos(0) -= 1.0;
-		} else if (timer.elapsedCycles() % 4000 == 3000) {
-			joint_desired_pos(0) += 1.0;
-		}
-		partial_joint_task->setDesiredPosition(joint_desired_pos);
-
-		// motion force task
 		double time = timer.elapsedSimTime();
-		Vector3d desired_position =
-			initial_position + 0.1 * Vector3d(sin(2.0 * M_PI * 0.3 * time), 0.0,
-											  1 - cos(2.0 * M_PI * 0.3 * time));
-		desired_position(1) = partial_joint_task->getCurrentPosition()(0);
-		motion_force_task->setDesiredPosition(desired_position);
 
-		//------ compute the final torques
+		// move in x and y plane back and forth
+		if (timer.elapsedCycles() % 6000 == 0) {
+			desired_orientation = initial_orientation;
+		} else if (timer.elapsedCycles() % 6000 == 2000) {
+			desired_orientation =
+				AngleAxisd(M_PI / 3.0, Vector3d::UnitX()).toRotationMatrix() *
+				initial_orientation;
+		} else if (timer.elapsedCycles() % 6000 == 4000) {
+			desired_orientation =
+				AngleAxisd(M_PI / 4.0, Vector3d::UnitY()).toRotationMatrix() *
+				AngleAxisd(M_PI / 3.0, Vector3d::UnitX()).toRotationMatrix() *
+				initial_orientation;
+		}
+
+		motion_force_task->setDesiredOrientation(desired_orientation);
+
+		//------ Control torques
 		{
-			lock_guard<mutex> lock_guard_torques(mutex_torques);
+			lock_guard<mutex> guard(mutex_torques);
 			control_torques = robot_controller->computeControlTorques();
 		}
 	}
@@ -182,13 +178,12 @@ void simulation(shared_ptr<Sai2Model::Sai2Model> robot,
 		timer.waitForNextLoop();
 
 		{
-			lock_guard<mutex> lock_guard_torques(mutex_torques);
-			sim->setJointTorques(robot_name, control_torques + UI_torques);
+			lock_guard<mutex> guard(mutex_torques);
+			sim->setJointTorques(robot_name, control_torques + ui_torques);
 		}
 		sim->integrate();
 	}
-
 	timer.stop();
-	cout << "Simulation loop timer stats:\n";
+	cout << "\nSimulation loop timer stats:\n";
 	timer.printInfoPostRun();
 }
