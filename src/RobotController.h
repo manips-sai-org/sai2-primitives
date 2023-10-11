@@ -16,6 +16,7 @@
 
 #include "tasks/TemplateTask.h"
 #include "tasks/JointTask.h"
+#include "tasks/MotionForceTask.h"
 
 namespace Sai2Primitives {
 
@@ -37,9 +38,17 @@ public:
 		return _redundancy_completion_task;
 	}
 
+	std::shared_ptr<JointTask> getJointTaskByName(const std::string& task_name);
+	std::shared_ptr<MotionForceTask> getMotionForceTaskByName(const std::string& task_name);
+
+	const std::vector<std::string>& getTaskNames() const {
+		return _task_names;
+	}
+
 private:
     std::shared_ptr<Sai2Model::Sai2Model> _robot;
 	std::vector<std::shared_ptr<TemplateTask>> _tasks;
+	std::vector<std::string> _task_names;
 	std::shared_ptr<JointTask> _redundancy_completion_task;
 	bool _enable_gravity_compensation;
 };

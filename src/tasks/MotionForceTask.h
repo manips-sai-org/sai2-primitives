@@ -58,6 +58,7 @@ public:
 	 * @param link_name The name of the link in the robot at which to attach the
 	 * compliant frame
 	 * @param compliant_frame Compliant frame with respect to link frame
+	 * @param task_name Name of the task
 	 * @param is_force_motion_parametrization_in_compliant_frame Whether the
 	 * force and motion space (and potential non isotropic gains) are defined
 	 * with respect to the compliant frome or the robot base frame
@@ -67,6 +68,7 @@ public:
 	MotionForceTask(
 		std::shared_ptr<Sai2Model::Sai2Model>& robot, const string& link_name,
 		const Affine3d& compliant_frame = Affine3d::Identity(),
+		const std::string& task_name = "motion_force_task",
 		const bool is_force_motion_parametrization_in_compliant_frame = false,
 		const double loop_timestep = 0.001);
 
@@ -75,6 +77,7 @@ public:
 		std::vector<Vector3d> controlled_directions_translation,
 		std::vector<Vector3d> controlled_directions_rotation,
 		const Affine3d& compliant_frame = Affine3d::Identity(),
+		const std::string& task_name = "partial_motion_force_task",
 		const bool is_force_motion_parametrization_in_compliant_frame = false,
 		const double loop_timestep = 0.001);
 

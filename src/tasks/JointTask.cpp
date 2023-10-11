@@ -12,8 +12,8 @@ using namespace Eigen;
 namespace Sai2Primitives {
 
 JointTask::JointTask(std::shared_ptr<Sai2Model::Sai2Model>& robot,
-					 const double loop_timestep)
-	: TemplateTask(robot, loop_timestep) {
+					 const std::string& task_name, const double loop_timestep)
+	: TemplateTask(robot, task_name, TaskType::JOINT_TASK, loop_timestep) {
 	// selection for full joint task
 	_joint_selection = MatrixXd::Identity(getConstRobotModel()->dof(), getConstRobotModel()->dof());
 
@@ -22,8 +22,9 @@ JointTask::JointTask(std::shared_ptr<Sai2Model::Sai2Model>& robot,
 
 JointTask::JointTask(std::shared_ptr<Sai2Model::Sai2Model>& robot,
 					 const MatrixXd& joint_selection_matrix,
+					 const std::string& task_name,
 					 const double loop_timestep)
-	: TemplateTask(robot, loop_timestep) {
+	: TemplateTask(robot, task_name, TaskType::JOINT_TASK, loop_timestep) {
 	// selection for partial joint task
 	if (joint_selection_matrix.cols() != getConstRobotModel()->dof()) {
 		throw std::invalid_argument(

@@ -130,7 +130,7 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 
 	// Position plus orientation task
 	auto motion_force_task = make_shared<Sai2Primitives::MotionForceTask>(
-		robot, link_name, Affine3d(Translation3d(pos_in_link)), true);
+		robot, link_name, Affine3d(Translation3d(pos_in_link)), "surface_alignment_task", true);
 	motion_force_task->enablePassivity();
 	motion_force_task->disableInternalOtg();
 	VectorXd motion_force_task_torques = VectorXd::Zero(dof);

@@ -21,9 +21,10 @@ const double MAX_FEEDBACK_MOMENT_FORCE_CONTROLLER = 10.0;
 MotionForceTask::MotionForceTask(
 	std::shared_ptr<Sai2Model::Sai2Model>& robot, const string& link_name,
 	const Affine3d& compliant_frame,
+	const std::string& task_name,
 	const bool is_force_motion_parametrization_in_compliant_frame,
 	const double loop_timestep)
-	: TemplateTask(robot, loop_timestep) {
+	: TemplateTask(robot, task_name, TaskType::MOTION_FORCE_TASK, loop_timestep) {
 	_link_name = link_name;
 	_compliant_frame = compliant_frame;
 	_is_force_motion_parametrization_in_compliant_frame =
@@ -39,9 +40,10 @@ MotionForceTask::MotionForceTask(
 	std::vector<Vector3d> controlled_directions_translation,
 	std::vector<Vector3d> controlled_directions_rotation,
 	const Affine3d& compliant_frame,
+	const std::string& task_name,
 	const bool is_force_motion_parametrization_in_compliant_frame,
 	const double loop_timestep)
-	: TemplateTask(robot, loop_timestep) {
+	: TemplateTask(robot, task_name, TaskType::MOTION_FORCE_TASK, loop_timestep) {
 	_link_name = link_name;
 	_compliant_frame = compliant_frame;
 	_is_force_motion_parametrization_in_compliant_frame =

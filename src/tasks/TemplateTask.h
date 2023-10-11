@@ -16,11 +16,21 @@
 
 namespace Sai2Primitives {
 
+enum TaskType {
+	UNDEFINED,
+	JOINT_TASK,
+	MOTION_FORCE_TASK,
+};
+
 class TemplateTask {
 public:
 	TemplateTask(std::shared_ptr<Sai2Model::Sai2Model>& robot,
+				 const std::string& task_name, const TaskType task_type,
 				 const double loop_timestep)
-		: _robot(robot), _loop_timestep(loop_timestep) {}
+		: _robot(robot),
+		  _task_name(task_name),
+		  _task_type(task_type),
+		  _loop_timestep(loop_timestep) {}
 
 	/**
 	 * @brief update the task model (only _N_prec for a joint task)
@@ -64,7 +74,7 @@ public:
 	 *
 	 * @return const std::shared_ptr<Sai2Model::Sai2Model>
 	 */
-	const std::shared_ptr<Sai2Model::Sai2Model> getConstRobotModel() const {
+	const std::shared_ptr<Sai2Model::Sai2Model>& getConstRobotModel() const {
 		return _robot;
 	}
 
@@ -72,11 +82,26 @@ public:
 	 * @brief returns the loop timestep of the task
 	 *
 	 */
-	double getLoopTimestep() const { return _loop_timestep; }
+	const double& getLoopTimestep() const { return _loop_timestep; }
+
+	/**
+	 * @brief returns the task type
+	 *
+	 */
+	const TaskType& getTaskType() const { return _task_type; }
+
+	/**
+	 * @brief returns the task name
+	 *
+	 */
+	const std::string& getTaskName() const { return _task_name; }
 
 private:
 	std::shared_ptr<Sai2Model::Sai2Model> _robot;
 	double _loop_timestep;
+
+	TaskType _task_type;
+	std::string _task_name;
 };
 
 } /* namespace Sai2Primitives */

@@ -40,10 +40,12 @@ public:
 	 *
 	 * @param      robot      A pointer to a Sai2Model object for the robot that
 	 *                        is to be controlled
+	 * @param[in]  task_name  The task name
 	 * @param[in]  loop_timestep  time taken by a control loop. Used only in
 	 * trajectory generation
 	 */
 	JointTask(std::shared_ptr<Sai2Model::Sai2Model>& robot,
+			  const std::string& task_name = "joint_task",
 			  const double loop_timestep = 0.001);
 
 	/**
@@ -55,10 +57,12 @@ public:
 	 *
 	 * @param robot
 	 * @param joint_selection_matrix
+	 * @param task_name
 	 * @param loop_timestep
 	 */
 	JointTask(std::shared_ptr<Sai2Model::Sai2Model>& robot,
 			  const MatrixXd& joint_selection_matrix,
+			  const std::string& task_name = "partial_joint_task",
 			  const double loop_timestep = 0.001);
 
 	/**
@@ -276,9 +280,7 @@ public:
 	/**
 	 * @brief      Disables the velocity saturation
 	 */
-	void disableVelocitySaturation() {
-		_use_velocity_saturation_flag = false;
-	}
+	void disableVelocitySaturation() { _use_velocity_saturation_flag = false; }
 
 	/**
 	 * @brief      Sets the dynamic decoupling type. See the enum for more info
