@@ -3,7 +3,12 @@ CMAKE_MINIMUM_REQUIRED(VERSION 2.8.12)
 PROJECT (SAI2-PRIMITIVES)
 SET (PROJECT_VERSION 0.1.0) #major version is zero for now since api will certainly change in future
 
-SET(CMAKE_CXX_FLAGS "-std=c++17 -I/usr/include -I/usr/local/include")
+if (${CMAKE_SYSTEM_NAME} MATCHES Linux)
+	SET(CMAKE_CXX_FLAGS "-std=c++17 -I/usr/include -I/usr/local/include -fPIC")
+elseif (${CMAKE_SYSTEM_NAME} MATCHES Darwin)
+	SET(CMAKE_CXX_FLAGS "-std=c++17 -I/usr/include -I/usr/local/include -I/opt/homebrew/include -fPIC")
+endif ()
+
 IF(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   MESSAGE(STATUS "Setting build type to 'RelWithDebInfo' as none was specified.")
   # Set the default build, and also the possible values of build type for cmake-gui
@@ -18,7 +23,7 @@ endforeach()
 message( STATUS "DirDefs: " ${DirDefs} )
 
 # include Eigen
-find_package(Eigen3 QUIET)
+find_package(Eigen3 REQUIRED)
 
 # include sai2-model
 find_package(SAI2-MODEL REQUIRED)
