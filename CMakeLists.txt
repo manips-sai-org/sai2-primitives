@@ -4,9 +4,9 @@ PROJECT (SAI2-PRIMITIVES)
 SET (PROJECT_VERSION 0.1.0) #major version is zero for now since api will certainly change in future
 
 if (${CMAKE_SYSTEM_NAME} MATCHES Linux)
-	SET(CMAKE_CXX_FLAGS "-std=c++17 -I/usr/include -I/usr/local/include -fPIC")
+	SET(CMAKE_CXX_FLAGS "-std=c++17 -I/usr/include -I/usr/local/include")
 elseif (${CMAKE_SYSTEM_NAME} MATCHES Darwin)
-	SET(CMAKE_CXX_FLAGS "-std=c++17 -I/usr/include -I/usr/local/include -I/opt/homebrew/include -fPIC")
+	SET(CMAKE_CXX_FLAGS "-std=c++17 -I/usr/include -I/usr/local/include -I/opt/homebrew/include")
 endif ()
 
 IF(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
