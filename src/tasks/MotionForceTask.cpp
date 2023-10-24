@@ -122,6 +122,7 @@ void MotionForceTask::initialSetup() {
 	_k_ff = 0.95;
 
 	parametrizeForceMotionSpaces(0);
+	parametrizeMomentRotMotionSpaces(0);
 	setClosedLoopForceControl(false);
 	setClosedLoopMomentControl(false);
 
