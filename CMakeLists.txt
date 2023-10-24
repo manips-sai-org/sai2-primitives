@@ -27,10 +27,11 @@ set(RUCKIG_INCLUDE_DIR ${RUCKIG_LOCAL_DIR}/include/)
 FIND_LIBRARY(RUCKIG_LIBRARIES ruckig PATHS ${RUCKIG_LOCAL_DIR}/build NO_DEFAULT_PATH)
 
 # add tasks
-SET(TASKS_SOURCE 
+SET(CONTROLLERS_SOURCE 
 	${PROJECT_SOURCE_DIR}/src/RobotController.cpp
 	${PROJECT_SOURCE_DIR}/src/tasks/MotionForceTask.cpp
 	${PROJECT_SOURCE_DIR}/src/tasks/JointTask.cpp
+	${PROJECT_SOURCE_DIR}/src/HapticDeviceController.cpp
 	# ${PROJECT_SOURCE_DIR}/src/tasks/TwoHandTwoRobotsTask.cpp
 	)
 
@@ -63,7 +64,7 @@ INCLUDE_DIRECTORIES (
 
 # Create the library
 ADD_LIBRARY (sai2-primitives STATIC
-	${TASKS_SOURCE}
+	${CONTROLLERS_SOURCE}
 	${HELPER_MODULES_SOURCE}
 	# ${HAPTIC_TASKS_SOURCE}
 	)
