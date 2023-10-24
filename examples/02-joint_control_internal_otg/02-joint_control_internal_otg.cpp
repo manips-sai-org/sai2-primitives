@@ -183,7 +183,7 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 		// -------------------------------------------
 		// display robot state every half second
 		if (timer.elapsedCycles() % 500 == 0) {
-			cout << time << endl;
+			cout << timer.elapsedSimTime() << endl;
 			cout << "desired position : "
 				 << joint_task->getDesiredPosition().transpose() << endl;
 			cout << "current position : "
