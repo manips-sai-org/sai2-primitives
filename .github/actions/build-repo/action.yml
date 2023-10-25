@@ -162,7 +162,7 @@ runs:
         cd ruckig
         mkdir build && cd build
         cmake .. && make -j8
-        cd ../../..
+        cd ../..
         mkdir build && cd build
         cmake .. && make -j8
 
