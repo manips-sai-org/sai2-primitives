@@ -62,6 +62,7 @@ int main(int argc, char** argv) {
 
 	// load robots
 	auto robot = make_shared<Sai2Model::Sai2Model>(robot_file, false);
+	robot->setTRobotBase(sim->getRobotBaseTransform(robot_name));
 	robot->setQ(sim->getJointPositions(robot_name));
 	robot->updateModel();
 
@@ -112,8 +113,8 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 	motion_force_task->disableInternalOtg();
 
 	// no gains setting here, using the default task values
-	const Matrix3d initial_orientation = robot->rotation(link_name);
-	const Vector3d initial_position = robot->position(link_name, pos_in_link);
+	const Matrix3d initial_orientation = robot->rotationInWorld(link_name);
+	const Vector3d initial_position = robot->positionInWorld(link_name, pos_in_link);
 	const VectorXd initial_q = robot->q();
 
 	// robot controller to automatize the task update and control computation

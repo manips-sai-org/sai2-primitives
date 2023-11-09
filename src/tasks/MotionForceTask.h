@@ -61,7 +61,7 @@ public:
 	 * @param task_name Name of the task
 	 * @param is_force_motion_parametrization_in_compliant_frame Whether the
 	 * force and motion space (and potential non isotropic gains) are defined
-	 * with respect to the compliant frome or the robot base frame
+	 * with respect to the compliant frame or the world frame
 	 * @param loop_timestep Time taken by a control loop. Used in trajectory
 	 * generation and integral control.
 	 */
@@ -228,7 +228,7 @@ public:
 	}
 
 	/**
-	 * @brief Set the Desired Force in robot base frame
+	 * @brief Set the Desired Force in robot world frame
 	 *
 	 * @param desired_force
 	 */
@@ -237,14 +237,14 @@ public:
 	}
 
 	/**
-	 * @brief Get the Desired Force in robot base frame
+	 * @brief Get the Desired Force in robot world frame
 	 *
-	 * @return const Vector3d& desired force in robot base frame
+	 * @return const Vector3d& desired force in robot world frame
 	 */
 	Vector3d getDesiredForce() const;
 
 	/**
-	 * @brief Set the Desired Moment in robot base frame
+	 * @brief Set the Desired Moment in robot world frame
 	 *
 	 * @param desired_moment
 	 */
@@ -253,9 +253,9 @@ public:
 	}
 
 	/**
-	 * @brief Get the Desired Moment in robot base frame
+	 * @brief Get the Desired Moment in robot world frame
 	 *
-	 * @return const Vector3d& desired moment in robot base frame
+	 * @return const Vector3d& desired moment in robot world frame
 	 */
 	Vector3d getDesiredMoment() const;
 
@@ -528,10 +528,10 @@ private:
 	void initialSetup();
 
 	// desired pose defaults to the configuration when the task is created
-	Vector3d _desired_position;			 // in robot frame
-	Matrix3d _desired_orientation;		 // in robot frame
-	Vector3d _desired_velocity;			 // in robot frame
-	Vector3d _desired_angular_velocity;	 // in robot frame
+	Vector3d _desired_position;			 // in robot world frame
+	Matrix3d _desired_orientation;		 // in robot world frame
+	Vector3d _desired_velocity;			 // in robot world frame
+	Vector3d _desired_angular_velocity;	 // in robot world frame
 	Vector3d _desired_acceleration;
 	Vector3d _desired_angular_acceleration;
 
@@ -554,8 +554,8 @@ private:
 
 	// desired force and moment for the force part of the controller
 	// defaults to Zero
-	Vector3d _desired_force;   // robot frame
-	Vector3d _desired_moment;  // robot frame
+	Vector3d _desired_force;   // robot world frame
+	Vector3d _desired_moment;  // robot world frame
 
 	// velocity saturation is off by default
 	bool _use_velocity_saturation_flag;
@@ -576,24 +576,24 @@ private:
 	bool _is_force_motion_parametrization_in_compliant_frame;
 
 	// motion quantities
-	Vector3d _current_position;		// robot frame
-	Matrix3d _current_orientation;	// robot frame
+	Vector3d _current_position;		// robot world frame
+	Matrix3d _current_orientation;	// robot world frame
 
-	Vector3d _current_velocity;			 // robot frame
-	Vector3d _current_angular_velocity;	 // robot frame
+	Vector3d _current_velocity;			 // robot world frame
+	Vector3d _current_angular_velocity;	 // robot world frame
 
-	Vector3d _orientation_error;			 // robot frame
-	Vector3d _integrated_orientation_error;	 // robot frame
-	Vector3d _integrated_position_error;	 // robot frame
+	Vector3d _orientation_error;			 // robot world frame
+	Vector3d _integrated_orientation_error;	 // robot world frame
+	Vector3d _integrated_position_error;	 // robot world frame
 
 	// force quantities
 	Affine3d _T_control_to_sensor;
 
-	Vector3d _sensed_force;	  // robot frame
-	Vector3d _sensed_moment;  // robot frame
+	Vector3d _sensed_force;	  // robot world frame
+	Vector3d _sensed_moment;  // robot world frame
 
-	Vector3d _integrated_force_error;	// robot frame
-	Vector3d _integrated_moment_error;	// robot frame
+	Vector3d _integrated_force_error;	// robot world frame
+	Vector3d _integrated_moment_error;	// robot world frame
 
 	int _force_space_dimension, _moment_space_dimension;
 	Vector3d _force_or_motion_axis, _moment_or_rotmotion_axis;
