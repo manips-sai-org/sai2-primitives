@@ -30,17 +30,17 @@ enum HapticControlType {
 };
 
 struct HapticControllerOtuput {
-	Vector3d robot_goal_position;	  // robot base frame
-	Matrix3d robot_goal_orientation;  // robot base frame
-	Vector3d device_feedback_force;	  // device base frame
-	Vector3d device_feedback_moment;  // device base frame
+	Vector3d robot_goal_position;	  // world frame
+	Matrix3d robot_goal_orientation;  // world frame
+	Vector3d device_command_force;	  // device base frame
+	Vector3d device_command_moment;   // device base frame
 	double device_gripper_force;
 
 	HapticControllerOtuput()
 		: robot_goal_position(Vector3d::Zero()),
 		  robot_goal_orientation(Matrix3d::Identity()),
-		  device_feedback_force(Vector3d::Zero()),
-		  device_feedback_moment(Vector3d::Zero()),
+		  device_command_force(Vector3d::Zero()),
+		  device_command_moment(Vector3d::Zero()),
 		  device_gripper_force(0.0) {}
 };
 
@@ -51,12 +51,12 @@ struct HapticControllerInput {
 	Vector3d device_angular_velocity;  // device base frame
 	double device_gripper_position;
 	double device_gripper_velocity;
-	Vector3d robot_position;	 	  // robot base frame
-	Matrix3d robot_orientation;	 	  // robot base frame
-	Vector3d robot_linear_velocity;   // robot base frame
-	Vector3d robot_angular_velocity;  // robot base frame
-	Vector3d robot_sensed_force;  	 // robot base frame
-	Vector3d robot_sensed_moment;	  // robot base frame
+	Vector3d robot_position;	 	  // world frame
+	Matrix3d robot_orientation;	 	  // world frame
+	Vector3d robot_linear_velocity;   // world frame
+	Vector3d robot_angular_velocity;  // world frame
+	Vector3d robot_sensed_force;  	  // world frame
+	Vector3d robot_sensed_moment;	  // world frame
 
 	HapticControllerInput()
 		: device_position(Vector3d::Zero()),
@@ -83,24 +83,25 @@ struct DeviceLimits {
 	double max_angular_damping;
 	double max_force;
 	double max_torque;
+
+	DeviceLimits(const Vector2d& max_stiffness, const Vector2d& max_damping, const Vector2d& max_force_torque)
+		: max_linear_stiffness(max_stiffness(0)),
+		  max_angular_stiffness(max_stiffness(1)),
+		  max_linear_damping(max_damping(0)),
+		  max_angular_damping(max_damping(1)),
+		  max_force(max_force_torque(0)),
+		  max_torque(max_force_torque(1)) {}
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //// Constructor, Destructor and Initialization of the haptic controllers
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-	/**
-	 * @brief Constructor  This constructor creates the haptic controller for a simple bilateral teleoperation scheme.
-	 *
-	 * @param center_position_robot 			The task home position of the robot in its operational space
-	 * @param center_rotation_robot     		The task home orientation of the robot in its operational space
-	 * @param Transform_Matrix_DeviceToRobot 	Rotation matrix between from the device to robot frame
-	 *
-	 */
+
+
 	HapticDeviceController(const DeviceLimits& device_limits,
-					const Eigen::Matrix3d& robot_base_rotation_in_world,
 					const Eigen::Affine3d& robot_initial_pose,
-					const Eigen::Matrix3d& device_base_rotation_in_world = Eigen::Matrix3d::Identity(),
-					const Eigen::Affine3d& device_home_pose = Eigen::Affine3d::Identity());
+					const Eigen::Affine3d& device_home_pose = Eigen::Affine3d::Identity(),
+					const Eigen::Matrix3d& device_base_rotation_in_world = Eigen::Matrix3d::Identity());
 
 	/**
 	 * @brief Detructor  This destructor deletes the pointers, stop the haptic controller, and close the haptic device.
@@ -159,7 +160,15 @@ struct DeviceLimits {
 	HapticControllerOtuput computeHapticControl(const HapticControllerInput& input, const bool verbose = false);
 
 	void enableOrientationTeleoperation(const bool enable_orientation_teleoperation);
-	void enableGripperTeleoperation(const bool enable_gripper_teleoperation);
+
+	const HapticControlType& getHapticControlType() const {
+		return _haptic_control_type;
+	}
+	void setHapticControlType(const HapticControlType& haptic_control_type);
+
+	bool homed() const {
+		return _device_homed;
+	}
 
 private:
 
@@ -268,7 +277,7 @@ public:
 	 * @param scaling_factor_trans      Translational scaling factor
 	 * @param scaling_factor_rot       	Rotational scaling factor
 	 */
-	void setScalingFactors(const double scaling_factor_pos, const double scaling_factor_ori);
+	void setScalingFactors(const double scaling_factor_pos, const double scaling_factor_ori = 1.0);
 
 	// /**
 	//  * @brief Set the position controller gains of the haptic device for the homing task.
@@ -503,7 +512,7 @@ private:
 	Eigen::Matrix3d _center_rotation_robot;
 
 	//Transformation matrix from the device frame to the robot frame
-	Eigen::Matrix3d _device_base_to_robot_base_rotation;
+	Eigen::Matrix3d _R_world_device;
 
 //// Controllers parameters, set through setting methods ////
 

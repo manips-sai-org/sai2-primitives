@@ -32,22 +32,17 @@ namespace Sai2Primitives
 //// Constructor, Destructor and Initialization of the haptic controllers
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-HapticDeviceController::HapticDeviceController(const DeviceLimits& device_limits,
-					const Eigen::Matrix3d& robot_base_rotation_in_world,
-					const Eigen::Affine3d& robot_initial_pose,
-					const Eigen::Matrix3d& device_base_rotation_in_world,
-					const Eigen::Affine3d& device_home_pose)
-{
-
-	_device_limits = device_limits;
-
-	_device_base_to_robot_base_rotation = device_base_rotation_in_world.transpose() * robot_base_rotation_in_world;
-
-	_center_position_robot = robot_initial_pose.translation();
-	_center_rotation_robot = robot_initial_pose.linear();
-
-	_home_position_device = device_home_pose.translation();
-	_home_rotation_device = device_home_pose.linear();
+HapticDeviceController::HapticDeviceController(
+	const DeviceLimits& device_limits,
+	const Eigen::Affine3d& robot_initial_pose,
+	const Eigen::Affine3d& device_home_pose,
+	const Eigen::Matrix3d& device_base_rotation_in_world)
+	: _device_limits(device_limits),
+	  _center_position_robot(robot_initial_pose.translation()),
+	  _center_rotation_robot(robot_initial_pose.linear()),
+	  _R_world_device(device_base_rotation_in_world),
+	  _home_position_device(device_home_pose.translation()),
+	  _home_rotation_device(device_home_pose.linear()) {
 
 	//Initialize homing task
 	_device_homed = false;
@@ -59,8 +54,8 @@ HapticDeviceController::HapticDeviceController(const DeviceLimits& device_limits
 	_scaling_factor_rot=1.0;
 
 	//Initialize position controller parameters
-	_kp_homing_pos = 0.2 * _device_limits.max_linear_stiffness;
-	_kp_homing_ori = 0.2 * _device_limits.max_angular_stiffness;
+	_kp_homing_pos = 0.8 * _device_limits.max_linear_stiffness;
+	_kp_homing_ori = 0.8 * _device_limits.max_angular_stiffness;
 	_kv_homing_pos = 2.0 * sqrt(_kp_homing_pos);
 	_kv_homing_ori = 2.0 * sqrt(_kp_homing_ori);
 	if(_kv_homing_pos > _device_limits.max_linear_damping) {
@@ -69,8 +64,8 @@ HapticDeviceController::HapticDeviceController(const DeviceLimits& device_limits
 	if(_kv_homing_ori > _device_limits.max_angular_damping) {
 		_kv_homing_ori = _device_limits.max_angular_damping;
 	}
-	_homing_max_linvel = 0.1;
-	_homing_max_angvel = M_PI / 2;
+	_homing_max_linvel = 0.2;
+	_homing_max_angvel = M_PI;
 
 	//Initialize virtual proxy parameters
 	_proxy_position_impedance = 1400.0;
@@ -102,8 +97,8 @@ HapticDeviceController::HapticDeviceController(const DeviceLimits& device_limits
 	_force_guidance_orientation_damping = 0.04;
 
 	//Initialiaze force feedback computation mode
-	_haptic_feedback_from_proxy = false;
-	_send_haptic_feedback = false;
+	_haptic_feedback_from_proxy = true;
+	_send_haptic_feedback = true;
 
 	// Initialize Workspace extension parameters
 	_center_position_robot_drift.setZero();
@@ -139,43 +134,54 @@ HapticDeviceController::HapticDeviceController(const DeviceLimits& device_limits
 	_guidance_damping=0.8;
 }
 
+void HapticDeviceController::setHapticControlType(const HapticControlType& haptic_control_type) {
+	_haptic_control_type = haptic_control_type;
+}
+
 HapticControllerOtuput HapticDeviceController::computeHapticControl(
 	const HapticControllerInput& input, const bool verbose) {
 	HapticControllerOtuput output;
 	switch (_haptic_control_type) {
 		case HapticControlType::DETACHED:
 			output = computeDetachedControl(input);
+			break;
 		case HapticControlType::HOMING:
 			output = computeHomingControl(input);
+			break;
 		case HapticControlType::MOTION_MOTION:
 			output = computeMotionMotionControl(input);
+			break;
 		// case HapticControlType::FORCE_MOTION:
 		// 	return computeForceMotionControl(input);
+			// break;
 		// case HapticControlType::HYBRID_WITH_PROXY:
 		// 	return computeHybridWithProxyControl(input);
+			// break;
 		// case HapticControlType::WORKSPACE_EXTENSION:
 		// 	return computeWorkspaceExtensionControl(input);
+			// break;
 		default:
 			throw std::runtime_error("Unimplemented haptic control type");
+			break;
 	}
 	validateOutput(output, verbose);
 	return output;
 }
 
 void HapticDeviceController::validateOutput(HapticControllerOtuput& output, const bool verbose) {
-	if(output.device_feedback_force.norm() > _device_limits.max_force) {
+	if(output.device_command_force.norm() > _device_limits.max_force) {
 		if(verbose) {
 			std::cout << "Warning: device feedback force norm is too high. Saturating to "
 					  << _device_limits.max_force << std::endl;
 		}
-		output.device_feedback_force *= _device_limits.max_force / output.device_feedback_force.norm();
+		output.device_command_force *= _device_limits.max_force / output.device_command_force.norm();
 	}
-	if(output.device_feedback_moment.norm() > _device_limits.max_torque) {
+	if(output.device_command_moment.norm() > _device_limits.max_torque) {
 		if(verbose) {
 			std::cout << "Warning: device feedback moment norm is too high. Saturating to "
 					  << _device_limits.max_torque << std::endl;
 		}
-		output.device_feedback_moment *= _device_limits.max_torque / output.device_feedback_moment.norm();
+		output.device_command_moment *= _device_limits.max_torque / output.device_command_moment.norm();
 	}
 }
 
@@ -188,6 +194,7 @@ HapticControllerOtuput HapticDeviceController::computeDetachedControl(const Hapt
 }
 
 HapticControllerOtuput HapticDeviceController::computeHomingControl(const HapticControllerInput& input) {
+	_device_homed = false;
 	HapticControllerOtuput output;
 	output.robot_goal_position = input.robot_position;
 	output.robot_goal_orientation = input.robot_orientation;
@@ -197,19 +204,20 @@ HapticControllerOtuput HapticDeviceController::computeHomingControl(const Haptic
 		if(desired_velocity.norm() > _homing_max_linvel) {
 			desired_velocity *= _homing_max_linvel / desired_velocity.norm();
 		}
-		output.device_feedback_force = -_kv_homing_pos * (input.device_linear_velocity - desired_velocity);
+		output.device_command_force = -_kv_homing_pos * (input.device_linear_velocity - desired_velocity);
 	}
 
+	Vector3d orientation_error = Vector3d::Zero();
 	if(_kv_homing_ori > 0) {
-		Vector3d orientation_error = Sai2Model::orientationError(_home_rotation_device, input.device_orientation);
+		orientation_error = Sai2Model::orientationError(_home_rotation_device, input.device_orientation);
 		Vector3d desired_velocity = - _kp_homing_ori / _kv_homing_ori * orientation_error;
 		if(desired_velocity.norm() > _homing_max_angvel) {
 			desired_velocity *= _homing_max_angvel / desired_velocity.norm();
 		}
-		output.device_feedback_moment = -_kv_homing_ori * (input.device_angular_velocity - desired_velocity);
+		output.device_command_moment = -_kv_homing_ori * (input.device_angular_velocity - desired_velocity);
 	}
 
-	if( (input.device_position - _home_position_device).norm()<0.002)
+	if( (input.device_position - _home_position_device).norm()<0.001 && orientation_error.norm()<0.01)
 	{
 		_device_homed = true;
 	}
@@ -228,10 +236,8 @@ HapticControllerOtuput HapticDeviceController::computeMotionMotionControl(const 
 	Vector3d device_home_to_current_position =
 		input.device_position - _home_position_device;	// in device base frame
 	output.robot_goal_position =
-		_center_position_robot +
-		_scaling_factor_trans *
-			_device_base_to_robot_base_rotation.transpose() *
-			device_home_to_current_position;
+		_center_position_robot + _scaling_factor_trans * _R_world_device *
+									 device_home_to_current_position;
 
 	// compute robot goal orientation
 	Matrix3d device_home_to_current_orientation =
@@ -244,10 +250,9 @@ HapticControllerOtuput HapticDeviceController::computeMotionMotionControl(const 
 															device_home_to_current_orientation_aa.axis());
 
 	output.robot_goal_orientation =
-		_device_base_to_robot_base_rotation.transpose() *
+		_R_world_device *
 		scaled_device_home_to_current_orientation_aa.toRotationMatrix() *
-		_device_base_to_robot_base_rotation * _center_rotation_robot;
-
+		_R_world_device.transpose() * _center_rotation_robot;
 
 	if(!_send_haptic_feedback) {
 		return output;
@@ -259,14 +264,12 @@ HapticControllerOtuput HapticDeviceController::computeMotionMotionControl(const 
 
 	if (_haptic_feedback_from_proxy)
 	{
-		// Transfer device velocity to robot global frame
+		// Transfer device velocity to world frame
 		Vector3d device_linear_velocity_in_robot_workspace =
-			_scaling_factor_trans *
-			_device_base_to_robot_base_rotation.transpose() *
+			_scaling_factor_trans * _R_world_device *
 			input.device_linear_velocity;
 		Vector3d device_angular_velocity_in_robot_workspace =
-			_scaling_factor_rot *
-			_device_base_to_robot_base_rotation.transpose() *
+			_scaling_factor_rot * _R_world_device *
 			input.device_angular_velocity;
 
 		// Evaluate the task force through stiffness proxy
@@ -291,9 +294,9 @@ HapticControllerOtuput HapticDeviceController::computeMotionMotionControl(const 
 
 	// scale and rotate to device frame
 	Vector3d haptic_force_feedback =
-		_device_base_to_robot_base_rotation * _reduction_factor_force_feedback /
+		_R_world_device.transpose() * _reduction_factor_force_feedback /
 		_scaling_factor_trans * haptic_forces_robot_space;
-	Vector3d haptic_moment_feedback = _device_base_to_robot_base_rotation *
+	Vector3d haptic_moment_feedback = _R_world_device.transpose() *
 								 _reduction_factor_torque_feedback /
 								 _scaling_factor_rot *
 								 haptic_moments_robot_space;
@@ -342,8 +345,8 @@ HapticControllerOtuput HapticDeviceController::computeMotionMotionControl(const 
 		haptic_moment_feedback += torque_virtual;
 	}
 
-	output.device_feedback_force = haptic_force_feedback;
-	output.device_feedback_moment = haptic_moment_feedback;
+	output.device_command_force = haptic_force_feedback;
+	output.device_command_moment = haptic_moment_feedback;
 
 	return output;
 
