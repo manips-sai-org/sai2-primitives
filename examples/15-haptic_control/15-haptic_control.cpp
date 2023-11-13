@@ -35,17 +35,7 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim);
 Vector3d sensed_force = Vector3d::Zero();
 Vector3d sensed_moment = Vector3d::Zero();
 // robot joint data
-// VectorXd robot_joint_positions = Eigen::VectorXd::Zero(7);
-// VectorXd robot_joint_velocities = Eigen::VectorXd::Zero(7);
 VectorXd robot_control_torques = Eigen::VectorXd::Zero(7);
-
-// //////////////////////////////////////////////////////////////////////
-// // Definition of the state machine
-// #define HOMING 0
-// #define MOTION_MOTION_CONTROL 1
-// #define PLANE_GUIDANCE 2
-
-// int state = HOMING;
 
 int main() {
 	// set up signal handler
@@ -55,10 +45,13 @@ int main() {
 
 	// load simulation world
 	auto sim = make_shared<Sai2Simulation::Sai2Simulation>(world_file);
+	sim->addSimulatedForceSensor(robot_name, link_name, Affine3d::Identity(),
+								 5.0);
 	sim->setCoeffFrictionStatic(0.1);
 
 	// load graphics scene
 	auto graphics = make_shared<Sai2Graphics::Sai2Graphics>(world_file);
+	graphics->addForceSensorDisplay(sim->getAllForceSensorData()[0]);
 
 	// Run simulation and control threads
 	thread sim_thread(runSim, sim);
@@ -70,7 +63,19 @@ int main() {
 	while (graphics->isWindowOpen()) {
 		graphicsTimer.waitForNextLoop();
 
+		// if(graphics->isKeyPressed(GLFW_KEY_D)) {
+		// 	cout << "switching to detached" << endl;
+		// 	next_state = STATE_DETACHED;
+		// } else if (graphics->isKeyPressed(GLFW_KEY_H)) {
+		// 	cout << "switching to homing" << endl;
+		// 	next_state = STATE_HOMING;
+		// } else if (graphics->isKeyPressed(GLFW_KEY_M)) {
+		// 	cout << "switching to motion motion control" << endl;
+		// 	next_state = STATE_MOTION_MOTION_CONTROL;
+		// }
+
 		graphics->updateRobotGraphics(robot_name, sim->getJointPositions(robot_name));
+		graphics->updateDisplayedForceSensor(sim->getAllForceSensorData()[0]);
 		graphics->renderGraphicsWorld();
 	}
 
@@ -94,7 +99,6 @@ void runSim(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 
 	while (fSimulationRunning) {
 		simTimer.waitForNextLoop();
-
 		{
 			lock_guard<mutex> lock(mtx);
 			sim->setJointTorques(robot_name, robot_control_torques);
@@ -128,6 +132,7 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim)
 	// create robot controller
 	Affine3d compliant_frame = Affine3d::Identity();
 	auto motion_force_task = make_shared<Sai2Primitives::MotionForceTask>(robot, link_name, compliant_frame);
+	// motion_force_task->enableInternalOtgAccelerationLimited(0.8, 40.0, M_PI, 50*M_PI);
 
 	vector<shared_ptr<Sai2Primitives::TemplateTask>> task_list = {
 		motion_force_task};
@@ -146,8 +151,13 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim)
 	haptic_controller->setScalingFactors(2.5);
 	haptic_controller->setHapticControlType(Sai2Primitives::HapticControlType::HOMING);
 
+
 	Sai2Primitives::HapticControllerInput haptic_input;
 	Sai2Primitives::HapticControllerOtuput haptic_output;
+	bool haptic_button_was_pressed = false;
+	int haptic_button_is_pressed = 0;
+	redis_client.setInt(SWITCH_PRESSED_KEY, haptic_button_is_pressed);
+	redis_client.setInt(USE_GRIPPER_AS_SWITCH_KEY, 1);
 
 	// setup redis communication
 	redis_client.addToSendGroup(COMMANDED_FORCE_KEY,
@@ -162,6 +172,8 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim)
 								   haptic_input.device_linear_velocity);
 	redis_client.addToReceiveGroup(ANGULAR_VELOCITY_KEY,
 								   haptic_input.device_angular_velocity);
+	redis_client.addToReceiveGroup(SWITCH_PRESSED_KEY,
+								   haptic_button_is_pressed);
 
 	// create a timer
 	Sai2Common::LoopTimer controlTimer(1000.0, 1e6);
@@ -187,11 +199,16 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim)
 			robot->linearVelocityInWorld(link_name);
 		haptic_input.robot_angular_velocity =
 			robot->angularVelocityInWorld(link_name);
+		haptic_input.robot_sensed_force = -motion_force_task->getSensedForce();
+		haptic_input.robot_sensed_moment = -motion_force_task->getSensedMoment();
+
 		haptic_output = haptic_controller->computeHapticControl(haptic_input);
 
 		redis_client.sendAllFromGroup();
 
 		// compute robot control
+		motion_force_task->updateSensedForceAndMoment(sim->getSensedForce(robot_name, link_name),
+													  sim->getSensedMoment(robot_name, link_name));
 		motion_force_task->setDesiredPosition(
 			haptic_output.robot_goal_position);
 		motion_force_task->setDesiredOrientation(
@@ -202,9 +219,17 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim)
 			robot_control_torques = robot_controller->computeControlTorques();
 		}
 
-		if(haptic_controller->homed()) {
+		if(haptic_controller->getHapticControlType() == Sai2Primitives::HapticControlType::HOMING && haptic_controller->getHomed()) {
 			haptic_controller->setHapticControlType(Sai2Primitives::HapticControlType::MOTION_MOTION);
+		} else {
+			if(haptic_button_is_pressed && !haptic_button_was_pressed) {
+				haptic_controller->setHapticControlType(Sai2Primitives::HapticControlType::DETACHED);
+			} else if(!haptic_button_is_pressed && haptic_button_was_pressed) {
+				haptic_controller->resetRobotOffset();
+				haptic_controller->setHapticControlType(Sai2Primitives::HapticControlType::MOTION_MOTION);
+			}
 		}
+		haptic_button_was_pressed = haptic_button_is_pressed;
 
 	}
 

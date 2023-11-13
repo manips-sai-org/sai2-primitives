@@ -29,3 +29,4 @@ const string SENSED_FORCE_KEY = REDIS_KEY_PREFIX + "::sensors::sensed_force";
 const string SENSED_TORQUE_KEY = REDIS_KEY_PREFIX + "::sensors::sensed_torque";
 const string USE_GRIPPER_AS_SWITCH_KEY =
 	REDIS_KEY_PREFIX + "::sensors::use_gripper_as_switch";
+const string SWITCH_PRESSED_KEY = REDIS_KEY_PREFIX + "::sensors::switch_pressed";
