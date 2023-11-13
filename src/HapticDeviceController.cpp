@@ -24,6 +24,13 @@ Affine3d AffineFromPosAndRot(const Vector3d& pos, const Matrix3d& rot) {
 	aff.linear() = rot;
 	return aff;
 }
+
+AngleAxisd orientationErrorAngleAxis(const Matrix3d& desired_orientation,
+									 const Matrix3d& current_orientation) {
+	// expressed in base frame common to desired and current orientation
+	return AngleAxisd(current_orientation * desired_orientation.transpose());
+}
+
 }  // namespace
 
 namespace Sai2Primitives {
@@ -45,6 +52,9 @@ HapticDeviceController::HapticDeviceController(
 	  _home_rotation_device(device_home_pose.linear()) {
 	_reset_robot_offset = false;
 
+	_previous_output.robot_goal_position = _center_position_robot;
+	_previous_output.robot_goal_orientation = _center_rotation_robot;
+
 	// Initialize homing task
 	_device_homed = false;
 
@@ -65,11 +75,12 @@ HapticDeviceController::HapticDeviceController(
 	if (_kv_haptic_ori > _device_limits.max_angular_damping) {
 		_kv_haptic_ori = _device_limits.max_angular_damping;
 	}
-	_homing_max_linvel = 0.2;
+
+	_homing_max_linvel = 0.15;
 	_homing_max_angvel = M_PI;
 
-	_reduction_factor_force = 0.5;
-	_reduction_factor_moment = 0.05;
+	_reduction_factor_force = 1.0;
+	_reduction_factor_moment = 1.0;
 
 	// Initialiaze force feedback computation mode
 	_compute_haptic_feedback_from_proxy = true;
@@ -118,6 +129,7 @@ HapticControllerOtuput HapticDeviceController::computeHapticControl(
 			break;
 	}
 	validateOutput(output, verbose);
+	_previous_output = output;
 	return output;
 }
 
@@ -145,9 +157,12 @@ void HapticDeviceController::validateOutput(HapticControllerOtuput& output,
 
 HapticControllerOtuput HapticDeviceController::computeDetachedControl(
 	const HapticControllerInput& input) {
-	HapticControllerOtuput output;
-	output.robot_goal_position = input.robot_position;
-	output.robot_goal_orientation = input.robot_orientation;
+	HapticControllerOtuput output = _previous_output;
+
+	applyLineGuidanceForce(output.device_command_force, input);
+	applyPlaneGuidanceForce(output.device_command_force, input);
+	applyWorkspaceVirtualLimits(output.device_command_force,
+								output.device_command_moment, input);
 
 	return output;
 }
@@ -156,8 +171,8 @@ HapticControllerOtuput HapticDeviceController::computeHomingControl(
 	const HapticControllerInput& input) {
 	_device_homed = false;
 	HapticControllerOtuput output;
-	output.robot_goal_position = input.robot_position;
-	output.robot_goal_orientation = input.robot_orientation;
+	output.robot_goal_position = _previous_output.robot_goal_position;
+	output.robot_goal_orientation = _previous_output.robot_goal_orientation;
 
 	if (_kv_haptic_pos > 0) {
 		Vector3d desired_velocity =
@@ -172,8 +187,10 @@ HapticControllerOtuput HapticDeviceController::computeHomingControl(
 
 	Vector3d orientation_error = Vector3d::Zero();
 	if (_kv_haptic_ori > 0) {
-		orientation_error = Sai2Model::orientationError(
+		AngleAxisd orientation_error_aa = orientationErrorAngleAxis(
 			_home_rotation_device, input.device_orientation);
+		orientation_error =
+			orientation_error_aa.angle() * orientation_error_aa.axis();
 		Vector3d desired_velocity =
 			-_kp_haptic_ori / _kv_haptic_ori * orientation_error;
 		if (desired_velocity.norm() > _homing_max_angvel) {
@@ -185,7 +202,9 @@ HapticControllerOtuput HapticDeviceController::computeHomingControl(
 	}
 
 	if ((input.device_position - _home_position_device).norm() < 0.001 &&
-		orientation_error.norm() < 0.01) {
+		orientation_error.norm() < 0.01 &&
+		input.device_linear_velocity.norm() < 0.001 &&
+		input.device_angular_velocity.norm() < 0.01) {
 		_device_homed = true;
 	}
 
@@ -195,8 +214,8 @@ HapticControllerOtuput HapticDeviceController::computeHomingControl(
 HapticControllerOtuput HapticDeviceController::computeMotionMotionControl(
 	const HapticControllerInput& input) {
 	HapticControllerOtuput output;
-	output.robot_goal_position = input.robot_position;
-	output.robot_goal_orientation = input.robot_orientation;
+	output.robot_goal_position = _previous_output.robot_goal_position;
+	output.robot_goal_orientation = _previous_output.robot_goal_orientation;
 
 	// Compute robot goal position
 	Vector3d device_home_to_current_position =
@@ -213,12 +232,15 @@ HapticControllerOtuput HapticDeviceController::computeMotionMotionControl(
 		_scaling_factor_pos * _R_world_device * device_home_to_current_position;
 
 	// compute robot goal orientation
-	Matrix3d device_home_to_current_orientation =
-		input.device_orientation *
-		_home_rotation_device.transpose();	// in device base frame
-	AngleAxisd device_home_to_current_orientation_aa(
-		device_home_to_current_orientation);
+	// Matrix3d device_home_to_current_orientation =
+	// 	input.device_orientation *
+	// 	_home_rotation_device.transpose();	// in device base frame
+	// AngleAxisd device_home_to_current_orientation_aa(
+	// 	device_home_to_current_orientation);
 	if (_enable_orientation_teleoperation) {
+		AngleAxisd device_home_to_current_orientation_aa =
+			orientationErrorAngleAxis(_home_rotation_device,
+									  input.device_orientation);
 		AngleAxisd scaled_device_home_to_current_orientation_aa(
 			_scaling_factor_ori * device_home_to_current_orientation_aa.angle(),
 			device_home_to_current_orientation_aa.axis());
@@ -244,12 +266,8 @@ HapticControllerOtuput HapticDeviceController::computeMotionMotionControl(
 	}
 
 	// Compute the force feedback in robot frame
-	Vector3d haptic_forces_robot_space =
-		input.robot_sensed_force -
-		0.9 * _device_limits.max_linear_damping * input.device_linear_velocity;
-	Vector3d haptic_moments_robot_space =
-		input.robot_sensed_moment - 0.9 * _device_limits.max_angular_damping *
-										input.device_angular_velocity;
+	Vector3d haptic_forces_robot_space = input.robot_sensed_force;
+	Vector3d haptic_moments_robot_space = input.robot_sensed_moment;
 
 	if (_compute_haptic_feedback_from_proxy) {
 		// Transfer device velocity to world frame
@@ -284,44 +302,16 @@ HapticControllerOtuput HapticDeviceController::computeMotionMotionControl(
 	Vector3d haptic_moment_feedback =
 		_R_world_device.transpose() * _reduction_factor_moment /
 		_scaling_factor_ori * haptic_moments_robot_space;
-
 	// Apply haptic guidances
-	ApplyPlaneGuidanceForce(haptic_force_feedback, input.device_position,
-							input.device_linear_velocity);
-	ApplyLineGuidanceForce(haptic_force_feedback, input.device_position,
-						   input.device_linear_velocity);
-
+	applyPlaneGuidanceForce(haptic_force_feedback, input);
+	applyLineGuidanceForce(haptic_force_feedback, input);
 	// if not controlling the orientation, set the moment to zero
 	if (!_enable_orientation_teleoperation) {
 		haptic_moment_feedback.setZero();
 	}
 
-	if (_enable_workspace_virtual_limit) {
-		// Add virtual forces according to the device operational space limits
-		Vector3d force_virtual = Vector3d::Zero();
-		Vector3d torque_virtual = Vector3d::Zero();
-
-		if (device_home_to_current_position.norm() >=
-			_device_workspace_radius_limit) {
-			force_virtual = -_kp_guidance_pos *
-								(device_home_to_current_position.norm() -
-								 _device_workspace_radius_limit) *
-								device_home_to_current_position -
-							_kv_guidance_pos * input.device_linear_velocity;
-		}
-		haptic_force_feedback += force_virtual;
-
-		if (device_home_to_current_orientation_aa.angle() >=
-			_device_workspace_angle_limit) {
-			torque_virtual =
-				-_kp_guidance_ori *
-					(device_home_to_current_orientation_aa.angle() -
-					 _device_workspace_angle_limit) *
-					device_home_to_current_orientation_aa.axis() -
-				_kv_guidance_ori * input.device_angular_velocity;
-		}
-		haptic_moment_feedback += torque_virtual;
-	}
+	applyWorkspaceVirtualLimits(haptic_force_feedback, haptic_moment_feedback,
+								input);
 
 	output.device_command_force = haptic_force_feedback;
 	output.device_command_moment = haptic_moment_feedback;
@@ -329,16 +319,15 @@ HapticControllerOtuput HapticDeviceController::computeMotionMotionControl(
 	return output;
 }
 
-void HapticDeviceController::ApplyPlaneGuidanceForce(
-	Vector3d& haptic_force_to_update, const Vector3d& device_position,
-	const Vector3d& device_velocity) {
+void HapticDeviceController::applyPlaneGuidanceForce(
+	Vector3d& haptic_force_to_update, const HapticControllerInput& input) {
 	if (!_enable_plane_guidance) {
 		return;
 	}
 
 	// vector from the plane's origin to the current position
 	Eigen::Vector3d plane_to_point_vec;
-	plane_to_point_vec = device_position - _plane_origin_point;
+	plane_to_point_vec = input.device_position - _plane_origin_point;
 
 	// calculate the normal distance from the plane to the current position
 	double distance_to_plane;
@@ -347,17 +336,17 @@ void HapticDeviceController::ApplyPlaneGuidanceForce(
 	// current position projected onto the plane
 	Eigen::Vector3d projected_current_position;
 	projected_current_position =
-		device_position - distance_to_plane * _plane_normal_vec;
+		input.device_position - distance_to_plane * _plane_normal_vec;
 
 	// projected device velocity on the normal vector
 	Eigen::Vector3d projected_current_velocity;
 	projected_current_velocity =
-		device_velocity.dot(_plane_normal_vec) * _plane_normal_vec;
+		input.device_linear_velocity.dot(_plane_normal_vec) * _plane_normal_vec;
 
 	// calculate the guidance force
 	Vector3d guidance_force_plane =
-		-_kp_guidance_pos * _device_limits.max_linear_stiffness *
-			(device_position - projected_current_position) -
+		-_kp_guidance_pos *
+			(input.device_position - projected_current_position) -
 		_kv_guidance_pos * projected_current_velocity;
 
 	// update the haptic force
@@ -366,9 +355,8 @@ void HapticDeviceController::ApplyPlaneGuidanceForce(
 		haptic_force_to_update.dot(_plane_normal_vec) * _plane_normal_vec;
 }
 
-void HapticDeviceController::ApplyLineGuidanceForce(
-	Vector3d& haptic_force_to_update, const Vector3d& device_position,
-	const Vector3d& device_velocity) {
+void HapticDeviceController::applyLineGuidanceForce(
+	Vector3d& haptic_force_to_update, const HapticControllerInput& input) {
 	if (!_enable_line_guidance) {
 		return;
 	}
@@ -380,7 +368,7 @@ void HapticDeviceController::ApplyLineGuidanceForce(
 	Eigen::Vector3d line_normal_vec;
 
 	// vector from first point on line to current position
-	line_to_point_vec = device_position - _line_first_point;
+	line_to_point_vec = input.device_position - _line_first_point;
 
 	// distance from the first point to the current position projected onto the
 	// line
@@ -393,18 +381,18 @@ void HapticDeviceController::ApplyLineGuidanceForce(
 	projected_current_position = _line_first_point + closest_point_vec;
 
 	// Normal vector to the line from current position
-	line_normal_vec = device_position - projected_current_position;
+	line_normal_vec = input.device_position - projected_current_position;
 	line_normal_vec = line_normal_vec / line_normal_vec.norm();
 
 	// projected device velocity on the normal vector
 	Eigen::Vector3d projected_current_velocity;
 	projected_current_velocity =
-		device_velocity.dot(line_normal_vec) * line_normal_vec;
+		input.device_linear_velocity.dot(line_normal_vec) * line_normal_vec;
 
 	// compute the force
 	Vector3d guidance_force_line =
-		-(_kp_guidance_pos)*_device_limits.max_linear_stiffness *
-			(device_position - projected_current_position) -
+		-_kp_guidance_pos *
+			(input.device_position - projected_current_position) -
 		_kv_guidance_pos * projected_current_velocity;
 
 	// update the haptic force
@@ -413,6 +401,44 @@ void HapticDeviceController::ApplyLineGuidanceForce(
 	haptic_force_to_update =
 		guidance_force_line +
 		haptic_force_to_update.dot(line_vector) * line_vector;
+}
+
+void HapticDeviceController::applyWorkspaceVirtualLimits(
+	Vector3d& haptic_force_to_update, Vector3d& haptic_moment_to_update,
+	const HapticControllerInput& input) {
+	if (!_enable_workspace_virtual_limit) {
+		return;
+	}
+
+	// Add virtual forces according to the device operational space limits
+	Vector3d force_virtual = Vector3d::Zero();
+	Vector3d torque_virtual = Vector3d::Zero();
+
+	Vector3d device_home_to_current_position =
+		input.device_position - _home_position_device;
+	if (device_home_to_current_position.norm() >=
+		_device_workspace_radius_limit) {
+		force_virtual = -_kp_guidance_pos *
+							(device_home_to_current_position.norm() -
+							 _device_workspace_radius_limit) *
+							device_home_to_current_position /
+							device_home_to_current_position.norm() -
+						_kv_guidance_pos * input.device_linear_velocity;
+	}
+	haptic_force_to_update += force_virtual;
+
+	AngleAxisd device_home_to_current_orientation_aa =
+		orientationErrorAngleAxis(_home_rotation_device,
+								  input.device_orientation);
+	if (device_home_to_current_orientation_aa.angle() >=
+		_device_workspace_angle_limit) {
+		torque_virtual = -_kp_guidance_ori *
+							 (device_home_to_current_orientation_aa.angle() -
+							  _device_workspace_angle_limit) *
+							 device_home_to_current_orientation_aa.axis() -
+						 _kv_guidance_ori * input.device_angular_velocity;
+	}
+	haptic_moment_to_update += torque_virtual;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////
@@ -504,6 +530,12 @@ void HapticDeviceController::enablePlaneGuidance(
 			"Plane normal vector must be non-zero in "
 			"HapticDeviceController::enablePlaneGuidance");
 	}
+	if (_enable_line_guidance) {
+		cout << "Warning: plane guidance is enabled while line guidance is "
+				"already enabled. Disabling line guidance."
+			 << endl;
+		disableLineGuidance();
+	}
 	_enable_plane_guidance = true;
 	_plane_origin_point = plane_origin_point;
 	_plane_normal_vec = plane_normal_vec / plane_normal_vec.norm();
@@ -512,6 +544,12 @@ void HapticDeviceController::enablePlaneGuidance(
 void HapticDeviceController::enableLineGuidance(
 	const Eigen::Vector3d line_first_point,
 	const Eigen::Vector3d line_second_point) {
+	if (_enable_plane_guidance) {
+		cout << "Warning: line guidance is enabled while plane guidance is "
+				"already enabled. Disabling plane guidance."
+			 << endl;
+		disablePlaneGuidance();
+	}
 	_enable_line_guidance = true;
 
 	// set vector from one point to the other
@@ -522,13 +560,14 @@ void HapticDeviceController::enableLineGuidance(
 	_guidance_line_vec = _guidance_line_vec / _guidance_line_vec.norm();
 }
 
-void HapticDeviceController::setHapticWorkspaceVirtualLimits(
+void HapticDeviceController::enableHapticWorkspaceVirtualLimits(
 	double device_workspace_radius_limit, double device_workspace_angle_limit) {
 	if (device_workspace_radius_limit < 0 || device_workspace_angle_limit < 0) {
 		throw std::runtime_error(
 			"Workspace virtual limits must be positive in "
 			"HapticDeviceController::setHapticWorkspaceVirtualLimits");
 	}
+	_enable_workspace_virtual_limit = true;
 	_device_workspace_radius_limit = device_workspace_radius_limit;
 	_device_workspace_angle_limit = device_workspace_angle_limit;
 }

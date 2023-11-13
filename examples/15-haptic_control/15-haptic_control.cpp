@@ -1,16 +1,16 @@
-#include "Sai2Graphics.h"
-#include "Sai2Simulation.h"
-#include "Sai2Primitives.h"
-#include "timer/LoopTimer.h"
-#include "redis/RedisClient.h"
-#include "redis_keys.h"
+#include <signal.h>
 
 #include <iostream>
 #include <string>
 
-#include <signal.h>
+#include "Sai2Graphics.h"
+#include "Sai2Primitives.h"
+#include "Sai2Simulation.h"
+#include "redis/RedisClient.h"
+#include "redis_keys.h"
+#include "timer/LoopTimer.h"
 bool fSimulationRunning = false;
-void sighandler(int){fSimulationRunning = false;}
+void sighandler(int) { fSimulationRunning = false; }
 
 using namespace std;
 using namespace Eigen;
@@ -24,7 +24,20 @@ const string link_name = "end-effector";
 // mutex for control torques
 mutex mtx;
 
-}
+// haptic plane and line guidance
+const Vector3d plane_normal = Vector3d(0, 0, 1);
+const Vector3d plane_origin = Vector3d(0, 0, 0.15);
+
+const Vector3d line_first_point = Vector3d(0, 0, 0.15);
+const Vector3d line_second_point = Vector3d(0, 0, 0.25);
+
+bool plane_guidance = false;
+bool line_guidance = false;
+
+bool p_was_pressed = false;
+bool l_was_pressed = false;
+
+}  // namespace
 
 // Create simulation and control function
 void runSim(shared_ptr<Sai2Simulation::Sai2Simulation> sim);
@@ -63,18 +76,22 @@ int main() {
 	while (graphics->isWindowOpen()) {
 		graphicsTimer.waitForNextLoop();
 
-		// if(graphics->isKeyPressed(GLFW_KEY_D)) {
-		// 	cout << "switching to detached" << endl;
-		// 	next_state = STATE_DETACHED;
-		// } else if (graphics->isKeyPressed(GLFW_KEY_H)) {
-		// 	cout << "switching to homing" << endl;
-		// 	next_state = STATE_HOMING;
-		// } else if (graphics->isKeyPressed(GLFW_KEY_M)) {
-		// 	cout << "switching to motion motion control" << endl;
-		// 	next_state = STATE_MOTION_MOTION_CONTROL;
-		// }
+		if (graphics->isKeyPressed(GLFW_KEY_P) && !p_was_pressed) {
+			plane_guidance = !plane_guidance;
+			p_was_pressed = true;
+		} else if (!graphics->isKeyPressed(GLFW_KEY_P)) {
+			p_was_pressed = false;
+		}
 
-		graphics->updateRobotGraphics(robot_name, sim->getJointPositions(robot_name));
+		if (graphics->isKeyPressed(GLFW_KEY_L) && !l_was_pressed) {
+			line_guidance = !line_guidance;
+			l_was_pressed = true;
+		} else if (!graphics->isKeyPressed(GLFW_KEY_L)) {
+			l_was_pressed = false;
+		}
+
+		graphics->updateRobotGraphics(robot_name,
+									  sim->getJointPositions(robot_name));
 		graphics->updateDisplayedForceSensor(sim->getAllForceSensorData()[0]);
 		graphics->renderGraphicsWorld();
 	}
@@ -91,7 +108,6 @@ int main() {
 ////// Simulation thread //////
 //------------------------------------------------------------------------------
 void runSim(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
-
 	// create a timer
 	Sai2Common::LoopTimer simTimer(1.0 / sim->timestep(), 1e6);
 
@@ -110,13 +126,10 @@ void runSim(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 	simTimer.printInfoPostRun();
 }
 
-
-
 //------------------------------------------------------------------------------
 ////// Control thread //////
 //------------------------------------------------------------------------------
-void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim)
-{
+void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 	// redis client
 	auto redis_client = Sai2Common::RedisClient();
 	redis_client.connect();
@@ -131,8 +144,11 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim)
 
 	// create robot controller
 	Affine3d compliant_frame = Affine3d::Identity();
-	auto motion_force_task = make_shared<Sai2Primitives::MotionForceTask>(robot, link_name, compliant_frame);
-	// motion_force_task->enableInternalOtgAccelerationLimited(0.8, 40.0, M_PI, 50*M_PI);
+	auto motion_force_task = make_shared<Sai2Primitives::MotionForceTask>(
+		robot, link_name, compliant_frame);
+	motion_force_task->disableInternalOtg();
+	// motion_force_task->enableInternalOtgAccelerationLimited(0.8, 40.0, M_PI,
+	// 50*M_PI);
 
 	vector<shared_ptr<Sai2Primitives::TemplateTask>> task_list = {
 		motion_force_task};
@@ -144,13 +160,18 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim)
 		redis_client.getEigen(MAX_STIFFNESS_KEY),
 		redis_client.getEigen(MAX_DAMPING_KEY),
 		redis_client.getEigen(MAX_FORCE_KEY));
-	Affine3d device_home_pose = Affine3d(Translation3d(0,0,0.15));
+	Affine3d device_home_pose = Affine3d(Translation3d(0, 0, 0.15));
 	auto haptic_controller =
 		make_shared<Sai2Primitives::HapticDeviceController>(
-			device_limits, robot->transformInWorld(link_name), device_home_pose);
+			device_limits, robot->transformInWorld(link_name),
+			device_home_pose);
 	haptic_controller->setScalingFactors(2.5);
-	haptic_controller->setHapticControlType(Sai2Primitives::HapticControlType::HOMING);
-
+	haptic_controller->setHapticControlType(
+		Sai2Primitives::HapticControlType::HOMING);
+	haptic_controller->setEnableOrientationTeleoperation(false);
+	haptic_controller->enableHapticWorkspaceVirtualLimits(0.05, M_PI / 4);
+	haptic_controller->setHapticFeedbackFromProxy(false);
+	// haptic_controller->setSendHapticFeedback(false);
 
 	Sai2Primitives::HapticControllerInput haptic_input;
 	Sai2Primitives::HapticControllerOtuput haptic_output;
@@ -200,15 +221,17 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim)
 		haptic_input.robot_angular_velocity =
 			robot->angularVelocityInWorld(link_name);
 		haptic_input.robot_sensed_force = -motion_force_task->getSensedForce();
-		haptic_input.robot_sensed_moment = -motion_force_task->getSensedMoment();
+		haptic_input.robot_sensed_moment =
+			-motion_force_task->getSensedMoment();
 
 		haptic_output = haptic_controller->computeHapticControl(haptic_input);
 
 		redis_client.sendAllFromGroup();
 
 		// compute robot control
-		motion_force_task->updateSensedForceAndMoment(sim->getSensedForce(robot_name, link_name),
-													  sim->getSensedMoment(robot_name, link_name));
+		motion_force_task->updateSensedForceAndMoment(
+			sim->getSensedForce(robot_name, link_name),
+			sim->getSensedMoment(robot_name, link_name));
 		motion_force_task->setDesiredPosition(
 			haptic_output.robot_goal_position);
 		motion_force_task->setDesiredOrientation(
@@ -219,18 +242,35 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim)
 			robot_control_torques = robot_controller->computeControlTorques();
 		}
 
-		if(haptic_controller->getHapticControlType() == Sai2Primitives::HapticControlType::HOMING && haptic_controller->getHomed()) {
-			haptic_controller->setHapticControlType(Sai2Primitives::HapticControlType::MOTION_MOTION);
+		if (haptic_controller->getHapticControlType() ==
+				Sai2Primitives::HapticControlType::HOMING &&
+			haptic_controller->getHomed()) {
+			haptic_controller->setHapticControlType(
+				Sai2Primitives::HapticControlType::MOTION_MOTION);
 		} else {
-			if(haptic_button_is_pressed && !haptic_button_was_pressed) {
-				haptic_controller->setHapticControlType(Sai2Primitives::HapticControlType::DETACHED);
-			} else if(!haptic_button_is_pressed && haptic_button_was_pressed) {
+			if (haptic_button_is_pressed && !haptic_button_was_pressed) {
+				haptic_controller->setHapticControlType(
+					Sai2Primitives::HapticControlType::DETACHED);
+			} else if (!haptic_button_is_pressed && haptic_button_was_pressed) {
 				haptic_controller->resetRobotOffset();
-				haptic_controller->setHapticControlType(Sai2Primitives::HapticControlType::MOTION_MOTION);
+				haptic_controller->setHapticControlType(
+					Sai2Primitives::HapticControlType::MOTION_MOTION);
 			}
 		}
 		haptic_button_was_pressed = haptic_button_is_pressed;
 
+		if (plane_guidance) {
+			haptic_controller->enablePlaneGuidance(plane_origin, plane_normal);
+		} else {
+			haptic_controller->disablePlaneGuidance();
+		}
+
+		if (line_guidance) {
+			haptic_controller->enableLineGuidance(line_first_point,
+												  line_second_point);
+		} else {
+			haptic_controller->disableLineGuidance();
+		}
 	}
 
 	redis_client.setEigen(COMMANDED_FORCE_KEY, Vector3d::Zero());

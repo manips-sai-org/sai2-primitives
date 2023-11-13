@@ -125,11 +125,11 @@ public:
 	 *task force (_compute_haptic_feedback_from_proxy=false) or through a
 	 *stiffness/ damping field between the desired position and the proxy
 	 *position (haptic_feedback_from_proxy=true).
-	 *				'_compute_haptic_feedback_from_proxy' flag is defined by the user
-	 *and set to false by default. When computing the force feedback from the
-	 *force sensor data, the task force must be send in the algorithm input. If
-	 *the proxy evaluation is used, the current position, rotation, and velocity
-	 *of the proxy are considered to be the robot current position and
+	 *				'_compute_haptic_feedback_from_proxy' flag is defined by the
+	 *user and set to false by default. When computing the force feedback from
+	 *the force sensor data, the task force must be send in the algorithm input.
+	 *If the proxy evaluation is used, the current position, rotation, and
+	 *velocity of the proxy are considered to be the robot current position and
 	 *orientation in the input.
 	 *
 	 *			computeHapticCommandsWorkspaceExtension3-6d augments the classic
@@ -141,8 +141,8 @@ public:
 	 *velocity error in the robot controller. The current robot position and
 	 *velocity must be set thanks to updateSensedRobotPositionVelocity().
 	 *
-	 *	 		computeHapticCommandsUnifiedControl3-6d implements a unified Motion
-	 *and Force controller for haptic teleoperation. The slave robot is
+	 *	 		computeHapticCommandsUnifiedControl3-6d implements a unified
+	 *Motion and Force controller for haptic teleoperation. The slave robot is
 	 *controlled in force (desired_force/torque_robot) in the physical
 	 *interaction direction (defined by the force selection matrices
 	 *_sigma_force and _sigma_moment) and in motion
@@ -166,8 +166,8 @@ public:
 	 *in position only, the 3 translational DOFs are controlled and rendered to
 	 *the user.
 	 *
-	 *		Make sure to update the haptic device data (position, velocity, sensed
-	 *force) from the redis keys before calling this function!
+	 *		Make sure to update the haptic device data (position, velocity,
+	 *sensed force) from the redis keys before calling this function!
 	 *
 	 *
 	 */
@@ -198,13 +198,15 @@ private:
 	// HapticControllerOtuput computeWorkspaceExtensionControl(const
 	// HapticControllerInput& input);
 
-	void ApplyPlaneGuidanceForce(Vector3d& haptic_force_to_update,
-								 const Vector3d& device_position,
-								 const Vector3d& device_velocity);
+	void applyPlaneGuidanceForce(Vector3d& haptic_force_to_update,
+								 const HapticControllerInput& input);
 
-	void ApplyLineGuidanceForce(Vector3d& haptic_force_to_update,
-								const Vector3d& device_position,
-								const Vector3d& device_velocity);
+	void applyLineGuidanceForce(Vector3d& haptic_force_to_update,
+								const HapticControllerInput& input);
+
+	void applyWorkspaceVirtualLimits(Vector3d& haptic_force_to_update,
+									 Vector3d& haptic_moment_to_update,
+									 const HapticControllerInput& input);
 
 public:
 	///////////////////////////////////////////////////////////////////////////////////
@@ -212,6 +214,7 @@ public:
 	///////////////////////////////////////////////////////////////////////////////////
 
 	void setHapticControlType(const HapticControlType& haptic_control_type) {
+		_device_homed = false;
 		_haptic_control_type = haptic_control_type;
 	}
 	const HapticControlType& getHapticControlType() const {
@@ -302,8 +305,12 @@ public:
 	 * @param device_workspace_angle_limit   	Maximum tilt angle of the haptic
 	 * device
 	 */
-	void setHapticWorkspaceVirtualLimits(double device_workspace_radius_limit,
-										 double device_workspace_angle_limit);
+	void enableHapticWorkspaceVirtualLimits(
+		double device_workspace_radius_limit,
+		double device_workspace_angle_limit);
+	void disableHapticWorkspaceVirtualLimits() {
+		_enable_workspace_virtual_limit = false;
+	}
 
 private:
 	// controller states
@@ -376,6 +383,9 @@ private:
 	double _scaling_factor_ori;
 	double _reduction_factor_force;
 	double _reduction_factor_moment;
+
+	// previous output
+	HapticControllerOtuput _previous_output;
 };
 
 } /* namespace Sai2Primitives */
