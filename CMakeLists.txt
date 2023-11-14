@@ -32,7 +32,6 @@ SET(CONTROLLERS_SOURCE
 	${PROJECT_SOURCE_DIR}/src/tasks/MotionForceTask.cpp
 	${PROJECT_SOURCE_DIR}/src/tasks/JointTask.cpp
 	${PROJECT_SOURCE_DIR}/src/HapticDeviceController.cpp
-	# ${PROJECT_SOURCE_DIR}/src/tasks/TwoHandTwoRobotsTask.cpp
 	)
 
 # add helper modules
@@ -41,15 +40,6 @@ SET(HELPER_MODULES_SOURCE
 	${PROJECT_SOURCE_DIR}/src/helper_modules/OTG_joints.cpp
 	${PROJECT_SOURCE_DIR}/src/helper_modules/OTG_6dof_cartesian.cpp
 	)
-
-# # add haptic_tasks
-# SET(HAPTIC_TASKS_SOURCE
-# 	${PROJECT_SOURCE_DIR}/src/haptic_tasks/OpenLoopTeleop.cpp
-# 	${PROJECT_SOURCE_DIR}/src/haptic_tasks/HapticController.cpp
-# 	${PROJECT_SOURCE_DIR}/src/haptic_tasks/BilateralPassivityController.cpp
-# 	${PROJECT_SOURCE_DIR}/src/haptic_tasks/ImpedanceControl.cpp
-# 	${PROJECT_SOURCE_DIR}/src/haptic_tasks/PositionControl.cpp
-# 	)
 
 # add header files
 SET(SAI2-PRIMITIVES_INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/src ${RUCKIG_LOCAL_DIR}/include/)

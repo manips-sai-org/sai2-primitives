@@ -158,7 +158,7 @@ public:
 	 *this function.
 	 *
 	 * 			Guidance plane or line can be added to the haptic controllers
-	 *(_enable_plane_guidance=true, _enable_line_guidance=true). The plane is
+	 *(_plane_guidance_enabled=true, _line_guidance_enabled=true). The plane is
 	 *defined thanks to the method setPlane and the line thanks to setLine.
 	 *
 	 *			computeHapticCommands...6d(): The 6 DOFs are controlled and
@@ -221,9 +221,12 @@ public:
 		return _haptic_control_type;
 	}
 
-	void setEnableOrientationTeleoperation(const bool enable);
+	void enableOrientationTeleoperation();
+	void disableOrientationTeleoperation() {
+		_orientation_teleop_enabled = false;
+	}
 	bool getEnableOrientationTeleoperation() const {
-		return _enable_orientation_teleoperation;
+		return _orientation_teleop_enabled;
 	}
 
 	void setHapticFeedbackFromProxy(const bool haptic_feedback_from_proxy) {
@@ -287,12 +290,16 @@ public:
 								const double kv_guidance_ori);
 
 	void enablePlaneGuidance(const Vector3d plane_origin_point,
-							 const Vector3d plane_normal_vec);
-	void disablePlaneGuidance() { _enable_plane_guidance = false; }
+							 const Vector3d plane_normal_direction);
+	void enablePlaneGuidance() { _plane_guidance_enabled = true; }
+	void disablePlaneGuidance() { _plane_guidance_enabled = false; }
+	bool getPlaneGuidanceEnabled() const { return _plane_guidance_enabled; }
 
-	void enableLineGuidance(const Vector3d line_first_point,
-							const Vector3d line_second_point);
-	void disableLineGuidance() { _enable_line_guidance = false; }
+	void enableLineGuidance(const Vector3d line_origin_point, 
+							const Vector3d line_direction);
+	void enableLineGuidance() { _line_guidance_enabled = true; }
+	void disableLineGuidance() { _line_guidance_enabled = false; }
+	bool getLineGuidanceEnabled() const { return _line_guidance_enabled; }
 
 	/**
 	 * @brief Sets the size of the device Workspace to add virtual limits in the
@@ -308,28 +315,39 @@ public:
 	void enableHapticWorkspaceVirtualLimits(
 		double device_workspace_radius_limit,
 		double device_workspace_angle_limit);
+	void enableHapticWorkspaceVirtualLimits() {
+		_device_workspace_virtual_limits_enabled = true;
+	}
 	void disableHapticWorkspaceVirtualLimits() {
-		_enable_workspace_virtual_limit = false;
+		_device_workspace_virtual_limits_enabled = false;
+	}
+	bool getHapticWorkspaceVirtualLimitsEnabled() const {
+		return _device_workspace_virtual_limits_enabled;
 	}
 
 private:
 	// controller states
-	bool _compute_haptic_feedback_from_proxy;  // If set to true, the force
-											   // feedback is computed from a
-											   // stiffness/damping proxy.
-											   // Otherwise the sensed force are
-											   // rendered to the user.
-	bool _send_haptic_feedback;	 // If set to false, send 0 forces and torques
-								 // to the haptic device
 
-	bool _enable_orientation_teleoperation;	 // If set to true, the orientation
-											 // of the robot is controlled and
-											 // rendered to the user
+	/**
+	 * @brief Only for motion-motion and workspace extension control types:
+	 * If set to true, the force feedback is computed from a stiffness/damping
+	 * proxy. Otherwise the sensed force are rendered to the user.
+	 *
+	 */
+	bool _compute_haptic_feedback_from_proxy;
 
-	bool _enable_plane_guidance;  // add guidance along a user-defined plane
-	bool _enable_line_guidance;	  // add guidance along a user-defined plane
-	bool _enable_workspace_virtual_limit;  // add a virtual sphere delimiting
-										   // the haptic device workspace
+	/**
+	 * @brief Only for motion-motion and workspace extension control types:
+	 * If false, there is no force and torque feedback, except for the potential
+	 * device virtual workspace limits
+	 *
+	 */
+	bool _send_haptic_feedback;
+
+	bool _orientation_teleop_enabled;
+	bool _plane_guidance_enabled;
+	bool _line_guidance_enabled;
+	bool _device_workspace_virtual_limits_enabled;
 
 	HapticControlType _haptic_control_type;
 	bool _device_homed;
@@ -337,16 +355,14 @@ private:
 	// Device specifications
 	DeviceLimits _device_limits;
 
-	// Rotation matrix from the device frame to the robot frame
+	// Rotation operator from robot world frame to device base frame
 	Matrix3d _R_world_device;
 
-	// Haptic device home position and orientation
-	Vector3d _home_position_device;
-	Matrix3d _home_rotation_device;
+	// Haptic device home pose in device base frame
+	Affine3d _device_home_pose;
 
-	// Workspace center of the controlled robot in the robot frame
-	Vector3d _center_position_robot;
-	Matrix3d _center_rotation_robot;
+	// Workspace center of the controlled robot in the robot world frame
+	Affine3d _robot_center_pose;
 	bool _reset_robot_offset;
 
 	// Haptic guidance gains
@@ -357,12 +373,11 @@ private:
 
 	// Guidance plane parameters
 	Vector3d _plane_origin_point;
-	Vector3d _plane_normal_vec;
+	Vector3d _plane_normal_direction;
 
 	// Guidance line parameters
-	Vector3d _guidance_line_vec;
-	Vector3d _line_first_point;
-	Vector3d _line_second_point;
+	Vector3d _line_origin_point;
+	Vector3d _line_direction;
 
 	// Device workspace virtual limits
 	double _device_workspace_radius_limit;

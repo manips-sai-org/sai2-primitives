@@ -31,11 +31,14 @@ const Vector3d plane_origin = Vector3d(0, 0, 0.15);
 const Vector3d line_first_point = Vector3d(0, 0, 0.15);
 const Vector3d line_second_point = Vector3d(0, 0, 0.25);
 
-bool plane_guidance = false;
-bool line_guidance = false;
-
-bool p_was_pressed = false;
-bool l_was_pressed = false;
+// map of flags for key presses
+map<int, bool> key_pressed = {
+	{GLFW_KEY_P, false},
+	{GLFW_KEY_L, false},
+	{GLFW_KEY_D, false},
+	{GLFW_KEY_W, false},
+};
+map<int, bool> key_was_pressed = key_pressed;
 
 }  // namespace
 
@@ -59,7 +62,7 @@ int main() {
 	// load simulation world
 	auto sim = make_shared<Sai2Simulation::Sai2Simulation>(world_file);
 	sim->addSimulatedForceSensor(robot_name, link_name, Affine3d::Identity(),
-								 5.0);
+								 25.0);
 	sim->setCoeffFrictionStatic(0.1);
 
 	// load graphics scene
@@ -76,18 +79,9 @@ int main() {
 	while (graphics->isWindowOpen()) {
 		graphicsTimer.waitForNextLoop();
 
-		if (graphics->isKeyPressed(GLFW_KEY_P) && !p_was_pressed) {
-			plane_guidance = !plane_guidance;
-			p_was_pressed = true;
-		} else if (!graphics->isKeyPressed(GLFW_KEY_P)) {
-			p_was_pressed = false;
-		}
-
-		if (graphics->isKeyPressed(GLFW_KEY_L) && !l_was_pressed) {
-			line_guidance = !line_guidance;
-			l_was_pressed = true;
-		} else if (!graphics->isKeyPressed(GLFW_KEY_L)) {
-			l_was_pressed = false;
+		key_was_pressed = key_pressed;
+		for (auto& key : key_pressed) {
+			key.second = graphics->isKeyPressed(key.first);
 		}
 
 		graphics->updateRobotGraphics(robot_name,
@@ -147,8 +141,7 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 	auto motion_force_task = make_shared<Sai2Primitives::MotionForceTask>(
 		robot, link_name, compliant_frame);
 	motion_force_task->disableInternalOtg();
-	// motion_force_task->enableInternalOtgAccelerationLimited(0.8, 40.0, M_PI,
-	// 50*M_PI);
+	motion_force_task->enableVelocitySaturation(0.5, M_PI);
 
 	vector<shared_ptr<Sai2Primitives::TemplateTask>> task_list = {
 		motion_force_task};
@@ -160,18 +153,18 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 		redis_client.getEigen(MAX_STIFFNESS_KEY),
 		redis_client.getEigen(MAX_DAMPING_KEY),
 		redis_client.getEigen(MAX_FORCE_KEY));
-	Affine3d device_home_pose = Affine3d(Translation3d(0, 0, 0.15));
+	Affine3d device_home_pose = Affine3d(Translation3d(0, 0, 0.1));
 	auto haptic_controller =
 		make_shared<Sai2Primitives::HapticDeviceController>(
 			device_limits, robot->transformInWorld(link_name),
 			device_home_pose);
 	haptic_controller->setScalingFactors(2.5);
+	haptic_controller->setReductionFactorForceMoment(0.5, 0.5);
 	haptic_controller->setHapticControlType(
 		Sai2Primitives::HapticControlType::HOMING);
-	haptic_controller->setEnableOrientationTeleoperation(false);
-	haptic_controller->enableHapticWorkspaceVirtualLimits(0.05, M_PI / 4);
-	haptic_controller->setHapticFeedbackFromProxy(false);
-	// haptic_controller->setSendHapticFeedback(false);
+	haptic_controller->disableOrientationTeleoperation();
+	haptic_controller->enableHapticWorkspaceVirtualLimits(0.07, M_PI / 3);
+	haptic_controller->disableHapticWorkspaceVirtualLimits();
 
 	Sai2Primitives::HapticControllerInput haptic_input;
 	Sai2Primitives::HapticControllerOtuput haptic_output;
@@ -242,6 +235,10 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 			robot_control_torques = robot_controller->computeControlTorques();
 		}
 
+		// state machine for button presses
+		haptic_controller->setSendHapticFeedback(
+			haptic_input.robot_sensed_force.norm() > 0);
+
 		if (haptic_controller->getHapticControlType() ==
 				Sai2Primitives::HapticControlType::HOMING &&
 			haptic_controller->getHomed()) {
@@ -249,27 +246,41 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 				Sai2Primitives::HapticControlType::MOTION_MOTION);
 		} else {
 			if (haptic_button_is_pressed && !haptic_button_was_pressed) {
-				haptic_controller->setHapticControlType(
-					Sai2Primitives::HapticControlType::DETACHED);
+				haptic_controller->enableOrientationTeleoperation();
 			} else if (!haptic_button_is_pressed && haptic_button_was_pressed) {
-				haptic_controller->resetRobotOffset();
-				haptic_controller->setHapticControlType(
-					Sai2Primitives::HapticControlType::MOTION_MOTION);
+				haptic_controller->disableOrientationTeleoperation();
 			}
 		}
 		haptic_button_was_pressed = haptic_button_is_pressed;
 
-		if (plane_guidance) {
-			haptic_controller->enablePlaneGuidance(plane_origin, plane_normal);
-		} else {
-			haptic_controller->disablePlaneGuidance();
+		if (key_pressed[GLFW_KEY_D] && !key_was_pressed[GLFW_KEY_D]) {
+			haptic_controller->setHapticControlType(
+				Sai2Primitives::HapticControlType::DETACHED);
+		} else if (!key_pressed[GLFW_KEY_D] && key_was_pressed[GLFW_KEY_D]) {
+			haptic_controller->resetRobotOffset();
+			haptic_controller->setHapticControlType(
+				Sai2Primitives::HapticControlType::MOTION_MOTION);
+		} else if (key_pressed[GLFW_KEY_P] && !key_was_pressed[GLFW_KEY_P]) {
+			haptic_controller->getPlaneGuidanceEnabled()
+				? haptic_controller->disablePlaneGuidance()
+				: haptic_controller->enablePlaneGuidance();
+		} else if (key_pressed[GLFW_KEY_L] && !key_was_pressed[GLFW_KEY_L]) {
+			haptic_controller->getLineGuidanceEnabled()
+				? haptic_controller->disableLineGuidance()
+				: haptic_controller->enableLineGuidance();
+
+		} else if (key_pressed[GLFW_KEY_W] && !key_was_pressed[GLFW_KEY_W]) {
+			haptic_controller->getHapticWorkspaceVirtualLimitsEnabled()
+				? haptic_controller->disableHapticWorkspaceVirtualLimits()
+				: haptic_controller->enableHapticWorkspaceVirtualLimits();
 		}
 
-		if (line_guidance) {
-			haptic_controller->enableLineGuidance(line_first_point,
-												  line_second_point);
-		} else {
-			haptic_controller->disableLineGuidance();
+		if (haptic_output.device_command_force.norm() > 0.1) {
+			cout << "sensed forces robot: "
+				 << motion_force_task->getSensedForce().transpose() << endl;
+			cout << "command forces haptic: "
+				 << haptic_output.device_command_force.transpose() << endl;
+			cout << endl;
 		}
 	}
 
