@@ -42,3 +42,6 @@ Go to build/examples/desired_example and run the example. For example 1 :
 cd build/examples/01-joint_control
 ./01-joint_control
 ```
+
+## License
+Currently pending licensing. PLEASE DO NOT DISTRIBUTE.
