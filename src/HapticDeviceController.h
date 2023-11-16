@@ -26,8 +26,6 @@ enum HapticControlType {
 	DETACHED,
 	MOTION_MOTION,
 	FORCE_MOTION,
-	HYBRID_WITH_PROXY,
-	WORKSPACE_EXTENSION
 };
 
 struct HapticControllerOtuput {
@@ -35,14 +33,12 @@ struct HapticControllerOtuput {
 	Matrix3d robot_goal_orientation;  // world frame
 	Vector3d device_command_force;	  // device base frame
 	Vector3d device_command_moment;	  // device base frame
-	double device_gripper_force;
 
 	HapticControllerOtuput()
 		: robot_goal_position(Vector3d::Zero()),
 		  robot_goal_orientation(Matrix3d::Identity()),
 		  device_command_force(Vector3d::Zero()),
-		  device_command_moment(Vector3d::Zero()),
-		  device_gripper_force(0.0) {}
+		  device_command_moment(Vector3d::Zero()) {}
 };
 
 struct HapticControllerInput {
@@ -50,22 +46,18 @@ struct HapticControllerInput {
 	Matrix3d device_orientation;	   // device base frame
 	Vector3d device_linear_velocity;   // device base frame
 	Vector3d device_angular_velocity;  // device base frame
-	double device_gripper_position;
-	double device_gripper_velocity;
-	Vector3d robot_position;		  // world frame
-	Matrix3d robot_orientation;		  // world frame
-	Vector3d robot_linear_velocity;	  // world frame
-	Vector3d robot_angular_velocity;  // world frame
-	Vector3d robot_sensed_force;	  // world frame
-	Vector3d robot_sensed_moment;	  // world frame
+	Vector3d robot_position;		   // world frame
+	Matrix3d robot_orientation;		   // world frame
+	Vector3d robot_linear_velocity;	   // world frame
+	Vector3d robot_angular_velocity;   // world frame
+	Vector3d robot_sensed_force;	   // world frame
+	Vector3d robot_sensed_moment;	   // world frame
 
 	HapticControllerInput()
 		: device_position(Vector3d::Zero()),
 		  device_orientation(Matrix3d::Identity()),
 		  device_linear_velocity(Vector3d::Zero()),
 		  device_angular_velocity(Vector3d::Zero()),
-		  device_gripper_position(0.0),
-		  device_gripper_velocity(0.0),
 		  robot_position(Vector3d::Zero()),
 		  robot_orientation(Matrix3d::Identity()),
 		  robot_sensed_force(Vector3d::Zero()),
@@ -118,64 +110,36 @@ public:
 	////////////////////////////////////////////////////////////////////////////////////////////////////
 	/**
 	 * @brief Computes the haptic commands for the haptic device and the
-	 *controlled robot.
-	 * @details:
-	 *			computeHapticCommands3-6d implements the impedance bilateral
-	 *teleoperation scheme. The haptic commands are computed from the sensed
-	 *task force (_compute_haptic_feedback_from_proxy=false) or through a
-	 *stiffness/ damping field between the desired position and the proxy
-	 *position (haptic_feedback_from_proxy=true).
-	 *				'_compute_haptic_feedback_from_proxy' flag is defined by the
-	 *user and set to false by default. When computing the force feedback from
-	 *the force sensor data, the task force must be send in the algorithm input.
-	 *If the proxy evaluation is used, the current position, rotation, and
-	 *velocity of the proxy are considered to be the robot current position and
-	 *orientation in the input.
+	 * controlled robot. The input data scructure contains the device and robot
+	 * position, orientation and velocity, as well as the robot sensed force and
+	 * moments if direct haptic feedback is desired. The output data structure
+	 * contains the robot goal position and orientation as well as the device
+	 * command force and moment.
 	 *
-	 *			computeHapticCommandsWorkspaceExtension3-6d augments the classic
-	 *impedance teleoperation scheme with a dynamic workspace extension
-	 *algorithm.
+	 * @details
+	 * - Motion Motion control implements the impedance bilateral
+	 * teleoperation scheme. The haptic commands can be computed from direct
+	 * feedback using the sensed force and moments from the robot, or through a
+	 * spring damper system attaching the device pose and the proxy pose (the
+	 * proxy being the robot pose from the input). The behavior can be different
+	 * in different direction and is set by the function
+	 * parametrizeProxyForceFeedbackSpace or
+	 * parametrizeProxyForceFeedbackSpaceFromRobotForceSpace, and their moment
+	 * equivalent. The default behavior is to use direct feedback in all
+	 * directions.
 	 *
-	 *			computeHapticCommandsAdmittance3-6d implements the admittance
-	 *bilateral teleoperation scheme. The haptic commands are computed from the
-	 *velocity error in the robot controller. The current robot position and
-	 *velocity must be set thanks to updateSensedRobotPositionVelocity().
+	 * - Force Motion Control implements an admittance type bilateral
+	 * teleoperation where the user pushes the haptic device against a force
+	 * field in a desired direction and this generated a robot velocity command.
 	 *
-	 *	 		computeHapticCommandsUnifiedControl3-6d implements a unified
-	 *Motion and Force controller for haptic teleoperation. The slave robot is
-	 *controlled in force (desired_force/torque_robot) in the physical
-	 *interaction direction (defined by the force selection matrices
-	 *_sigma_force and _sigma_moment) and in motion
-	 *(desired_position/rotation_robot) in the orthogonal direction (defined by
-	 *the motion selection matrices _sigma_position and _sigma_orientation). The
-	 *selection matrices must be defined before calling the controller thanks to
-	 *updateSelectionMatrices(). The haptic feedback is computed as the sum of
-	 *the sensed task interaction projected into the motion-controlled space and
-	 *a virtual spring-damper (_force_guidance_xx stiffness and damping
-	 *parameters) into the force-controlled space. The task force must be sent
-	 *thanks to updateSensedForce() and the current robot position and velocity
-	 *must be updated with updateSensedRobotPositionVelocity() before calling
-	 *this function.
-	 *
-	 * 			Guidance plane or line can be added to the haptic controllers
-	 *(_plane_guidance_enabled=true, _line_guidance_enabled=true). The plane is
-	 *defined thanks to the method setPlane and the line thanks to setLine.
-	 *
-	 *			computeHapticCommands...6d(): The 6 DOFs are controlled and
-	 *feedback. computeHapticCommands...3d(): The haptic commands are evaluated
-	 *in position only, the 3 translational DOFs are controlled and rendered to
-	 *the user.
-	 *
-	 *		Make sure to update the haptic device data (position, velocity,
-	 *sensed force) from the redis keys before calling this function!
-	 *
-	 *
+	 * @param input device and robot position, orientation and velocity, and
+	 * robot sensed force and moments
+	 * @param verbose whether to print a message is the output was saturated by
+	 * the validateOutput function
+	 * @return HapticControllerOtuput: robot goal pose and device command force
 	 */
-
 	HapticControllerOtuput computeHapticControl(
 		const HapticControllerInput& input, const bool verbose = false);
-
-	void resetRobotOffset() { _reset_robot_offset = true; }
 
 private:
 	void validateOutput(HapticControllerOtuput& output, const bool verbose);
@@ -192,31 +156,26 @@ private:
 	// HapticControllerOtuput computeForceMotionControl(const
 	// HapticControllerInput& input);
 
-	// HapticControllerOtuput computeHybridControlWithProxy(const
-	// HapticControllerInput& input);
+	void motionMotionControlPosition(const HapticControllerInput& input,
+									 HapticControllerOtuput& output);
+	void motionMotionControlOrientation(const HapticControllerInput& input,
+										HapticControllerOtuput& output);
 
-	// HapticControllerOtuput computeWorkspaceExtensionControl(const
-	// HapticControllerInput& input);
+	void applyPlaneGuidanceForce(const HapticControllerInput& input,
+								 HapticControllerOtuput& output);
 
-	void applyPlaneGuidanceForce(Vector3d& haptic_force_to_update,
-								 const HapticControllerInput& input);
+	void applyLineGuidanceForce(const HapticControllerInput& input,
+								HapticControllerOtuput& output);
 
-	void applyLineGuidanceForce(Vector3d& haptic_force_to_update,
-								const HapticControllerInput& input);
-
-	void applyWorkspaceVirtualLimits(Vector3d& haptic_force_to_update,
-									 Vector3d& haptic_moment_to_update,
-									 const HapticControllerInput& input);
+	void applyWorkspaceVirtualLimitsForceMoment(
+		const HapticControllerInput& input, HapticControllerOtuput& output);
 
 public:
 	///////////////////////////////////////////////////////////////////////////////////
 	// Parameter setting methods
 	///////////////////////////////////////////////////////////////////////////////////
 
-	void setHapticControlType(const HapticControlType& haptic_control_type) {
-		_device_homed = false;
-		_haptic_control_type = haptic_control_type;
-	}
+	void setHapticControlType(const HapticControlType& haptic_control_type);
 	const HapticControlType& getHapticControlType() const {
 		return _haptic_control_type;
 	}
@@ -229,19 +188,19 @@ public:
 		return _orientation_teleop_enabled;
 	}
 
-	void setHapticFeedbackFromProxy(const bool haptic_feedback_from_proxy) {
-		_compute_haptic_feedback_from_proxy = haptic_feedback_from_proxy;
-	}
-	bool getHapticFeedbackFromProxy() const {
-		return _compute_haptic_feedback_from_proxy;
-	}
-
-	void setSendHapticFeedback(const bool send_haptic_feedback) {
-		_send_haptic_feedback = send_haptic_feedback;
-	}
-	bool getSendHapticFeedback() const { return _send_haptic_feedback; }
-
 	bool getHomed() const { return _device_homed; }
+
+	void parametrizeProxyForceFeedbackSpace(
+		const int proxy_feedback_space_dimension,
+		const Vector3d& proxy_or_direct_feedback_axis = Vector3d::Zero());
+	void parametrizeProxyForceFeedbackSpaceFromRobotForceSpace(
+		const Matrix3d& robot_sigma_force);
+
+	void parametrizeProxyMomentFeedbackSpace(
+		const int proxy_feedback_space_dimension,
+		const Vector3d& proxy_or_direct_feedback_axis = Vector3d::Zero());
+	void parametrizeProxyMomentFeedbackSpaceFromRobotForceSpace(
+		const Matrix3d& robot_sigma_moment);
 
 	void setScalingFactors(const double scaling_factor_pos,
 						   const double scaling_factor_ori = 1.0);
@@ -291,13 +250,17 @@ public:
 
 	void enablePlaneGuidance(const Vector3d plane_origin_point,
 							 const Vector3d plane_normal_direction);
-	void enablePlaneGuidance() { _plane_guidance_enabled = true; }
+	void enablePlaneGuidance() {
+		enablePlaneGuidance(_plane_origin_point, _plane_normal_direction);
+	}
 	void disablePlaneGuidance() { _plane_guidance_enabled = false; }
 	bool getPlaneGuidanceEnabled() const { return _plane_guidance_enabled; }
 
-	void enableLineGuidance(const Vector3d line_origin_point, 
+	void enableLineGuidance(const Vector3d line_origin_point,
 							const Vector3d line_direction);
-	void enableLineGuidance() { _line_guidance_enabled = true; }
+	void enableLineGuidance() {
+		enableLineGuidance(_line_origin_point, _line_direction);
+	}
 	void disableLineGuidance() { _line_guidance_enabled = false; }
 	bool getLineGuidanceEnabled() const { return _line_guidance_enabled; }
 
@@ -327,23 +290,6 @@ public:
 
 private:
 	// controller states
-
-	/**
-	 * @brief Only for motion-motion and workspace extension control types:
-	 * If set to true, the force feedback is computed from a stiffness/damping
-	 * proxy. Otherwise the sensed force are rendered to the user.
-	 *
-	 */
-	bool _compute_haptic_feedback_from_proxy;
-
-	/**
-	 * @brief Only for motion-motion and workspace extension control types:
-	 * If false, there is no force and torque feedback, except for the potential
-	 * device virtual workspace limits
-	 *
-	 */
-	bool _send_haptic_feedback;
-
 	bool _orientation_teleop_enabled;
 	bool _plane_guidance_enabled;
 	bool _line_guidance_enabled;
@@ -365,23 +311,9 @@ private:
 	Affine3d _robot_center_pose;
 	bool _reset_robot_offset;
 
-	// Haptic guidance gains
-	double _kp_guidance_pos;
-	double _kv_guidance_pos;
-	double _kp_guidance_ori;
-	double _kv_guidance_ori;
-
-	// Guidance plane parameters
-	Vector3d _plane_origin_point;
-	Vector3d _plane_normal_direction;
-
-	// Guidance line parameters
-	Vector3d _line_origin_point;
-	Vector3d _line_direction;
-
-	// Device workspace virtual limits
-	double _device_workspace_radius_limit;
-	double _device_workspace_angle_limit;
+	// proxy feedback space selection matrices
+	Matrix3d _sigma_proxy_force_feedback;
+	Matrix3d _sigma_proxy_moment_feedback;
 
 	// Haptic Controller Gains
 	double _kp_haptic_pos;
@@ -401,6 +333,24 @@ private:
 
 	// previous output
 	HapticControllerOtuput _previous_output;
+
+	// Haptic guidance gains
+	double _kp_guidance_pos;
+	double _kv_guidance_pos;
+	double _kp_guidance_ori;
+	double _kv_guidance_ori;
+
+	// Guidance plane parameters
+	Vector3d _plane_origin_point;
+	Vector3d _plane_normal_direction;
+
+	// Guidance line parameters
+	Vector3d _line_origin_point;
+	Vector3d _line_direction;
+
+	// Device workspace virtual limits
+	double _device_workspace_radius_limit;
+	double _device_workspace_angle_limit;
 };
 
 } /* namespace Sai2Primitives */

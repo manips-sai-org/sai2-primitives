@@ -79,9 +79,8 @@ int main() {
 	while (graphics->isWindowOpen()) {
 		graphicsTimer.waitForNextLoop();
 
-		key_was_pressed = key_pressed;
 		for (auto& key : key_pressed) {
-			key.second = graphics->isKeyPressed(key.first);
+			key_pressed[key.first] = graphics->isKeyPressed(key.first);
 		}
 
 		graphics->updateRobotGraphics(robot_name,
@@ -141,7 +140,7 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 	auto motion_force_task = make_shared<Sai2Primitives::MotionForceTask>(
 		robot, link_name, compliant_frame);
 	motion_force_task->disableInternalOtg();
-	motion_force_task->enableVelocitySaturation(0.5, M_PI);
+	motion_force_task->enableVelocitySaturation(0.7, M_PI);
 
 	vector<shared_ptr<Sai2Primitives::TemplateTask>> task_list = {
 		motion_force_task};
@@ -236,8 +235,11 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 		}
 
 		// state machine for button presses
-		haptic_controller->setSendHapticFeedback(
-			haptic_input.robot_sensed_force.norm() > 0);
+		if(haptic_input.robot_sensed_force.norm() > 0.1) {
+			haptic_controller->parametrizeProxyForceFeedbackSpace(1, Vector3d::UnitZ());
+		} else {
+			haptic_controller->parametrizeProxyForceFeedbackSpace(0);
+		}
 
 		if (haptic_controller->getHapticControlType() ==
 				Sai2Primitives::HapticControlType::HOMING &&
@@ -253,35 +255,40 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 		}
 		haptic_button_was_pressed = haptic_button_is_pressed;
 
-		if (key_pressed[GLFW_KEY_D] && !key_was_pressed[GLFW_KEY_D]) {
+		if (key_pressed.at(GLFW_KEY_D) && !key_was_pressed.at(GLFW_KEY_D)) {
 			haptic_controller->setHapticControlType(
 				Sai2Primitives::HapticControlType::DETACHED);
-		} else if (!key_pressed[GLFW_KEY_D] && key_was_pressed[GLFW_KEY_D]) {
-			haptic_controller->resetRobotOffset();
+		} else if (!key_pressed.at(GLFW_KEY_D) && key_was_pressed.at(GLFW_KEY_D)) {
 			haptic_controller->setHapticControlType(
 				Sai2Primitives::HapticControlType::MOTION_MOTION);
-		} else if (key_pressed[GLFW_KEY_P] && !key_was_pressed[GLFW_KEY_P]) {
-			haptic_controller->getPlaneGuidanceEnabled()
-				? haptic_controller->disablePlaneGuidance()
-				: haptic_controller->enablePlaneGuidance();
-		} else if (key_pressed[GLFW_KEY_L] && !key_was_pressed[GLFW_KEY_L]) {
-			haptic_controller->getLineGuidanceEnabled()
-				? haptic_controller->disableLineGuidance()
-				: haptic_controller->enableLineGuidance();
-
-		} else if (key_pressed[GLFW_KEY_W] && !key_was_pressed[GLFW_KEY_W]) {
-			haptic_controller->getHapticWorkspaceVirtualLimitsEnabled()
-				? haptic_controller->disableHapticWorkspaceVirtualLimits()
-				: haptic_controller->enableHapticWorkspaceVirtualLimits();
+		} else if (key_pressed.at(GLFW_KEY_P) && !key_was_pressed.at(GLFW_KEY_P)) {
+			if(haptic_controller->getPlaneGuidanceEnabled()) {
+				cout << "disabling plane guidance" << endl;
+				haptic_controller->disablePlaneGuidance();
+			} else {
+				cout << "enabling plane guidance" << endl;
+				haptic_controller->enablePlaneGuidance();
+			}
+		} else if (key_pressed.at(GLFW_KEY_L) && !key_was_pressed.at(GLFW_KEY_L)) {
+			if(haptic_controller->getLineGuidanceEnabled()) {
+				cout << "disabling line guidance" << endl;
+				haptic_controller->disableLineGuidance();
+			} else {
+				cout << "enabling line guidance" << endl;
+				haptic_controller->enableLineGuidance();
+			}
+		} else if (key_pressed.at(GLFW_KEY_W) && !key_was_pressed.at(GLFW_KEY_W)) {
+			if(haptic_controller->getHapticWorkspaceVirtualLimitsEnabled()) {
+				cout << "disabling haptic workspace virtual limits" << endl;
+				haptic_controller->disableHapticWorkspaceVirtualLimits();
+			} else {
+				cout << "enabling haptic workspace virtual limits" << endl;
+				haptic_controller->enableHapticWorkspaceVirtualLimits();
+			}
 		}
 
-		if (haptic_output.device_command_force.norm() > 0.1) {
-			cout << "sensed forces robot: "
-				 << motion_force_task->getSensedForce().transpose() << endl;
-			cout << "command forces haptic: "
-				 << haptic_output.device_command_force.transpose() << endl;
-			cout << endl;
-		}
+		key_was_pressed = key_pressed;
+
 	}
 
 	redis_client.setEigen(COMMANDED_FORCE_KEY, Vector3d::Zero());
