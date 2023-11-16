@@ -1,4 +1,4 @@
-set(EXAMPLE_NAME 15-haptic_control)
+set(EXAMPLE_NAME 15-haptic_control_impedance_type)
 # create an executable
 add_executable(${EXAMPLE_NAME} ${EXAMPLE_NAME}.cpp)
 

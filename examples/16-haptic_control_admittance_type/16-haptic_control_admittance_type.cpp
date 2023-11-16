@@ -61,13 +61,9 @@ int main() {
 
 	// load simulation world
 	auto sim = make_shared<Sai2Simulation::Sai2Simulation>(world_file);
-	sim->addSimulatedForceSensor(robot_name, link_name, Affine3d::Identity(),
-								 25.0);
-	sim->setCoeffFrictionStatic(0.1);
 
 	// load graphics scene
 	auto graphics = make_shared<Sai2Graphics::Sai2Graphics>(world_file);
-	graphics->addForceSensorDisplay(sim->getAllForceSensorData()[0]);
 
 	// Run simulation and control threads
 	thread sim_thread(runSim, sim);
@@ -85,7 +81,6 @@ int main() {
 
 		graphics->updateRobotGraphics(robot_name,
 									  sim->getJointPositions(robot_name));
-		graphics->updateDisplayedForceSensor(sim->getAllForceSensorData()[0]);
 		graphics->renderGraphicsWorld();
 	}
 
@@ -157,13 +152,9 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 		make_shared<Sai2Primitives::HapticDeviceController>(
 			device_limits, robot->transformInWorld(link_name),
 			device_home_pose);
-	haptic_controller->setScalingFactors(2.5);
-	haptic_controller->setReductionFactorForceMoment(0.5, 0.5);
 	haptic_controller->setHapticControlType(
 		Sai2Primitives::HapticControlType::HOMING);
 	haptic_controller->disableOrientationTeleoperation();
-	haptic_controller->enableHapticWorkspaceVirtualLimits(0.07, M_PI / 3);
-	haptic_controller->disableHapticWorkspaceVirtualLimits();
 
 	Sai2Primitives::HapticControllerInput haptic_input;
 	Sai2Primitives::HapticControllerOtuput haptic_output;
@@ -212,18 +203,12 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 			robot->linearVelocityInWorld(link_name);
 		haptic_input.robot_angular_velocity =
 			robot->angularVelocityInWorld(link_name);
-		haptic_input.robot_sensed_force = -motion_force_task->getSensedForce();
-		haptic_input.robot_sensed_moment =
-			-motion_force_task->getSensedMoment();
 
 		haptic_output = haptic_controller->computeHapticControl(haptic_input);
 
 		redis_client.sendAllFromGroup();
 
 		// compute robot control
-		motion_force_task->updateSensedForceAndMoment(
-			sim->getSensedForce(robot_name, link_name),
-			sim->getSensedMoment(robot_name, link_name));
 		motion_force_task->setDesiredPosition(
 			haptic_output.robot_goal_position);
 		motion_force_task->setDesiredOrientation(
@@ -245,7 +230,7 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 				Sai2Primitives::HapticControlType::HOMING &&
 			haptic_controller->getHomed()) {
 			haptic_controller->setHapticControlType(
-				Sai2Primitives::HapticControlType::MOTION_MOTION);
+				Sai2Primitives::HapticControlType::FORCE_MOTION);
 		} else {
 			if (haptic_button_is_pressed && !haptic_button_was_pressed) {
 				haptic_controller->enableOrientationTeleoperation();
@@ -260,7 +245,7 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 				Sai2Primitives::HapticControlType::DETACHED);
 		} else if (!key_pressed.at(GLFW_KEY_D) && key_was_pressed.at(GLFW_KEY_D)) {
 			haptic_controller->setHapticControlType(
-				Sai2Primitives::HapticControlType::MOTION_MOTION);
+				Sai2Primitives::HapticControlType::FORCE_MOTION);
 		} else if (key_pressed.at(GLFW_KEY_P) && !key_was_pressed.at(GLFW_KEY_P)) {
 			if(haptic_controller->getPlaneGuidanceEnabled()) {
 				cout << "disabling plane guidance" << endl;
@@ -276,14 +261,6 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 			} else {
 				cout << "enabling line guidance" << endl;
 				haptic_controller->enableLineGuidance();
-			}
-		} else if (key_pressed.at(GLFW_KEY_W) && !key_was_pressed.at(GLFW_KEY_W)) {
-			if(haptic_controller->getHapticWorkspaceVirtualLimitsEnabled()) {
-				cout << "disabling haptic workspace virtual limits" << endl;
-				haptic_controller->disableHapticWorkspaceVirtualLimits();
-			} else {
-				cout << "enabling haptic workspace virtual limits" << endl;
-				haptic_controller->enableHapticWorkspaceVirtualLimits();
 			}
 		}
 

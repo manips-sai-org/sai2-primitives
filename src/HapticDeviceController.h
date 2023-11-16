@@ -153,19 +153,19 @@ private:
 	HapticControllerOtuput computeMotionMotionControl(
 		const HapticControllerInput& input);
 
-	// HapticControllerOtuput computeForceMotionControl(const
-	// HapticControllerInput& input);
+	HapticControllerOtuput computeForceMotionControl(
+		const HapticControllerInput& input);
 
 	void motionMotionControlPosition(const HapticControllerInput& input,
 									 HapticControllerOtuput& output);
 	void motionMotionControlOrientation(const HapticControllerInput& input,
 										HapticControllerOtuput& output);
 
-	void applyPlaneGuidanceForce(const HapticControllerInput& input,
-								 HapticControllerOtuput& output);
+	void applyPlaneGuidanceForce(Vector3d& force_to_update,
+	const HapticControllerInput& input, const bool use_device_home_as_origin);
 
-	void applyLineGuidanceForce(const HapticControllerInput& input,
-								HapticControllerOtuput& output);
+	void applyLineGuidanceForce(Vector3d& force_to_update,
+	const HapticControllerInput& input, const bool use_device_home_as_origin);
 
 	void applyWorkspaceVirtualLimitsForceMoment(
 		const HapticControllerInput& input, HapticControllerOtuput& output);
@@ -330,6 +330,10 @@ private:
 	double _scaling_factor_ori;
 	double _reduction_factor_force;
 	double _reduction_factor_moment;
+
+	// admittance factors for froce-motion controller
+	double _device_force_to_robot_delta_position;
+	double _device_moment_to_robot_delta_orientation;
 
 	// previous output
 	HapticControllerOtuput _previous_output;
