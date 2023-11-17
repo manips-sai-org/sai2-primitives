@@ -135,6 +135,11 @@ void MotionForceTask::initialSetup() {
 	_N.setZero(dof, dof);
 	_N_prec = MatrixXd::Identity(dof, dof);
 
+	// setup lambda smoothing
+	enableLambdaSmoothing();
+	_e_max = 5e-2;
+	_e_min = 5e-3;
+
 	MatrixXd range_pos =
 		Sai2Model::matrixRangeBasis(_partial_task_projection.block<3, 3>(0, 0));
 	MatrixXd range_ori =
@@ -221,35 +226,100 @@ void MotionForceTask::updateTaskModel(const MatrixXd& N_prec) {
 					_link_name, _compliant_frame.translation());
 	_projected_jacobian = _jacobian * _N_prec;
 
-	MatrixXd range_pos =
+	// smoothing lambda; already takes care of the projected jacobian matrix range
+	if (_use_lambda_smoothing_flag) {
+		const double e_diff = _e_max - _e_min;
+		_current_task_range = MatrixXd::Identity(6, 6);  // ensures force continuity 
+
+		MatrixXd Lambda_inv = _projected_jacobian * getConstRobotModel()->MInv() * _projected_jacobian.transpose();
+		Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double, 6, 6>> eigensolver(Lambda_inv);
+		int n_cols = 0;
+		for (int i = 5; i >= 0; --i) {
+			if (eigensolver.eigenvalues()(i) < _e_max) {
+				n_cols = i + 1;
+				break;
+			}
+		}
+		if (n_cols != 0) {
+			const VectorXd& e = eigensolver.eigenvalues();
+			const MatrixXd& U = eigensolver.eigenvectors();
+			if (n_cols == 6) {
+				Eigen::VectorXd D_s(6);
+				for (int i = 0; i < 6; ++i) {
+					if (D_s(i) < _e_min) {
+						D_s(i) = 0;
+					} else {
+						double e_dev = (e(i) - _e_min) / e_diff;
+						D_s(i) = (1 / e(i)) * e_dev * e_dev;
+					}
+				}
+				_Lambda = U * D_s.asDiagonal() * U.transpose();
+			} else {
+				const Eigen::MatrixXd& U_s = U.leftCols(n_cols);
+				const Eigen::MatrixXd& U_ns = U.rightCols(6 - n_cols);
+				Eigen::VectorXd D_s(n_cols);
+				Eigen::VectorXd D_ns(6 - n_cols);
+
+				for (int i = 0; i < n_cols; ++i) {
+					if (e(i) < _e_min) {
+						D_s(i) = 0;
+					} else {
+						double e_dev = (e(i) - _e_min) / e_diff;
+						D_s(i) = (1 / e(i)) * e_dev * e_dev;
+					}
+				}
+				for (int i = 0; i < 6 - n_cols; ++i) {
+					D_ns(i) = 1 / e(i + n_cols);
+				}
+				_Lambda = U_s * D_s.asDiagonal() * U_s.transpose() + U_ns * D_ns.asDiagonal() * U_ns.transpose();
+			}
+
+			// using original lambda to keep nullspace rank 
+			Sai2Model::OpSpaceMatrices op_space_matrices =
+				getConstRobotModel()->operationalSpaceMatrices(
+					_projected_jacobian);
+			_Jbar = op_space_matrices.Jbar;
+			_N = op_space_matrices.N;
+		} else {
+			Sai2Model::OpSpaceMatrices op_space_matrices =
+				getConstRobotModel()->operationalSpaceMatrices(
+					_projected_jacobian);
+			_Lambda = op_space_matrices.Lambda;
+			_Jbar = op_space_matrices.Jbar;
+			_N = op_space_matrices.N;
+		}
+	} else {
+		// truncation method
+		MatrixXd range_pos =
 		Sai2Model::matrixRangeBasis(_projected_jacobian.topRows(3));
-	MatrixXd range_ori =
-		Sai2Model::matrixRangeBasis(_projected_jacobian.bottomRows(3));
+		MatrixXd range_ori =
+			Sai2Model::matrixRangeBasis(_projected_jacobian.bottomRows(3));
 
-	_pos_range = range_pos.norm() == 0 ? 0 : range_pos.cols();
-	_ori_range = range_ori.norm() == 0 ? 0 : range_ori.cols();
+		_pos_range = range_pos.norm() == 0 ? 0 : range_pos.cols();
+		_ori_range = range_ori.norm() == 0 ? 0 : range_ori.cols();
 
-	if (_pos_range + _ori_range == 0) {
-		// there is no controllable degree of freedom for the task, just return
-		// should maybe print a warning here
-		_N.setIdentity(robot_dof, robot_dof);
-		return;
+		if (_pos_range + _ori_range == 0) {
+			// there is no controllable degree of freedom for the task, just return
+			// should maybe print a warning here
+			_N.setIdentity(robot_dof, robot_dof);
+			return;
+		}
+
+		_current_task_range.setZero(6, _pos_range + _ori_range);
+		if (_pos_range > 0) {
+			_current_task_range.block(0, 0, 3, _pos_range) = range_pos;
+		}
+		if (_ori_range > 0) {
+			_current_task_range.block(3, _pos_range, 3, _ori_range) = range_ori;
+		}
+
+		Sai2Model::OpSpaceMatrices op_space_matrices =
+			getConstRobotModel()->operationalSpaceMatrices(
+				_current_task_range.transpose() * _projected_jacobian);
+		_Lambda = op_space_matrices.Lambda;
+		_Jbar = op_space_matrices.Jbar;
+		_N = op_space_matrices.N;
 	}
-
-	_current_task_range.setZero(6, _pos_range + _ori_range);
-	if (_pos_range > 0) {
-		_current_task_range.block(0, 0, 3, _pos_range) = range_pos;
-	}
-	if (_ori_range > 0) {
-		_current_task_range.block(3, _pos_range, 3, _ori_range) = range_ori;
-	}
-
-	Sai2Model::OpSpaceMatrices op_space_matrices =
-		getConstRobotModel()->operationalSpaceMatrices(
-			_current_task_range.transpose() * _projected_jacobian);
-	_Lambda = op_space_matrices.Lambda;
-	_Jbar = op_space_matrices.Jbar;
-	_N = op_space_matrices.N;
 
 	switch (_dynamic_decoupling_type) {
 		case FULL_DYNAMIC_DECOUPLING: {
@@ -461,6 +531,13 @@ VectorXd MotionForceTask::computeTorques() {
 			 _kv_pos * (_current_linear_velocity - tmp_desired_linear_velocity) -
 			 _ki_pos * _integrated_position_error);
 	}
+
+	// // debug
+	// std::cout << "Position error: " << (_current_position - tmp_desired_position).transpose() << "\n";
+	// std::cout << "Velocity error: " << (_current_velocity - tmp_desired_velocity).transpose() << "\n";
+	// std::cout << "Current velocity: " << _current_velocity.transpose() << "\n";
+	// std::cout << "Desired velocity: " << tmp_desired_velocity.transpose() << "\n";
+	// std::cout << "Position related force: " << position_related_force.transpose() << "\n";
 
 	// angular motion
 	// orientation error
