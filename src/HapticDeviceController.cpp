@@ -135,8 +135,8 @@ HapticDeviceController::HapticDeviceController(
 	// Initialize haptic guidance parameters
 	_plane_guidance_enabled = false;
 	_line_guidance_enabled = false;
-	_kp_guidance_pos = _kp_haptic_pos;
-	_kp_guidance_ori = _kp_haptic_ori;
+	_kp_guidance_pos = 1.2 * _kp_haptic_pos;
+	_kp_guidance_ori = 1.2 * _kp_haptic_ori;
 	_kv_guidance_pos = _kv_haptic_pos;
 	_kv_guidance_ori = _kv_haptic_ori;
 
@@ -331,7 +331,7 @@ void HapticDeviceController::motionMotionControlPosition(
 
 	// Compute the force feedback in robot frame
 	Vector3d haptic_forces_robot_space_direct_feedback =
-		input.robot_sensed_force;
+		-input.robot_sensed_force;
 
 	// scale and rotate to device frame
 	Vector3d haptic_force_direct_feedback =
@@ -402,7 +402,7 @@ void HapticDeviceController::motionMotionControlOrientation(
 
 	// Compute the moment feedback in robot frame
 	Vector3d haptic_moments_robot_space_direct_feedback =
-		input.robot_sensed_moment;
+		-input.robot_sensed_moment;
 
 	// scale and rotate to device frame
 	Vector3d haptic_moment_direct_feedback =

@@ -7,13 +7,14 @@
 #include "Sai2Primitives.h"
 #include "Sai2Simulation.h"
 #include "redis/RedisClient.h"
-#include "redis_keys.h"
+#include "redis/keys/chai_haptic_devices_driver.h"
 #include "timer/LoopTimer.h"
 bool fSimulationRunning = false;
 void sighandler(int) { fSimulationRunning = false; }
 
 using namespace std;
 using namespace Eigen;
+using namespace Sai2Common::ChaiHapticDriverKeys;
 
 namespace {
 const string world_file = "./resources/world.urdf";
@@ -39,10 +40,6 @@ map<int, bool> key_was_pressed = key_pressed;
 void runSim(shared_ptr<Sai2Simulation::Sai2Simulation> sim);
 void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim);
 
-//// Robot global variables /////
-// sensed task force from robot interaction
-Vector3d sensed_force = Vector3d::Zero();
-Vector3d sensed_moment = Vector3d::Zero();
 // robot joint data
 VectorXd robot_control_torques = Eigen::VectorXd::Zero(7);
 
@@ -56,7 +53,7 @@ int main() {
 	auto sim = make_shared<Sai2Simulation::Sai2Simulation>(world_file);
 	sim->addSimulatedForceSensor(robot_name, link_name, Affine3d::Identity(),
 								 10.0);
-	sim->setCoeffFrictionStatic(0.1);
+	sim->setCoeffFrictionStatic(0.0);
 
 	// load graphics scene
 	auto graphics = make_shared<Sai2Graphics::Sai2Graphics>(world_file);
@@ -134,6 +131,7 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 		robot, link_name, compliant_frame);
 	motion_force_task->disableInternalOtg();
 	motion_force_task->enableVelocitySaturation(0.7, M_PI);
+	motion_force_task->setOriControlGains(400.0, 40.0);
 	Vector3d prev_sensed_force = Vector3d::Zero();
 
 	vector<shared_ptr<Sai2Primitives::TemplateTask>> task_list = {
@@ -143,43 +141,45 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 
 	// create haptic controller
 	Sai2Primitives::HapticDeviceController::DeviceLimits device_limits(
-		redis_client.getEigen(MAX_STIFFNESS_KEY),
-		redis_client.getEigen(MAX_DAMPING_KEY),
-		redis_client.getEigen(MAX_FORCE_KEY));
-	Affine3d device_home_pose = Affine3d(Translation3d(0, 0, 0));
+		redis_client.getEigen(createRedisKey(MAX_STIFFNESS_KEY_SUFFIX, 0)),
+		redis_client.getEigen(createRedisKey(MAX_DAMPING_KEY_SUFFIX, 0)),
+		redis_client.getEigen(createRedisKey(MAX_FORCE_KEY_SUFFIX, 0)));
 	auto haptic_controller =
 		make_shared<Sai2Primitives::HapticDeviceController>(
-			device_limits, robot->transformInWorld(link_name),
-			device_home_pose);
+			device_limits, robot->transformInWorld(link_name));
 	haptic_controller->setScalingFactors(3.5);
-	haptic_controller->setReductionFactorForceMoment(0.3, 0.3);
+	haptic_controller->setReductionFactorForceMoment(
+		0, 0);	// disable direct force feedback
 	haptic_controller->setHapticControlType(
 		Sai2Primitives::HapticControlType::HOMING);
 	haptic_controller->disableOrientationTeleoperation();
-	haptic_controller->setVariableDampingGainsPos(vector<double>{0.15, 0.30},
-												  vector<double>{0.0, 20.0});
+	Vector3i directions_of_proxy_feedback = Vector3i::Zero();
 
 	Sai2Primitives::HapticControllerInput haptic_input;
 	Sai2Primitives::HapticControllerOtuput haptic_output;
 	bool haptic_button_was_pressed = false;
 	int haptic_button_is_pressed = 0;
-	redis_client.setInt(SWITCH_PRESSED_KEY, haptic_button_is_pressed);
-	redis_client.setInt(USE_GRIPPER_AS_SWITCH_KEY, 1);
+	redis_client.setInt(createRedisKey(SWITCH_PRESSED_KEY_SUFFIX, 0),
+						haptic_button_is_pressed);
+	redis_client.setInt(createRedisKey(USE_GRIPPER_AS_SWITCH_KEY_SUFFIX, 0), 1);
 
 	// setup redis communication
-	redis_client.addToSendGroup(COMMANDED_FORCE_KEY,
+	redis_client.addToSendGroup(createRedisKey(COMMANDED_FORCE_KEY_SUFFIX, 0),
 								haptic_output.device_command_force);
-	redis_client.addToSendGroup(COMMANDED_TORQUE_KEY,
+	redis_client.addToSendGroup(createRedisKey(COMMANDED_TORQUE_KEY_SUFFIX, 0),
 								haptic_output.device_command_moment);
 
-	redis_client.addToReceiveGroup(POSITION_KEY, haptic_input.device_position);
-	redis_client.addToReceiveGroup(ROTATION_KEY,
+	redis_client.addToReceiveGroup(createRedisKey(POSITION_KEY_SUFFIX, 0),
+								   haptic_input.device_position);
+	redis_client.addToReceiveGroup(createRedisKey(ROTATION_KEY_SUFFIX, 0),
 								   haptic_input.device_orientation);
-	redis_client.addToReceiveGroup(LINEAR_VELOCITY_KEY,
-								   haptic_input.device_linear_velocity);
-	redis_client.addToReceiveGroup(ANGULAR_VELOCITY_KEY,
-								   haptic_input.device_angular_velocity);
-	redis_client.addToReceiveGroup(SWITCH_PRESSED_KEY,
+	redis_client.addToReceiveGroup(
+		createRedisKey(LINEAR_VELOCITY_KEY_SUFFIX, 0),
+		haptic_input.device_linear_velocity);
+	redis_client.addToReceiveGroup(
+		createRedisKey(ANGULAR_VELOCITY_KEY_SUFFIX, 0),
+		haptic_input.device_angular_velocity);
+	redis_client.addToReceiveGroup(createRedisKey(SWITCH_PRESSED_KEY_SUFFIX, 0),
 								   haptic_button_is_pressed);
 
 	// create a timer
@@ -206,9 +206,8 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 			robot->linearVelocityInWorld(link_name);
 		haptic_input.robot_angular_velocity =
 			robot->angularVelocityInWorld(link_name);
-		haptic_input.robot_sensed_force = -motion_force_task->getSensedForce();
-		haptic_input.robot_sensed_moment =
-			-motion_force_task->getSensedMoment();
+		haptic_input.robot_sensed_force = Vector3d::Zero();
+		haptic_input.robot_sensed_moment = Vector3d::Zero();
 
 		haptic_output = haptic_controller->computeHapticControl(haptic_input);
 
@@ -228,23 +227,49 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 			robot_control_torques = robot_controller->computeControlTorques();
 		}
 
-		// state machine for button presses
-		if (haptic_input.robot_sensed_force.norm() >= 0.5 &&
-			prev_sensed_force.norm() < 0.5) {
-			haptic_controller->parametrizeProxyForceFeedbackSpace(
-				1, Vector3d::UnitZ());
-		} else if (haptic_input.robot_sensed_force.norm() < 0.1 &&
-				   prev_sensed_force.norm() >= 0.1) {
-			haptic_controller->parametrizeProxyForceFeedbackSpace(0);
+		// set feedback from proxy
+		Vector3d sensed_force_world_frame =
+			sim->getSensedForce(robot_name, link_name, false);
+		for (int i = 0; i < 3; ++i) {
+			if (fabs(sensed_force_world_frame(i)) >= 0.5 &&
+				fabs(prev_sensed_force(i)) < 0.5) {
+				directions_of_proxy_feedback(i) = 1;
+			} else if (fabs(sensed_force_world_frame(i)) <= 0.1 &&
+					   fabs(prev_sensed_force(i)) > 0.1) {
+				directions_of_proxy_feedback(i) = 0;
+			}
 		}
-		prev_sensed_force = haptic_input.robot_sensed_force;
+		prev_sensed_force = sensed_force_world_frame;
 
+		int dim_proxy_space = directions_of_proxy_feedback.sum();
+		switch (dim_proxy_space) {
+			case 0:
+				haptic_controller->parametrizeProxyForceFeedbackSpace(0);
+				break;
+			case 1:
+				haptic_controller->parametrizeProxyForceFeedbackSpace(
+					1, directions_of_proxy_feedback.cast<double>());
+				break;
+			case 2:
+				haptic_controller->parametrizeProxyForceFeedbackSpace(
+					2, Vector3d::Ones() -
+						   directions_of_proxy_feedback.cast<double>());
+				break;
+			case 3:
+				haptic_controller->parametrizeProxyForceFeedbackSpace(
+					3, Vector3d::Zero());
+				break;
+			default:
+				break;
+		}
+
+		// state machine for button presses
 		if (haptic_controller->getHapticControlType() ==
 				Sai2Primitives::HapticControlType::HOMING &&
 			haptic_controller->getHomed()) {
 			haptic_controller->setHapticControlType(
 				Sai2Primitives::HapticControlType::MOTION_MOTION);
-			haptic_controller->setDeviceControlGains(200.0, 20.0);
+			haptic_controller->setDeviceControlGains(100.0, 25.0);
 			cout << "haptic device homed" << endl;
 		} else {
 			if (haptic_button_is_pressed && !haptic_button_was_pressed) {
@@ -297,9 +322,11 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 		key_was_pressed = key_pressed;
 	}
 
-	redis_client.setEigen(COMMANDED_FORCE_KEY, Vector3d::Zero());
-	redis_client.setEigen(COMMANDED_TORQUE_KEY, Vector3d::Zero());
-	redis_client.setInt(USE_GRIPPER_AS_SWITCH_KEY, 0);
+	redis_client.setEigen(createRedisKey(COMMANDED_FORCE_KEY_SUFFIX, 0),
+						  Vector3d::Zero());
+	redis_client.setEigen(createRedisKey(COMMANDED_TORQUE_KEY_SUFFIX, 0),
+						  Vector3d::Zero());
+	redis_client.setInt(createRedisKey(USE_GRIPPER_AS_SWITCH_KEY_SUFFIX, 0), 0);
 
 	cout << "control timer stats:" << endl;
 	controlTimer.printInfoPostRun();

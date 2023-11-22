@@ -69,19 +69,25 @@ public:
 	struct DeviceLimits {
 		double max_linear_stiffness;
 		double max_angular_stiffness;
+		double max_gripper_stiffness;
 		double max_linear_damping;
 		double max_angular_damping;
+		double max_gripper_damping;
 		double max_force;
 		double max_torque;
+		double max_gripper_force;
 
-		DeviceLimits(const Vector2d& max_stiffness, const Vector2d& max_damping,
-					 const Vector2d& max_force_torque)
+		DeviceLimits(const Vector3d& max_stiffness, const Vector3d& max_damping,
+					 const Vector3d& max_force_torque)
 			: max_linear_stiffness(max_stiffness(0)),
 			  max_angular_stiffness(max_stiffness(1)),
+			  max_gripper_stiffness(max_stiffness(2)),
 			  max_linear_damping(max_damping(0)),
 			  max_angular_damping(max_damping(1)),
+			  max_gripper_damping(max_damping(2)),
 			  max_force(max_force_torque(0)),
-			  max_torque(max_force_torque(1)) {}
+			  max_torque(max_force_torque(1)),
+			  max_gripper_force(max_force_torque(2)) {}
 	};
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -303,12 +309,13 @@ public:
 		const vector<double>& velocity_thresholds,
 		const vector<double>& variable_damping_gains);
 
-	void setAdmittanceFactors(const double device_force_to_robot_delta_position,
-							  const double device_moment_to_robot_delta_orientation);
+	void setAdmittanceFactors(
+		const double device_force_to_robot_delta_position,
+		const double device_moment_to_robot_delta_orientation);
 
 	void setHomingMaxVelocity(const double homing_max_linvel,
 							  const double homing_max_angvel);
-	
+
 	void setForceDeadbandForceMotionController(const double force_deadband);
 	void setMomentDeadbandForceMotionController(const double force_deadband);
 

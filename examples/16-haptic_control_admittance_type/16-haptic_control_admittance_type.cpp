@@ -7,13 +7,14 @@
 #include "Sai2Primitives.h"
 #include "Sai2Simulation.h"
 #include "redis/RedisClient.h"
-#include "redis_keys.h"
+#include "redis/keys/chai_haptic_devices_driver.h"
 #include "timer/LoopTimer.h"
 bool fSimulationRunning = false;
 void sighandler(int) { fSimulationRunning = false; }
 
 using namespace std;
 using namespace Eigen;
+using namespace Sai2Common::ChaiHapticDriverKeys;
 
 namespace {
 const string world_file = "./resources/world.urdf";
@@ -137,9 +138,9 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 
 	// create haptic controller
 	Sai2Primitives::HapticDeviceController::DeviceLimits device_limits(
-		redis_client.getEigen(MAX_STIFFNESS_KEY),
-		redis_client.getEigen(MAX_DAMPING_KEY),
-		redis_client.getEigen(MAX_FORCE_KEY));
+		redis_client.getEigen(createRedisKey(MAX_STIFFNESS_KEY_SUFFIX, 0)),
+		redis_client.getEigen(createRedisKey(MAX_DAMPING_KEY_SUFFIX, 0)),
+		redis_client.getEigen(createRedisKey(MAX_FORCE_KEY_SUFFIX, 0)));
 	Affine3d device_home_pose = Affine3d(Translation3d(0, 0, 0));
 	auto haptic_controller =
 		make_shared<Sai2Primitives::HapticDeviceController>(
@@ -153,18 +154,21 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 	Sai2Primitives::HapticControllerOtuput haptic_output;
 
 	// setup redis communication
-	redis_client.addToSendGroup(COMMANDED_FORCE_KEY,
+	redis_client.addToSendGroup(createRedisKey(COMMANDED_FORCE_KEY_SUFFIX, 0),
 								haptic_output.device_command_force);
-	redis_client.addToSendGroup(COMMANDED_TORQUE_KEY,
+	redis_client.addToSendGroup(createRedisKey(COMMANDED_TORQUE_KEY_SUFFIX, 0),
 								haptic_output.device_command_moment);
 
-	redis_client.addToReceiveGroup(POSITION_KEY, haptic_input.device_position);
-	redis_client.addToReceiveGroup(ROTATION_KEY,
+	redis_client.addToReceiveGroup(createRedisKey(POSITION_KEY_SUFFIX, 0),
+								   haptic_input.device_position);
+	redis_client.addToReceiveGroup(createRedisKey(ROTATION_KEY_SUFFIX, 0),
 								   haptic_input.device_orientation);
-	redis_client.addToReceiveGroup(LINEAR_VELOCITY_KEY,
-								   haptic_input.device_linear_velocity);
-	redis_client.addToReceiveGroup(ANGULAR_VELOCITY_KEY,
-								   haptic_input.device_angular_velocity);
+	redis_client.addToReceiveGroup(
+		createRedisKey(LINEAR_VELOCITY_KEY_SUFFIX, 0),
+		haptic_input.device_linear_velocity);
+	redis_client.addToReceiveGroup(
+		createRedisKey(ANGULAR_VELOCITY_KEY_SUFFIX, 0),
+		haptic_input.device_angular_velocity);
 
 	// create a timer
 	Sai2Common::LoopTimer controlTimer(1000.0, 1e6);
@@ -212,17 +216,11 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 			haptic_controller->getHomed()) {
 			haptic_controller->setHapticControlType(
 				Sai2Primitives::HapticControlType::FORCE_MOTION);
+			haptic_controller->setForceDeadbandForceMotionController(2.0);
+			haptic_controller->setDeviceControlGains(350.0, 15.0);
 		}
 
-		if (key_pressed.at(GLFW_KEY_D) && !key_was_pressed.at(GLFW_KEY_D)) {
-			haptic_controller->setHapticControlType(
-				Sai2Primitives::HapticControlType::DETACHED);
-		} else if (!key_pressed.at(GLFW_KEY_D) &&
-				   key_was_pressed.at(GLFW_KEY_D)) {
-			haptic_controller->setHapticControlType(
-				Sai2Primitives::HapticControlType::FORCE_MOTION);
-		} else if (key_pressed.at(GLFW_KEY_P) &&
-				   !key_was_pressed.at(GLFW_KEY_P)) {
+		if (key_pressed.at(GLFW_KEY_P) && !key_was_pressed.at(GLFW_KEY_P)) {
 			if (haptic_controller->getPlaneGuidanceEnabled()) {
 				cout << "disabling plane guidance" << endl;
 				haptic_controller->disablePlaneGuidance();
@@ -244,8 +242,10 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 		key_was_pressed = key_pressed;
 	}
 
-	redis_client.setEigen(COMMANDED_FORCE_KEY, Vector3d::Zero());
-	redis_client.setEigen(COMMANDED_TORQUE_KEY, Vector3d::Zero());
+	redis_client.setEigen(createRedisKey(COMMANDED_FORCE_KEY_SUFFIX, 0),
+						  Vector3d::Zero());
+	redis_client.setEigen(createRedisKey(COMMANDED_TORQUE_KEY_SUFFIX, 0),
+						  Vector3d::Zero());
 
 	cout << "control timer stats:" << endl;
 	controlTimer.printInfoPostRun();

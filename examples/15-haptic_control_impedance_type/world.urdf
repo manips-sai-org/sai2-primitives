@@ -1,6 +1,5 @@
 <?xml version="1.0" ?>
 
-<!-- <world name="demo_world" gravity="0.0 0.0 -9.81"> -->
 <world name="demo_world" gravity="0.0 0.0 0.0">
 
 	<robot name="PANDA">
@@ -46,37 +45,18 @@
 		</visual>
 	</static_object>
 
-	<!-- <static_object name="Box">
-		<origin xyz="0.2 0.0 0.51" rpy="0.0 0.0 0.0" />
+	<static_object name="Box">
+		<origin xyz="0.33 0.1 0.27" rpy="0.0 0.0 0.0" />
 		<collision>
 			<origin xyz="0.0 0.0 0.0" rpy="0 0 0" />
 			<geometry>
-				<box size="0.2 0.3 0.06" />
+				<box size="0.2 0.25 0.06" />
 			</geometry>
 		</collision>
 		<visual>
 			<origin xyz="0.0 0.0 0.0" rpy="0 0 0" />
 			<geometry>
-				<box size="0.2 0.3 0.06" />
-			</geometry>
-			<material name="material_blue">
-				<color rgba="0.20 0.47 1.00 1.0" />
-			</material>
-		</visual>
-	</static_object> -->
-
-	<static_object name="Curved Box">
-		<origin xyz="0.3 0.1 0.22" rpy="0.0 0.0 0.0" />
-		<collision>
-			<origin xyz="0.0 0.0 0.0" rpy="0 0 0" />
-			<geometry>
-				<cylinder length="0.06" radius="0.08" />
-			</geometry>
-		</collision>
-		<visual>
-			<origin xyz="0.0 0.0 0.0" rpy="0 0 0" />
-			<geometry>
-				<cylinder length="0.06" radius="0.08" />
+				<box size="0.2 0.25 0.06" />
 			</geometry>
 			<material name="material_blue">
 				<color rgba="0.20 0.47 1.00 1.0" />
@@ -93,16 +73,6 @@
 		<position xyz="2.0 2.0 2.0" />
 		<lookat xyz="0.0 0.0 0.0" />
 	</light>
-
-	<!-- 	<light name="light3" type="directional">
-		<position xyz="-2.0 2.0 -2.0" />
-		<lookat xyz="0.0 0.0 0.0" />
-	</light>
-
-	<light name="light4" type="directional">
-		<position xyz="-2.0 -2.0 -2.0" />
-		<lookat xyz="0.0 0.0 0.0" />
-	</light> -->
 
 	<camera name="camera">
 		<position xyz="2.0 0.25  1.0" />
