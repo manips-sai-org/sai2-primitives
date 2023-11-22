@@ -96,7 +96,7 @@ HapticDeviceController::HapticDeviceController(
 	// Initialize homing task
 	_device_homed = false;
 
-	_haptic_control_type = HapticControlType::DETACHED;
+	_haptic_control_type = HapticControlType::CLUTCH;
 
 	// Initialize scaling factors (can be set through setScalingFactors())
 	_scaling_factor_pos = 1.0;
@@ -157,8 +157,8 @@ HapticControllerOtuput HapticDeviceController::computeHapticControl(
 	const HapticControllerInput& input, const bool verbose) {
 	HapticControllerOtuput output;
 	switch (_haptic_control_type) {
-		case HapticControlType::DETACHED:
-			output = computeDetachedControl(input);
+		case HapticControlType::CLUTCH:
+			output = computeClutchControl(input);
 			break;
 		case HapticControlType::HOMING:
 			output = computeHomingControl(input);
@@ -200,7 +200,7 @@ void HapticDeviceController::validateOutput(HapticControllerOtuput& output,
 	}
 }
 
-HapticControllerOtuput HapticDeviceController::computeDetachedControl(
+HapticControllerOtuput HapticDeviceController::computeClutchControl(
 	const HapticControllerInput& input) {
 	HapticControllerOtuput output;
 	output.robot_goal_position = _previous_output.robot_goal_position;
@@ -247,9 +247,10 @@ HapticControllerOtuput HapticDeviceController::computeHomingControl(
 
 	if ((input.device_position - _device_home_pose.translation()).norm() <
 			0.001 &&
-		orientation_error.norm() < 0.001 &&
-		input.device_linear_velocity.norm() < 0.001 &&
-		input.device_angular_velocity.norm() < 0.01) {
+		input.device_linear_velocity.norm() < 0.01 &&
+		(!_orientation_teleop_enabled ||
+		 orientation_error.norm() < 0.01 &&
+			 input.device_angular_velocity.norm() < 0.1)) {
 		_device_homed = true;
 	}
 

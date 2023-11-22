@@ -29,8 +29,6 @@ mutex mtx;
 map<int, bool> key_pressed = {
 	{GLFW_KEY_P, false},
 	{GLFW_KEY_L, false},
-	{GLFW_KEY_D, false},
-	{GLFW_KEY_W, false},
 };
 map<int, bool> key_was_pressed = key_pressed;
 

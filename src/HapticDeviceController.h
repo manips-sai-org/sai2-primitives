@@ -23,7 +23,7 @@ namespace Sai2Primitives {
 
 enum HapticControlType {
 	HOMING,
-	DETACHED,
+	CLUTCH,
 	MOTION_MOTION,
 	FORCE_MOTION,
 };
@@ -60,6 +60,8 @@ struct HapticControllerInput {
 		  device_angular_velocity(Vector3d::Zero()),
 		  robot_position(Vector3d::Zero()),
 		  robot_orientation(Matrix3d::Identity()),
+		  robot_linear_velocity(Vector3d::Zero()),
+		  robot_angular_velocity(Vector3d::Zero()),
 		  robot_sensed_force(Vector3d::Zero()),
 		  robot_sensed_moment(Vector3d::Zero()) {}
 };
@@ -150,7 +152,7 @@ public:
 private:
 	void validateOutput(HapticControllerOtuput& output, const bool verbose);
 
-	HapticControllerOtuput computeDetachedControl(
+	HapticControllerOtuput computeClutchControl(
 		const HapticControllerInput& input);
 
 	HapticControllerOtuput computeHomingControl(

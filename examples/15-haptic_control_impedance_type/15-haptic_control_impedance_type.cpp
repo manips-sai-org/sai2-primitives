@@ -29,7 +29,6 @@ mutex mtx;
 map<int, bool> key_pressed = {
 	{GLFW_KEY_P, false},
 	{GLFW_KEY_L, false},
-	{GLFW_KEY_D, false},
 	{GLFW_KEY_W, false},
 };
 map<int, bool> key_was_pressed = key_pressed;
@@ -148,8 +147,6 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 		make_shared<Sai2Primitives::HapticDeviceController>(
 			device_limits, robot->transformInWorld(link_name));
 	haptic_controller->setScalingFactors(3.5);
-	haptic_controller->setReductionFactorForceMoment(
-		0, 0);	// disable direct force feedback
 	haptic_controller->setHapticControlType(
 		Sai2Primitives::HapticControlType::HOMING);
 	haptic_controller->disableOrientationTeleoperation();
@@ -266,25 +263,21 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 		// state machine for button presses
 		if (haptic_controller->getHapticControlType() ==
 				Sai2Primitives::HapticControlType::HOMING &&
-			haptic_controller->getHomed()) {
+			haptic_controller->getHomed() && haptic_button_is_pressed) {
 			haptic_controller->setHapticControlType(
 				Sai2Primitives::HapticControlType::MOTION_MOTION);
-			haptic_controller->setDeviceControlGains(100.0, 25.0);
+			haptic_controller->setDeviceControlGains(200.0, 15.0);
 			cout << "haptic device homed" << endl;
-		} else {
-			if (haptic_button_is_pressed && !haptic_button_was_pressed) {
-				haptic_controller->enableOrientationTeleoperation();
-			} else if (!haptic_button_is_pressed && haptic_button_was_pressed) {
-				haptic_controller->disableOrientationTeleoperation();
-			}
 		}
-		haptic_button_was_pressed = haptic_button_is_pressed;
 
-		if (key_pressed.at(GLFW_KEY_D) && !key_was_pressed.at(GLFW_KEY_D)) {
+		if (haptic_controller->getHapticControlType() ==
+				Sai2Primitives::HapticControlType::MOTION_MOTION &&
+			haptic_button_is_pressed && !haptic_button_was_pressed) {
 			haptic_controller->setHapticControlType(
-				Sai2Primitives::HapticControlType::DETACHED);
-		} else if (!key_pressed.at(GLFW_KEY_D) &&
-				   key_was_pressed.at(GLFW_KEY_D)) {
+				Sai2Primitives::HapticControlType::CLUTCH);
+		} else if (haptic_controller->getHapticControlType() ==
+					   Sai2Primitives::HapticControlType::CLUTCH &&
+				   !haptic_button_is_pressed && haptic_button_was_pressed) {
 			haptic_controller->setHapticControlType(
 				Sai2Primitives::HapticControlType::MOTION_MOTION);
 		} else if (key_pressed.at(GLFW_KEY_P) &&
@@ -319,6 +312,7 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 			}
 		}
 
+		haptic_button_was_pressed = haptic_button_is_pressed;
 		key_was_pressed = key_pressed;
 	}
 
