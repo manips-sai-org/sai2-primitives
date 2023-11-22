@@ -32,6 +32,7 @@ SET(CONTROLLERS_SOURCE
 	${PROJECT_SOURCE_DIR}/src/tasks/MotionForceTask.cpp
 	${PROJECT_SOURCE_DIR}/src/tasks/JointTask.cpp
 	${PROJECT_SOURCE_DIR}/src/HapticDeviceController.cpp
+	${PROJECT_SOURCE_DIR}/src/POPCBilateralTeleoperation.cpp
 	)
 
 # add helper modules

@@ -190,6 +190,18 @@ public:
 
 	const DeviceLimits& getDeviceLimits() const { return _device_limits; }
 
+	const HapticControllerOtuput& getLatestOutput() const {
+		return _latest_output;
+	}
+
+	const HapticControllerInput& getLatestInput() const {
+		return _latest_input;
+	}
+
+	const Matrix3d& getRotationWorldToDeviceBase() const {
+		return _R_world_device;
+	}
+
 	void setHapticControlType(const HapticControlType& haptic_control_type);
 	const HapticControlType& getHapticControlType() const {
 		return _haptic_control_type;
@@ -217,8 +229,24 @@ public:
 	void parametrizeProxyMomentFeedbackSpaceFromRobotForceSpace(
 		const Matrix3d& robot_sigma_moment);
 
+	const Matrix3d& getSigmaProxyForce() const {
+		return _sigma_proxy_force_feedback;
+	}
+	Matrix3d getSigmaDirectForceFeedback() const {
+		return Matrix3d::Identity() - _sigma_proxy_force_feedback;
+	}
+	const Matrix3d& getSigmaProxyMoment() const {
+		return _sigma_proxy_moment_feedback;
+	}
+	Matrix3d getSigmaDirectMomentFeedback() const {
+		return Matrix3d::Identity() - _sigma_proxy_moment_feedback;
+	}
+
 	void setScalingFactors(const double scaling_factor_pos,
 						   const double scaling_factor_ori = 1.0);
+
+	double getScalingFactorPos() const { return _scaling_factor_pos; }
+	double getScalingFactorOri() const { return _scaling_factor_ori; }
 
 	/**
 	 * @brief Set the Reduction Factor for force and moment. The command force
@@ -379,7 +407,10 @@ private:
 	double _moment_deadband;
 
 	// previous output
-	HapticControllerOtuput _previous_output;
+	HapticControllerOtuput _latest_output;
+
+	// latest input
+	HapticControllerInput _latest_input;
 
 	// Haptic guidance gains
 	double _kp_guidance_pos;

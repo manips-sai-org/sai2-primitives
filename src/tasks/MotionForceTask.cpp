@@ -551,6 +551,14 @@ void MotionForceTask::enableInternalOtgJerkLimited(
 	_use_internal_otg_flag = true;
 }
 
+Vector3d MotionForceTask::getPositionError() const {
+	return sigmaPosition() * (_desired_position - _current_position);
+}
+
+Vector3d MotionForceTask::getOrientationError() const {
+	return sigmaOrientation() * _orientation_error;
+}
+
 bool MotionForceTask::goalPositionReached(const double tolerance,
 										  const bool verbose) {
 	double position_error =

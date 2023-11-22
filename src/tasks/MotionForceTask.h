@@ -182,6 +182,11 @@ public:
 		return _desired_angular_acceleration;
 	}
 
+	const VectorXd& getUnitMassForce() const { return _unit_mass_force; }
+
+	Vector3d getPositionError() const;
+	Vector3d getOrientationError() const;
+
 	// Gains for motion controller
 	void setPosControlGains(const PIDGains& gains) {
 		setPosControlGains(gains.kp, gains.kv, gains.ki);

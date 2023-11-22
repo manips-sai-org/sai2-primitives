@@ -90,8 +90,8 @@ HapticDeviceController::HapticDeviceController(
 	  _device_home_pose(device_home_pose) {
 	_reset_robot_offset = false;
 
-	_previous_output.robot_goal_position = _robot_center_pose.translation();
-	_previous_output.robot_goal_orientation = _robot_center_pose.rotation();
+	_latest_output.robot_goal_position = _robot_center_pose.translation();
+	_latest_output.robot_goal_orientation = _robot_center_pose.rotation();
 
 	// Initialize homing task
 	_device_homed = false;
@@ -156,6 +156,7 @@ HapticDeviceController::HapticDeviceController(
 HapticControllerOtuput HapticDeviceController::computeHapticControl(
 	const HapticControllerInput& input, const bool verbose) {
 	HapticControllerOtuput output;
+	_latest_input = input;
 	switch (_haptic_control_type) {
 		case HapticControlType::CLUTCH:
 			output = computeClutchControl(input);
@@ -174,7 +175,7 @@ HapticControllerOtuput HapticDeviceController::computeHapticControl(
 			break;
 	}
 	validateOutput(output, verbose);
-	_previous_output = output;
+	_latest_output = output;
 	return output;
 }
 
@@ -203,8 +204,8 @@ void HapticDeviceController::validateOutput(HapticControllerOtuput& output,
 HapticControllerOtuput HapticDeviceController::computeClutchControl(
 	const HapticControllerInput& input) {
 	HapticControllerOtuput output;
-	output.robot_goal_position = _previous_output.robot_goal_position;
-	output.robot_goal_orientation = _previous_output.robot_goal_orientation;
+	output.robot_goal_position = _latest_output.robot_goal_position;
+	output.robot_goal_orientation = _latest_output.robot_goal_orientation;
 
 	applyWorkspaceVirtualLimitsForceMoment(input, output);
 	applyLineGuidanceForce(output.device_command_force, input, false);
@@ -217,8 +218,8 @@ HapticControllerOtuput HapticDeviceController::computeHomingControl(
 	const HapticControllerInput& input) {
 	_device_homed = false;
 	HapticControllerOtuput output;
-	output.robot_goal_position = _previous_output.robot_goal_position;
-	output.robot_goal_orientation = _previous_output.robot_goal_orientation;
+	output.robot_goal_position = _latest_output.robot_goal_position;
+	output.robot_goal_orientation = _latest_output.robot_goal_orientation;
 
 	if (_kv_haptic_pos > 0) {
 		Vector3d desired_velocity =
@@ -260,8 +261,8 @@ HapticControllerOtuput HapticDeviceController::computeHomingControl(
 HapticControllerOtuput HapticDeviceController::computeMotionMotionControl(
 	const HapticControllerInput& input) {
 	HapticControllerOtuput output;
-	output.robot_goal_position = _previous_output.robot_goal_position;
-	output.robot_goal_orientation = _previous_output.robot_goal_orientation;
+	output.robot_goal_position = _latest_output.robot_goal_position;
+	output.robot_goal_orientation = _latest_output.robot_goal_orientation;
 
 	// position and orientation control
 	motionMotionControlPosition(input, output);
@@ -450,8 +451,8 @@ void HapticDeviceController::motionMotionControlOrientation(
 HapticControllerOtuput HapticDeviceController::computeForceMotionControl(
 	const HapticControllerInput& input) {
 	HapticControllerOtuput output;
-	output.robot_goal_position = _previous_output.robot_goal_position;
-	output.robot_goal_orientation = _previous_output.robot_goal_orientation;
+	output.robot_goal_position = _latest_output.robot_goal_position;
+	output.robot_goal_orientation = _latest_output.robot_goal_orientation;
 
 	// compute force from stiffness/damping field
 	Vector3d device_force =
