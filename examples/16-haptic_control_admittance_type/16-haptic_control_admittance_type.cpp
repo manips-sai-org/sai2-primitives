@@ -24,13 +24,6 @@ const string link_name = "end-effector";
 // mutex for control torques
 mutex mtx;
 
-// haptic plane and line guidance
-const Vector3d plane_normal = Vector3d(0, 0, 1);
-const Vector3d plane_origin = Vector3d(0, 0, 0.15);
-
-const Vector3d line_first_point = Vector3d(0, 0, 0.15);
-const Vector3d line_second_point = Vector3d(0, 0, 0.25);
-
 // map of flags for key presses
 map<int, bool> key_pressed = {
 	{GLFW_KEY_P, false},
@@ -147,7 +140,7 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 		redis_client.getEigen(MAX_STIFFNESS_KEY),
 		redis_client.getEigen(MAX_DAMPING_KEY),
 		redis_client.getEigen(MAX_FORCE_KEY));
-	Affine3d device_home_pose = Affine3d(Translation3d(0, 0, 0.1));
+	Affine3d device_home_pose = Affine3d(Translation3d(0, 0, 0));
 	auto haptic_controller =
 		make_shared<Sai2Primitives::HapticDeviceController>(
 			device_limits, robot->transformInWorld(link_name),
@@ -158,10 +151,6 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 
 	Sai2Primitives::HapticControllerInput haptic_input;
 	Sai2Primitives::HapticControllerOtuput haptic_output;
-	bool haptic_button_was_pressed = false;
-	int haptic_button_is_pressed = 0;
-	redis_client.setInt(SWITCH_PRESSED_KEY, haptic_button_is_pressed);
-	redis_client.setInt(USE_GRIPPER_AS_SWITCH_KEY, 1);
 
 	// setup redis communication
 	redis_client.addToSendGroup(COMMANDED_FORCE_KEY,
@@ -176,8 +165,6 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 								   haptic_input.device_linear_velocity);
 	redis_client.addToReceiveGroup(ANGULAR_VELOCITY_KEY,
 								   haptic_input.device_angular_velocity);
-	redis_client.addToReceiveGroup(SWITCH_PRESSED_KEY,
-								   haptic_button_is_pressed);
 
 	// create a timer
 	Sai2Common::LoopTimer controlTimer(1000.0, 1e6);
@@ -220,42 +207,32 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 		}
 
 		// state machine for button presses
-		if(haptic_input.robot_sensed_force.norm() > 0.1) {
-			haptic_controller->parametrizeProxyForceFeedbackSpace(1, Vector3d::UnitZ());
-		} else {
-			haptic_controller->parametrizeProxyForceFeedbackSpace(0);
-		}
-
 		if (haptic_controller->getHapticControlType() ==
 				Sai2Primitives::HapticControlType::HOMING &&
 			haptic_controller->getHomed()) {
 			haptic_controller->setHapticControlType(
 				Sai2Primitives::HapticControlType::FORCE_MOTION);
-		} else {
-			if (haptic_button_is_pressed && !haptic_button_was_pressed) {
-				haptic_controller->enableOrientationTeleoperation();
-			} else if (!haptic_button_is_pressed && haptic_button_was_pressed) {
-				haptic_controller->disableOrientationTeleoperation();
-			}
 		}
-		haptic_button_was_pressed = haptic_button_is_pressed;
 
 		if (key_pressed.at(GLFW_KEY_D) && !key_was_pressed.at(GLFW_KEY_D)) {
 			haptic_controller->setHapticControlType(
 				Sai2Primitives::HapticControlType::DETACHED);
-		} else if (!key_pressed.at(GLFW_KEY_D) && key_was_pressed.at(GLFW_KEY_D)) {
+		} else if (!key_pressed.at(GLFW_KEY_D) &&
+				   key_was_pressed.at(GLFW_KEY_D)) {
 			haptic_controller->setHapticControlType(
 				Sai2Primitives::HapticControlType::FORCE_MOTION);
-		} else if (key_pressed.at(GLFW_KEY_P) && !key_was_pressed.at(GLFW_KEY_P)) {
-			if(haptic_controller->getPlaneGuidanceEnabled()) {
+		} else if (key_pressed.at(GLFW_KEY_P) &&
+				   !key_was_pressed.at(GLFW_KEY_P)) {
+			if (haptic_controller->getPlaneGuidanceEnabled()) {
 				cout << "disabling plane guidance" << endl;
 				haptic_controller->disablePlaneGuidance();
 			} else {
 				cout << "enabling plane guidance" << endl;
 				haptic_controller->enablePlaneGuidance();
 			}
-		} else if (key_pressed.at(GLFW_KEY_L) && !key_was_pressed.at(GLFW_KEY_L)) {
-			if(haptic_controller->getLineGuidanceEnabled()) {
+		} else if (key_pressed.at(GLFW_KEY_L) &&
+				   !key_was_pressed.at(GLFW_KEY_L)) {
+			if (haptic_controller->getLineGuidanceEnabled()) {
 				cout << "disabling line guidance" << endl;
 				haptic_controller->disableLineGuidance();
 			} else {
@@ -265,7 +242,6 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 		}
 
 		key_was_pressed = key_pressed;
-
 	}
 
 	redis_client.setEigen(COMMANDED_FORCE_KEY, Vector3d::Zero());

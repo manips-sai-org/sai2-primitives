@@ -162,18 +162,25 @@ private:
 										HapticControllerOtuput& output);
 
 	void applyPlaneGuidanceForce(Vector3d& force_to_update,
-	const HapticControllerInput& input, const bool use_device_home_as_origin);
+								 const HapticControllerInput& input,
+								 const bool use_device_home_as_origin);
 
 	void applyLineGuidanceForce(Vector3d& force_to_update,
-	const HapticControllerInput& input, const bool use_device_home_as_origin);
+								const HapticControllerInput& input,
+								const bool use_device_home_as_origin);
 
 	void applyWorkspaceVirtualLimitsForceMoment(
 		const HapticControllerInput& input, HapticControllerOtuput& output);
 
+	double getVariableDampingKvPos(const double device_linvel) const;
+	double getVariableDampingKvOri(const double device_velocity) const;
+
 public:
 	///////////////////////////////////////////////////////////////////////////////////
-	// Parameter setting methods
+	// Parameter setting and getting methods
 	///////////////////////////////////////////////////////////////////////////////////
+
+	const DeviceLimits& getDeviceLimits() const { return _device_limits; }
 
 	void setHapticControlType(const HapticControlType& haptic_control_type);
 	const HapticControlType& getHapticControlType() const {
@@ -288,6 +295,23 @@ public:
 		return _device_workspace_virtual_limits_enabled;
 	}
 
+	void setVariableDampingGainsPos(
+		const vector<double>& velocity_thresholds,
+		const vector<double>& variable_damping_gains);
+
+	void setVariableDampingGainsOri(
+		const vector<double>& velocity_thresholds,
+		const vector<double>& variable_damping_gains);
+
+	void setAdmittanceFactors(const double device_force_to_robot_delta_position,
+							  const double device_moment_to_robot_delta_orientation);
+
+	void setHomingMaxVelocity(const double homing_max_linvel,
+							  const double homing_max_angvel);
+	
+	void setForceDeadbandForceMotionController(const double force_deadband);
+	void setMomentDeadbandForceMotionController(const double force_deadband);
+
 private:
 	// controller states
 	bool _orientation_teleop_enabled;
@@ -331,9 +355,19 @@ private:
 	double _reduction_factor_force;
 	double _reduction_factor_moment;
 
+	// variable damping for motion-motion controller direct force feedback
+	vector<double> _variable_damping_linvel_thresholds;
+	vector<double> _variable_damping_angvel_thresholds;
+	vector<double> _variable_damping_gains_pos;
+	vector<double> _variable_damping_gains_ori;
+
 	// admittance factors for froce-motion controller
 	double _device_force_to_robot_delta_position;
 	double _device_moment_to_robot_delta_orientation;
+
+	// force and moment deadbands for force-motion controller
+	double _force_deadband;
+	double _moment_deadband;
 
 	// previous output
 	HapticControllerOtuput _previous_output;

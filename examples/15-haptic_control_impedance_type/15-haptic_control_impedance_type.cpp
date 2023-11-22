@@ -24,13 +24,6 @@ const string link_name = "end-effector";
 // mutex for control torques
 mutex mtx;
 
-// haptic plane and line guidance
-const Vector3d plane_normal = Vector3d(0, 0, 1);
-const Vector3d plane_origin = Vector3d(0, 0, 0.15);
-
-const Vector3d line_first_point = Vector3d(0, 0, 0.15);
-const Vector3d line_second_point = Vector3d(0, 0, 0.25);
-
 // map of flags for key presses
 map<int, bool> key_pressed = {
 	{GLFW_KEY_P, false},
@@ -62,7 +55,7 @@ int main() {
 	// load simulation world
 	auto sim = make_shared<Sai2Simulation::Sai2Simulation>(world_file);
 	sim->addSimulatedForceSensor(robot_name, link_name, Affine3d::Identity(),
-								 25.0);
+								 10.0);
 	sim->setCoeffFrictionStatic(0.1);
 
 	// load graphics scene
@@ -141,6 +134,7 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 		robot, link_name, compliant_frame);
 	motion_force_task->disableInternalOtg();
 	motion_force_task->enableVelocitySaturation(0.7, M_PI);
+	Vector3d prev_sensed_force = Vector3d::Zero();
 
 	vector<shared_ptr<Sai2Primitives::TemplateTask>> task_list = {
 		motion_force_task};
@@ -152,18 +146,18 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 		redis_client.getEigen(MAX_STIFFNESS_KEY),
 		redis_client.getEigen(MAX_DAMPING_KEY),
 		redis_client.getEigen(MAX_FORCE_KEY));
-	Affine3d device_home_pose = Affine3d(Translation3d(0, 0, 0.1));
+	Affine3d device_home_pose = Affine3d(Translation3d(0, 0, 0));
 	auto haptic_controller =
 		make_shared<Sai2Primitives::HapticDeviceController>(
 			device_limits, robot->transformInWorld(link_name),
 			device_home_pose);
-	haptic_controller->setScalingFactors(2.5);
-	haptic_controller->setReductionFactorForceMoment(0.5, 0.5);
+	haptic_controller->setScalingFactors(3.5);
+	haptic_controller->setReductionFactorForceMoment(0.3, 0.3);
 	haptic_controller->setHapticControlType(
 		Sai2Primitives::HapticControlType::HOMING);
 	haptic_controller->disableOrientationTeleoperation();
-	haptic_controller->enableHapticWorkspaceVirtualLimits(0.07, M_PI / 3);
-	haptic_controller->disableHapticWorkspaceVirtualLimits();
+	haptic_controller->setVariableDampingGainsPos(vector<double>{0.15, 0.30},
+												  vector<double>{0.0, 20.0});
 
 	Sai2Primitives::HapticControllerInput haptic_input;
 	Sai2Primitives::HapticControllerOtuput haptic_output;
@@ -235,17 +229,22 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 		}
 
 		// state machine for button presses
-		if(haptic_input.robot_sensed_force.norm() > 0.1) {
-			haptic_controller->parametrizeProxyForceFeedbackSpace(1, Vector3d::UnitZ());
-		} else {
+		if (haptic_input.robot_sensed_force.norm() >= 0.5 &&
+			prev_sensed_force.norm() < 0.5) {
+			haptic_controller->parametrizeProxyForceFeedbackSpace(
+				1, Vector3d::UnitZ());
+		} else if (haptic_input.robot_sensed_force.norm() < 0.1 &&
+				   prev_sensed_force.norm() >= 0.1) {
 			haptic_controller->parametrizeProxyForceFeedbackSpace(0);
 		}
+		prev_sensed_force = haptic_input.robot_sensed_force;
 
 		if (haptic_controller->getHapticControlType() ==
 				Sai2Primitives::HapticControlType::HOMING &&
 			haptic_controller->getHomed()) {
 			haptic_controller->setHapticControlType(
 				Sai2Primitives::HapticControlType::MOTION_MOTION);
+			haptic_controller->setDeviceControlGains(200.0, 20.0);
 			cout << "haptic device homed" << endl;
 		} else {
 			if (haptic_button_is_pressed && !haptic_button_was_pressed) {
@@ -259,41 +258,48 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 		if (key_pressed.at(GLFW_KEY_D) && !key_was_pressed.at(GLFW_KEY_D)) {
 			haptic_controller->setHapticControlType(
 				Sai2Primitives::HapticControlType::DETACHED);
-		} else if (!key_pressed.at(GLFW_KEY_D) && key_was_pressed.at(GLFW_KEY_D)) {
+		} else if (!key_pressed.at(GLFW_KEY_D) &&
+				   key_was_pressed.at(GLFW_KEY_D)) {
 			haptic_controller->setHapticControlType(
 				Sai2Primitives::HapticControlType::MOTION_MOTION);
-		} else if (key_pressed.at(GLFW_KEY_P) && !key_was_pressed.at(GLFW_KEY_P)) {
-			if(haptic_controller->getPlaneGuidanceEnabled()) {
+		} else if (key_pressed.at(GLFW_KEY_P) &&
+				   !key_was_pressed.at(GLFW_KEY_P)) {
+			if (haptic_controller->getPlaneGuidanceEnabled()) {
 				cout << "disabling plane guidance" << endl;
 				haptic_controller->disablePlaneGuidance();
 			} else {
 				cout << "enabling plane guidance" << endl;
-				haptic_controller->enablePlaneGuidance();
+				haptic_controller->enablePlaneGuidance(
+					haptic_input.device_position, Vector3d::UnitZ());
 			}
-		} else if (key_pressed.at(GLFW_KEY_L) && !key_was_pressed.at(GLFW_KEY_L)) {
-			if(haptic_controller->getLineGuidanceEnabled()) {
+		} else if (key_pressed.at(GLFW_KEY_L) &&
+				   !key_was_pressed.at(GLFW_KEY_L)) {
+			if (haptic_controller->getLineGuidanceEnabled()) {
 				cout << "disabling line guidance" << endl;
 				haptic_controller->disableLineGuidance();
 			} else {
 				cout << "enabling line guidance" << endl;
-				haptic_controller->enableLineGuidance();
+				haptic_controller->enableLineGuidance(
+					haptic_input.device_position, Vector3d::UnitZ());
 			}
-		} else if (key_pressed.at(GLFW_KEY_W) && !key_was_pressed.at(GLFW_KEY_W)) {
-			if(haptic_controller->getHapticWorkspaceVirtualLimitsEnabled()) {
+		} else if (key_pressed.at(GLFW_KEY_W) &&
+				   !key_was_pressed.at(GLFW_KEY_W)) {
+			if (haptic_controller->getHapticWorkspaceVirtualLimitsEnabled()) {
 				cout << "disabling haptic workspace virtual limits" << endl;
 				haptic_controller->disableHapticWorkspaceVirtualLimits();
 			} else {
 				cout << "enabling haptic workspace virtual limits" << endl;
-				haptic_controller->enableHapticWorkspaceVirtualLimits();
+				haptic_controller->enableHapticWorkspaceVirtualLimits(
+					haptic_input.device_position.norm(), M_PI / 3);
 			}
 		}
 
 		key_was_pressed = key_pressed;
-
 	}
 
 	redis_client.setEigen(COMMANDED_FORCE_KEY, Vector3d::Zero());
 	redis_client.setEigen(COMMANDED_TORQUE_KEY, Vector3d::Zero());
+	redis_client.setInt(USE_GRIPPER_AS_SWITCH_KEY, 0);
 
 	cout << "control timer stats:" << endl;
 	controlTimer.printInfoPostRun();
