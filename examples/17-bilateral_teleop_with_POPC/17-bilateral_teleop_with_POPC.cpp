@@ -226,7 +226,6 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 		// compute POPC
 		auto POPC_force_moment = POPC_teleop->computeAdditionalHapticDampingForce();
 		haptic_output.device_command_force += POPC_force_moment.first;
-		haptic_output.device_command_moment += POPC_force_moment.second;
 
 		redis_client.sendAllFromGroup();
 		{

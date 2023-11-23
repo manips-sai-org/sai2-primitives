@@ -29,6 +29,7 @@ mutex mtx;
 map<int, bool> key_pressed = {
 	{GLFW_KEY_P, false},
 	{GLFW_KEY_L, false},
+	{GLFW_KEY_O, false},
 };
 map<int, bool> key_was_pressed = key_pressed;
 
@@ -234,6 +235,15 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 			} else {
 				cout << "enabling line guidance" << endl;
 				haptic_controller->enableLineGuidance();
+			}
+		}  else if (key_pressed.at(GLFW_KEY_O) &&
+				   !key_was_pressed.at(GLFW_KEY_O)) {
+			if (haptic_controller->getEnableOrientationTeleoperation()) {
+				cout << "disabling orientation teleoperation" << endl;
+				haptic_controller->disableOrientationTeleoperation();
+			} else {
+				cout << "enabling orientation teleoperation" << endl;
+				haptic_controller->enableOrientationTeleoperation();
 			}
 		}
 
