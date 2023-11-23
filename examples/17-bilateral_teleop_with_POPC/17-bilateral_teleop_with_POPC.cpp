@@ -49,6 +49,25 @@ int main() {
 	signal(SIGTERM, &sighandler);
 	signal(SIGINT, &sighandler);
 
+	cout
+		<< "exmaple of a motion-motion controller to control a simulated robot "
+		   "with a haptic device, using direct force feedback with POPC "
+		   "bilateral teleoperation to stabilize the contact force. The "
+		   "controller will first bring the haptic device to its home pose and "
+		   "then a press of the gripper or button is required to start "
+		   "cotnrolling the robot."
+		<< endl;
+	cout << "Provided options:" << endl;
+	cout << "1. press the device gripper/button to clutch the device (move the "
+			"device without moving the robot) and release to get back the "
+			"control of the robot."
+		 << endl;
+	cout << "2. Press 'p' to enable/disable plane guidance" << endl;
+	cout << "3. Press 'l' to enable/disable line guidance" << endl;
+	cout << "4. Press 'w' to enable/disable haptic workspace virtual limits"
+		 << endl;
+	cout << "5. Press 'o' to enable/disable orientation teleoperation" << endl;
+
 	// load simulation world
 	auto sim = make_shared<Sai2Simulation::Sai2Simulation>(world_file);
 	sim->addSimulatedForceSensor(robot_name, link_name, Affine3d::Identity(),
@@ -149,7 +168,8 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 			device_limits, robot->transformInWorld(link_name));
 	haptic_controller->setScalingFactors(3.5);
 	haptic_controller->setReductionFactorForce(0.7);
-	haptic_controller->setVariableDampingGainsPos(vector<double>{0.25, 0.35}, vector<double>{0, 20});
+	haptic_controller->setVariableDampingGainsPos(vector<double>{0.25, 0.35},
+												  vector<double>{0, 20});
 	haptic_controller->setHapticControlType(
 		Sai2Primitives::HapticControlType::HOMING);
 	haptic_controller->disableOrientationTeleop();
@@ -224,7 +244,8 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 			haptic_output.robot_goal_orientation);
 
 		// compute POPC
-		auto POPC_force_moment = POPC_teleop->computeAdditionalHapticDampingForce();
+		auto POPC_force_moment =
+			POPC_teleop->computeAdditionalHapticDampingForce();
 		haptic_output.device_command_force += POPC_force_moment.first;
 
 		redis_client.sendAllFromGroup();

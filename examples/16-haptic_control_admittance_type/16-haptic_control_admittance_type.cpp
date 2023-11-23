@@ -52,6 +52,16 @@ int main() {
 	signal(SIGTERM, &sighandler);
 	signal(SIGINT, &sighandler);
 
+	cout << "exmaple of a force-motion controller to control a simulated robot "
+			"with a haptic device.. The controller will first bring the haptic "
+			"device to its home pose and then switch automatically to "
+			"force-motion control"
+		 << endl;
+	cout << "Provided options:" << endl;
+	cout << "1. Press 'p' to enable/disable plane guidance" << endl;
+	cout << "2. Press 'l' to enable/disable line guidance" << endl;
+	cout << "3. Press 'o' to enable/disable orientation teleoperation" << endl;
+
 	// load simulation world
 	auto sim = make_shared<Sai2Simulation::Sai2Simulation>(world_file);
 
@@ -236,7 +246,7 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 				cout << "enabling line guidance" << endl;
 				haptic_controller->enableLineGuidance();
 			}
-		}  else if (key_pressed.at(GLFW_KEY_O) &&
+		} else if (key_pressed.at(GLFW_KEY_O) &&
 				   !key_was_pressed.at(GLFW_KEY_O)) {
 			if (haptic_controller->getOrientationTeleopEnabled()) {
 				cout << "disabling orientation teleoperation" << endl;
