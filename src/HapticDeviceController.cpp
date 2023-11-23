@@ -345,7 +345,7 @@ void HapticDeviceController::motionMotionControlPosition(
 	// add damping to the direct force feedback
 	if (haptic_force_direct_feedback.norm() > 1e-2) {
 		haptic_force_direct_feedback -=
-			getVariableDampingKvPos(input.device_linear_velocity.norm()) *
+			computeKvPosVariableDamping(input.device_linear_velocity.norm()) *
 			input.device_linear_velocity;
 	}
 
@@ -416,7 +416,7 @@ void HapticDeviceController::motionMotionControlOrientation(
 	// add damping to the direct force feedback
 	if (haptic_moment_direct_feedback.norm() > 1e-2) {
 		haptic_moment_direct_feedback -=
-			getVariableDampingKvOri(input.device_angular_velocity.norm()) *
+			computeKvOriVariableDamping(input.device_angular_velocity.norm()) *
 			input.device_angular_velocity;
 	}
 
@@ -618,7 +618,7 @@ void HapticDeviceController::applyWorkspaceVirtualLimitsForceMoment(
 	}
 }
 
-double HapticDeviceController::getVariableDampingKvPos(
+double HapticDeviceController::computeKvPosVariableDamping(
 	const double device_velocity) const {
 	if (_variable_damping_linvel_thresholds.empty()) {
 		return 0;
@@ -643,7 +643,7 @@ double HapticDeviceController::getVariableDampingKvPos(
 	return _variable_damping_gains_pos.back();
 }
 
-double HapticDeviceController::getVariableDampingKvOri(
+double HapticDeviceController::computeKvOriVariableDamping(
 	const double device_velocity) const {
 	if (_variable_damping_angvel_thresholds.empty()) {
 		return 0;
@@ -691,7 +691,7 @@ void HapticDeviceController::setHapticControlType(
 	_haptic_control_type = haptic_control_type;
 }
 
-void HapticDeviceController::enableOrientationTeleoperation() {
+void HapticDeviceController::enableOrientationTeleop() {
 	_orientation_teleop_enabled = true;
 	_reset_robot_angular_offset = true;
 }

@@ -70,7 +70,7 @@ POPCBilateralTeleoperation::computeAdditionalHapticDampingForce() {
 	_latest_haptic_controller_type = _haptic_controller->getHapticControlType();
 
 	damping_force_and_moment.first = computePOPCForce();
-	if (_haptic_controller->getEnableOrientationTeleoperation()) {
+	if (_haptic_controller->getOrientationTeleopEnabled()) {
 		damping_force_and_moment.second = computePOPCTorque();
 	}
 	return damping_force_and_moment;

@@ -96,16 +96,21 @@ public:
 	//// Constructor, Destructor and Initialization of the haptic controllers
 	////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	/**
+	 * @brief Construct a new Haptic Device Controller object
+	 *
+	 * @param device_limits limits for stiffness, damping and force/torque for
+	 * translation, rotation and gripper
+	 * @param robot_initial_pose initial pose of the robot in the world frame
+	 * @param device_home_pose home pose of the device in device base frame
+	 * @param device_base_rotation_in_world rotation between world frame and
+	 * device base frame
+	 */
 	HapticDeviceController(
 		const DeviceLimits& device_limits, const Affine3d& robot_initial_pose,
 		const Affine3d& device_home_pose = Affine3d::Identity(),
 		const Matrix3d& device_base_rotation_in_world = Matrix3d::Identity());
 
-	/**
-	 * @brief Detructor  This destructor deletes the pointers, stop the haptic
-	 * controller, and close the haptic device.
-	 *
-	 */
 	~HapticDeviceController() = default;
 
 	// disallow copy, assign and default constructors
@@ -150,38 +155,121 @@ public:
 		const HapticControllerInput& input, const bool verbose = false);
 
 private:
+	/**
+	 * @brief Validates that the output command force and torque are within the
+	 * device limits, and saturates those if needed
+	 *
+	 * @param output the output to validate and modify if needed
+	 * @param verbose if true, a warning message will be printed when saturation
+	 * occurs
+	 */
 	void validateOutput(HapticControllerOtuput& output, const bool verbose);
 
+	/**
+	 * @brief Computes the control for the clutch control mode
+	 *
+	 * @param input
+	 * @return HapticControllerOtuput
+	 */
 	HapticControllerOtuput computeClutchControl(
 		const HapticControllerInput& input);
 
+	/**
+	 * @brief Computes the control for the homing control mode
+	 *
+	 * @param input
+	 * @return HapticControllerOtuput
+	 */
 	HapticControllerOtuput computeHomingControl(
 		const HapticControllerInput& input);
 
+	/**
+	 * @brief Computes the control for the motion-motion control mode
+	 *
+	 * @param input
+	 * @return HapticControllerOtuput
+	 */
 	HapticControllerOtuput computeMotionMotionControl(
 		const HapticControllerInput& input);
 
+	/**
+	 * @brief Computes the control for the force-motion control mode
+	 *
+	 * @param input
+	 * @return HapticControllerOtuput
+	 */
 	HapticControllerOtuput computeForceMotionControl(
 		const HapticControllerInput& input);
 
+	/**
+	 * @brief Computes the position part of the motion-motion control and
+	 * populates the output
+	 *
+	 * @param input
+	 * @param output
+	 */
 	void motionMotionControlPosition(const HapticControllerInput& input,
 									 HapticControllerOtuput& output);
+
+	/**
+	 * @brief Computes the orientation part of the motion-motion control and
+	 * populates the output
+	 *
+	 * @param input
+	 * @param output
+	 */
 	void motionMotionControlOrientation(const HapticControllerInput& input,
 										HapticControllerOtuput& output);
 
+	/**
+	 * @brief Apply the guidance force in case plane guidance is enabled
+	 *
+	 * @param force_to_update the force to update with plane guidance
+	 * @param input the hapticControlInput for the current control loop
+	 * @param use_device_home_as_origin whether to use the origin of the plane
+	 * defined by the user or to use the device home pose as plane origin
+	 */
 	void applyPlaneGuidanceForce(Vector3d& force_to_update,
 								 const HapticControllerInput& input,
 								 const bool use_device_home_as_origin);
 
+	/**
+	 * @brief Apply the guidance force in case line guidance is enabled
+	 *
+	 * @param force_to_update the force to update with line guidance
+	 * @param input the hapticControlInput for the current control loop
+	 * @param use_device_home_as_origin whether to use the origin of the line
+	 * defined by the user or or use the device home pose as line origin
+	 */
 	void applyLineGuidanceForce(Vector3d& force_to_update,
 								const HapticControllerInput& input,
 								const bool use_device_home_as_origin);
 
+	/**
+	 * @brief Apply the haptic device virtual workspace limits in case they are
+	 * enabled by the user
+	 *
+	 * @param input the hapticControlInput for the current control loop
+	 * @param output the hapticControlOutput to modify
+	 */
 	void applyWorkspaceVirtualLimitsForceMoment(
 		const HapticControllerInput& input, HapticControllerOtuput& output);
 
-	double getVariableDampingKvPos(const double device_linvel) const;
-	double getVariableDampingKvOri(const double device_velocity) const;
+	/**
+	 * @brief Compute the kv for variable damping in position
+	 *
+	 * @param device_linvel linear velocity of the device
+	 * @return double damping
+	 */
+	double computeKvPosVariableDamping(const double device_linvel) const;
+
+	/**
+	 * @brief Compute the kv for variable damping in orientation
+	 *
+	 * @param device_velocity angular velocity of the device
+	 * @return double damping
+	 */
+	double computeKvOriVariableDamping(const double device_velocity) const;
 
 public:
 	///////////////////////////////////////////////////////////////////////////////////
@@ -190,10 +278,22 @@ public:
 
 	const DeviceLimits& getDeviceLimits() const { return _device_limits; }
 
+	/**
+	 * @brief Return the latest computed output by the computeHapticControl
+	 * function
+	 *
+	 * @return const HapticControllerOtuput&
+	 */
 	const HapticControllerOtuput& getLatestOutput() const {
 		return _latest_output;
 	}
 
+	/**
+	 * @brief Returns the latest provided input to the computeHapticControl
+	 * function
+	 *
+	 * @return const HapticControllerInput&
+	 */
 	const HapticControllerInput& getLatestInput() const {
 		return _latest_input;
 	}
@@ -207,41 +307,129 @@ public:
 		return _haptic_control_type;
 	}
 
-	void enableOrientationTeleoperation();
-	void disableOrientationTeleoperation() {
-		_orientation_teleop_enabled = false;
-	}
-	bool getEnableOrientationTeleoperation() const {
+	void enableOrientationTeleop();
+	void disableOrientationTeleop() { _orientation_teleop_enabled = false; }
+	bool getOrientationTeleopEnabled() const {
 		return _orientation_teleop_enabled;
 	}
 
 	bool getHomed() const { return _device_homed; }
 
+	/**
+	 * @brief sets the space in which the force feedback is computed by the
+	 * proxy method instead of using direct force feedback (used in
+	 * motion-motion control only). If the proxy feedback space dimension is:
+	 * - 0: the direct force feedback is used in all directions
+	 * - 1: the force feedback is computed by the proxy method in the direction
+	 * of the provided axis, and with direct force feedback in the orthogonal
+	 * plane
+	 * - 2: the force feedback is computed by using direct feedback in the
+	 * direction of the provided axis, and with the proxy method in the
+	 * orthogonal plane
+	 * - 3: the force feedback is computed by the proxy method in all directions
+	 *
+	 * @param proxy_feedback_space_dimension dimenson of the proxy feedback
+	 * space (between 0 and 3)
+	 * @param proxy_or_direct_feedback_axis provided direction (in device base
+	 * frame)
+	 */
 	void parametrizeProxyForceFeedbackSpace(
 		const int proxy_feedback_space_dimension,
 		const Vector3d& proxy_or_direct_feedback_axis = Vector3d::Zero());
+
+	/**
+	 * @brief sets the space in which the moment feedback is computed by the
+	 * proxy method to match the space defined by the provided robot sigma
+	 * matrix.
+	 *
+	 * @param robot_sigma_force robot sigma matrix (in robot world frame)
+	 */
 	void parametrizeProxyForceFeedbackSpaceFromRobotForceSpace(
 		const Matrix3d& robot_sigma_force);
 
+	/**
+	 * @brief sets the space in which the moment feedback is computed by the
+	 * proxy method instead of using direct moment feedback (used in
+	 * motion-motion control only). If the proxy feedback space dimension is:
+	 * - 0: the direct moment feedback is used in all directions
+	 * - 1: the moment feedback is computed by the proxy method in the direction
+	 * of the provided axis, and with direct moment feedback in the orthogonal
+	 * plane
+	 * - 2: the moment feedback is computed by using direct feedback in the
+	 * direction of the provided axis, and with the proxy method feedback in the
+	 * orthogonal plane
+	 * - 3: the moment feedback is computed by the proxy method in all
+	 * directions
+	 *
+	 * @param proxy_feedback_space_dimension dimenson of the proxy feedback
+	 * space (between 0 and 3)
+	 * @param proxy_or_direct_feedback_axis provided direction (in device base
+	 * frame)
+	 */
 	void parametrizeProxyMomentFeedbackSpace(
 		const int proxy_feedback_space_dimension,
 		const Vector3d& proxy_or_direct_feedback_axis = Vector3d::Zero());
+
+	/**
+	 * @brief sets the space in which the moment feedback is computed by the
+	 * proxy method to match the space defined by the provided robot sigma
+	 * matrix.
+	 *
+	 * @param robot_sigma_moment robot sigma matrix (in robot world frame)
+	 */
 	void parametrizeProxyMomentFeedbackSpaceFromRobotForceSpace(
 		const Matrix3d& robot_sigma_moment);
 
+	/**
+	 * @brief Returns the sigma matrix that describes the space of proxy force
+	 * feedback (in device base frame)
+	 *
+	 * @return const Matrix3d&
+	 */
 	const Matrix3d& getSigmaProxyForce() const {
 		return _sigma_proxy_force_feedback;
 	}
+
+	/**
+	 * @brief Returns the sigma matrix that describes the space of direct force
+	 * feedback (in device base frame)
+	 *
+	 * @return Matrix3d
+	 */
 	Matrix3d getSigmaDirectForceFeedback() const {
 		return Matrix3d::Identity() - _sigma_proxy_force_feedback;
 	}
+
+	/**
+	 * @brief Returns the sigma matrix that describes the space of proxy moment
+	 * feedback (in device base frame)
+	 *
+	 * @return const Matrix3d&
+	 */
 	const Matrix3d& getSigmaProxyMoment() const {
 		return _sigma_proxy_moment_feedback;
 	}
+
+	/**
+	 * @brief Returns the sigma matrix that describes the space of direct moment
+	 * feedback (in device base frame)
+	 *
+	 * @return Matrix3d
+	 */
 	Matrix3d getSigmaDirectMomentFeedback() const {
 		return Matrix3d::Identity() - _sigma_proxy_moment_feedback;
 	}
 
+	/**
+	 * @brief Sets the scaling factors for position and orientation (used in
+	 * motion-motion control only). The motion of the robot is multiplied by the
+	 * scaling factor compared to the motion of the haptic device, so a scaling
+	 * factor higher than 1 corresponds to a robot moving more than the haptic
+	 * device.)
+	 *
+	 * @param scaling_factor_pos
+	 * @param scaling_factor_ori
+	 */
 	void setScalingFactors(const double scaling_factor_pos,
 						   const double scaling_factor_ori = 1.0);
 
@@ -250,7 +438,8 @@ public:
 
 	/**
 	 * @brief Set the Reduction Factor for force. The command force
-	 * to the haptic device is reduced by this factors
+	 * to the haptic device (from direct force feedback) is reduced by this
+	 * factors
 	 *
 	 * @param reduction_factor_force
 	 */
@@ -258,7 +447,8 @@ public:
 
 	/**
 	 * @brief Set the Reduction Factor for force. The command force
-	 * to the haptic device is reduced by this factors
+	 * to the haptic device (from direct moment feedback) is reduced by this
+	 * factors
 	 *
 	 * @param reduction_factor_moment
 	 */
@@ -269,7 +459,7 @@ public:
 	 * - The homing controller
 	 * - The feedback from proxy in the motion-motion controller and worlspace
 	 * extension
-	 * - The stiffness and damping of the force-motion cotnroller
+	 * - The stiffness and damping of the force-motion controller
 	 * - The proxy stiffness and damping in the hybrid controller
 	 *
 	 * @param kp_pos
@@ -297,16 +487,41 @@ public:
 								const double kp_guidance_ori,
 								const double kv_guidance_ori);
 
+	/**
+	 * @brief Enables the plane guidance with the provided plane
+	 *
+	 * @param plane_origin_point in device base frame
+	 * @param plane_normal_direction in device base frame
+	 */
 	void enablePlaneGuidance(const Vector3d plane_origin_point,
 							 const Vector3d plane_normal_direction);
+
+	/**
+	 * @brief enables the plane guidance with the plane in memory (either the
+	 * last one defined by the user, or the default one being the X-Y plane)
+	 *
+	 */
 	void enablePlaneGuidance() {
 		enablePlaneGuidance(_plane_origin_point, _plane_normal_direction);
 	}
+
 	void disablePlaneGuidance() { _plane_guidance_enabled = false; }
 	bool getPlaneGuidanceEnabled() const { return _plane_guidance_enabled; }
 
+	/**
+	 * @brief enables the line guidance with the provided line
+	 *
+	 * @param line_origin_point in device base frame
+	 * @param line_direction in device base frame
+	 */
 	void enableLineGuidance(const Vector3d line_origin_point,
 							const Vector3d line_direction);
+
+	/**
+	 * @brief enables the line guidance with the line in memory (either the last
+	 * one defined by the user, or the default one being the Z axis)
+	 *
+	 */
 	void enableLineGuidance() {
 		enableLineGuidance(_line_origin_point, _line_direction);
 	}
@@ -327,6 +542,13 @@ public:
 	void enableHapticWorkspaceVirtualLimits(
 		double device_workspace_radius_limit,
 		double device_workspace_angle_limit);
+
+	/**
+	 * @brief enables the workspace virtual limits with the parameters in memory
+	 * (either the last one defined by the user, or the default one being  a
+	 * radius of 0.1 and an angle of PI/3)
+	 *
+	 */
 	void enableHapticWorkspaceVirtualLimits() {
 		_device_workspace_virtual_limits_enabled = true;
 	}
@@ -345,14 +567,42 @@ public:
 		const vector<double>& velocity_thresholds,
 		const vector<double>& variable_damping_gains);
 
+	/**
+	 * @brief Set the conversion factors from force to position/orientation
+	 * difference for the force-motion control type. The defaults are 3e-5 for
+	 * position and PI/2000 for orientation.
+	 *
+	 * @param device_force_to_robot_delta_position
+	 * @param device_moment_to_robot_delta_orientation
+	 */
 	void setAdmittanceFactors(
 		const double device_force_to_robot_delta_position,
 		const double device_moment_to_robot_delta_orientation);
 
+	/**
+	 * @brief Set the Homing Max Velocity for the homing task. The default is
+	 * 0.15 m/s for the position and PI rad/s for the orientation
+	 *
+	 * @param homing_max_linvel
+	 * @param homing_max_angvel
+	 */
 	void setHomingMaxVelocity(const double homing_max_linvel,
 							  const double homing_max_angvel);
 
+	/**
+	 * @brief Set the Force Deadband for force-motion controller. This is the
+	 * minimum force required to start making the robot position change. the default is 0.
+	 *
+	 * @param force_deadband
+	 */
 	void setForceDeadbandForceMotionController(const double force_deadband);
+
+	/**
+	 * @brief Set the Moment Deadband for force-motion controller. This is the
+	 * minimum moment required to start making the robot orientation change. the default is 0.
+	 *
+	 * @param force_deadband
+	 */
 	void setMomentDeadbandForceMotionController(const double force_deadband);
 
 private:

@@ -152,7 +152,7 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 	haptic_controller->setVariableDampingGainsPos(vector<double>{0.25, 0.35}, vector<double>{0, 20});
 	haptic_controller->setHapticControlType(
 		Sai2Primitives::HapticControlType::HOMING);
-	haptic_controller->disableOrientationTeleoperation();
+	haptic_controller->disableOrientationTeleop();
 
 	Sai2Primitives::HapticControllerInput haptic_input;
 	Sai2Primitives::HapticControllerOtuput haptic_output;
@@ -285,12 +285,12 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 			}
 		} else if (key_pressed.at(GLFW_KEY_O) &&
 				   !key_was_pressed.at(GLFW_KEY_O)) {
-			if (haptic_controller->getEnableOrientationTeleoperation()) {
+			if (haptic_controller->getOrientationTeleopEnabled()) {
 				cout << "disabling orientation teleoperation" << endl;
-				haptic_controller->disableOrientationTeleoperation();
+				haptic_controller->disableOrientationTeleop();
 			} else {
 				cout << "enabling orientation teleoperation" << endl;
-				haptic_controller->enableOrientationTeleoperation();
+				haptic_controller->enableOrientationTeleop();
 			}
 		}
 
