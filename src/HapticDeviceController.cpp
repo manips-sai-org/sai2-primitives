@@ -88,7 +88,8 @@ HapticDeviceController::HapticDeviceController(
 	  _robot_center_pose(robot_initial_pose),
 	  _R_world_device(device_base_rotation_in_world),
 	  _device_home_pose(device_home_pose) {
-	_reset_robot_offset = false;
+	_reset_robot_linear_offset = false;
+	_reset_robot_angular_offset = false;
 
 	_latest_output.robot_goal_position = _robot_center_pose.translation();
 	_latest_output.robot_goal_orientation = _robot_center_pose.rotation();
@@ -268,8 +269,9 @@ HapticControllerOtuput HapticDeviceController::computeMotionMotionControl(
 	motionMotionControlPosition(input, output);
 	motionMotionControlOrientation(input, output);
 
-	// consume reset robot offset
-	_reset_robot_offset = false;
+	// consume reset robot offsets
+	_reset_robot_linear_offset = false;
+	_reset_robot_angular_offset = false;
 
 	// Apply haptic guidances
 	applyWorkspaceVirtualLimitsForceMoment(input, output);
@@ -286,7 +288,7 @@ void HapticDeviceController::motionMotionControlPosition(
 		input.device_position -
 		_device_home_pose.translation();  // in device base frame
 
-	if (_reset_robot_offset) {
+	if (_reset_robot_linear_offset) {
 		_robot_center_pose.translation() =
 			input.robot_position - _scaling_factor_pos * _R_world_device *
 									   device_home_to_current_position;
@@ -389,7 +391,7 @@ void HapticDeviceController::motionMotionControlOrientation(
 			scaled_angle_limit;
 	}
 
-	if (_reset_robot_offset) {
+	if (_reset_robot_angular_offset) {
 		_robot_center_pose.linear() =
 			_R_world_device *
 			scaled_device_home_to_current_orientation_aa.toRotationMatrix()
@@ -676,7 +678,8 @@ void HapticDeviceController::setHapticControlType(
 		return;
 	}
 	_device_homed = false;
-	_reset_robot_offset = true;
+	_reset_robot_linear_offset = true;
+	_reset_robot_angular_offset = true;
 	if (haptic_control_type == HapticControlType::FORCE_MOTION &&
 		_haptic_control_type != HapticControlType::HOMING) {
 		cout << "warning: force motion control can only be set from homing "
@@ -690,7 +693,7 @@ void HapticDeviceController::setHapticControlType(
 
 void HapticDeviceController::enableOrientationTeleoperation() {
 	_orientation_teleop_enabled = true;
-	_reset_robot_offset = true;
+	_reset_robot_angular_offset = true;
 }
 
 void HapticDeviceController::parametrizeProxyForceFeedbackSpace(
@@ -826,14 +829,24 @@ void HapticDeviceController::setScalingFactors(
 	_scaling_factor_ori = scaling_factor_ori;
 }
 
-void HapticDeviceController::setReductionFactorForceMoment(
-	const double reduction_factor_force, const double reduction_factor_moment) {
-	if (reduction_factor_force < 0 || reduction_factor_moment < 0 ||
-		reduction_factor_force > 1 || reduction_factor_moment > 1) {
+void HapticDeviceController::setReductionFactorForce(
+	const double reduction_factor_force) {
+	if (reduction_factor_force < 0 || reduction_factor_force > 1) {
 		throw std::runtime_error(
 			"Reduction factors must be between 0 and 1 in "
 			"HapticDeviceController::setReductionFactorForceMoment");
 	}
+	_reduction_factor_force = reduction_factor_force;
+}
+
+void HapticDeviceController::setReductionFactorMoment(
+	const double reduction_factor_moment) {
+	if (reduction_factor_moment < 0 || reduction_factor_moment > 1) {
+		throw std::runtime_error(
+			"Reduction factors must be between 0 and 1 in "
+			"HapticDeviceController::setReductionFactorForceMoment");
+	}
+	_reduction_factor_moment = reduction_factor_moment;
 }
 
 void HapticDeviceController::setDeviceControlGains(const double kp_pos,

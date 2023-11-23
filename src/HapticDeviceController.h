@@ -249,14 +249,20 @@ public:
 	double getScalingFactorOri() const { return _scaling_factor_ori; }
 
 	/**
-	 * @brief Set the Reduction Factor for force and moment. The command force
-	 * and moments to the haptic device are reduced by these factors
+	 * @brief Set the Reduction Factor for force. The command force
+	 * to the haptic device is reduced by this factors
 	 *
 	 * @param reduction_factor_force
+	 */
+	void setReductionFactorForce(const double reduction_factor_force);
+
+	/**
+	 * @brief Set the Reduction Factor for force. The command force
+	 * to the haptic device is reduced by this factors
+	 *
 	 * @param reduction_factor_moment
 	 */
-	void setReductionFactorForceMoment(const double reduction_factor_force,
-									   const double reduction_factor_moment);
+	void setReductionFactorMoment(const double reduction_factor_moment);
 
 	/**
 	 * @brief Set the Gains used for all the device control types:
@@ -370,7 +376,8 @@ private:
 
 	// Workspace center of the controlled robot in the robot world frame
 	Affine3d _robot_center_pose;
-	bool _reset_robot_offset;
+	bool _reset_robot_linear_offset;
+	bool _reset_robot_angular_offset;
 
 	// proxy feedback space selection matrices
 	Matrix3d _sigma_proxy_force_feedback;

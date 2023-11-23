@@ -52,7 +52,7 @@ int main() {
 	// load simulation world
 	auto sim = make_shared<Sai2Simulation::Sai2Simulation>(world_file);
 	sim->addSimulatedForceSensor(robot_name, link_name, Affine3d::Identity(),
-								 10.0);
+								 55.0);
 	sim->setCoeffFrictionStatic(0.0);
 
 	// load graphics scene
@@ -130,8 +130,8 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 	auto motion_force_task = make_shared<Sai2Primitives::MotionForceTask>(
 		robot, link_name, compliant_frame);
 	motion_force_task->disableInternalOtg();
-	motion_force_task->enableVelocitySaturation(0.7, M_PI);
-	motion_force_task->setOriControlGains(400.0, 40.0);
+	motion_force_task->enableVelocitySaturation(0.9, M_PI);
+	motion_force_task->setOriControlGains(200.0, 25.0);
 	Vector3d prev_sensed_force = Vector3d::Zero();
 
 	vector<shared_ptr<Sai2Primitives::TemplateTask>> task_list = {
@@ -148,10 +148,11 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 		make_shared<Sai2Primitives::HapticDeviceController>(
 			device_limits, robot->transformInWorld(link_name));
 	haptic_controller->setScalingFactors(3.5);
+	haptic_controller->setReductionFactorForce(0.7);
+	haptic_controller->setVariableDampingGainsPos(vector<double>{0.25, 0.35}, vector<double>{0, 20});
 	haptic_controller->setHapticControlType(
 		Sai2Primitives::HapticControlType::HOMING);
 	haptic_controller->disableOrientationTeleoperation();
-	Vector3i directions_of_proxy_feedback = Vector3i::Zero();
 
 	Sai2Primitives::HapticControllerInput haptic_input;
 	Sai2Primitives::HapticControllerOtuput haptic_output;
@@ -160,6 +161,10 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 	redis_client.setInt(createRedisKey(SWITCH_PRESSED_KEY_SUFFIX, 0),
 						haptic_button_is_pressed);
 	redis_client.setInt(createRedisKey(USE_GRIPPER_AS_SWITCH_KEY_SUFFIX, 0), 1);
+
+	// create bilateral teleop POPC
+	auto POPC_teleop = make_shared<Sai2Primitives::POPCBilateralTeleoperation>(
+		motion_force_task, haptic_controller, 0.001);
 
 	// setup redis communication
 	redis_client.addToSendGroup(createRedisKey(COMMANDED_FORCE_KEY_SUFFIX, 0),
@@ -204,12 +209,10 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 			robot->linearVelocityInWorld(link_name);
 		haptic_input.robot_angular_velocity =
 			robot->angularVelocityInWorld(link_name);
-		haptic_input.robot_sensed_force = Vector3d::Zero();
-		haptic_input.robot_sensed_moment = Vector3d::Zero();
+		haptic_input.robot_sensed_force = motion_force_task->getSensedForce();
+		haptic_input.robot_sensed_moment = motion_force_task->getSensedMoment();
 
 		haptic_output = haptic_controller->computeHapticControl(haptic_input);
-
-		redis_client.sendAllFromGroup();
 
 		// compute robot control
 		motion_force_task->updateSensedForceAndMoment(
@@ -220,45 +223,15 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 		motion_force_task->setDesiredOrientation(
 			haptic_output.robot_goal_orientation);
 
+		// compute POPC
+		auto POPC_force_moment = POPC_teleop->computeAdditionalHapticDampingForce();
+		haptic_output.device_command_force += POPC_force_moment.first;
+		haptic_output.device_command_moment += POPC_force_moment.second;
+
+		redis_client.sendAllFromGroup();
 		{
 			lock_guard<mutex> lock(mtx);
 			robot_control_torques = robot_controller->computeControlTorques();
-		}
-
-		// set feedback from proxy
-		Vector3d sensed_force_world_frame =
-			sim->getSensedForce(robot_name, link_name, false);
-		for (int i = 0; i < 3; ++i) {
-			if (fabs(sensed_force_world_frame(i)) >= 0.5 &&
-				fabs(prev_sensed_force(i)) < 0.5) {
-				directions_of_proxy_feedback(i) = 1;
-			} else if (fabs(sensed_force_world_frame(i)) <= 0.1 &&
-					   fabs(prev_sensed_force(i)) > 0.1) {
-				directions_of_proxy_feedback(i) = 0;
-			}
-		}
-		prev_sensed_force = sensed_force_world_frame;
-
-		int dim_proxy_space = directions_of_proxy_feedback.sum();
-		switch (dim_proxy_space) {
-			case 0:
-				haptic_controller->parametrizeProxyForceFeedbackSpace(0);
-				break;
-			case 1:
-				haptic_controller->parametrizeProxyForceFeedbackSpace(
-					1, directions_of_proxy_feedback.cast<double>());
-				break;
-			case 2:
-				haptic_controller->parametrizeProxyForceFeedbackSpace(
-					2, Vector3d::Ones() -
-						   directions_of_proxy_feedback.cast<double>());
-				break;
-			case 3:
-				haptic_controller->parametrizeProxyForceFeedbackSpace(
-					3, Vector3d::Zero());
-				break;
-			default:
-				break;
 		}
 
 		// state machine for button presses

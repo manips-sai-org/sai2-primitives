@@ -12,6 +12,12 @@ using namespace Eigen;
 namespace Sai2Primitives {
 
 namespace {
+
+const int window_size = 30;
+
+const double linvel_lower_bound = 1e-4;
+const double angvel_lower_bound = 1e-3;
+
 Matrix3d extractKpGainMatrix(vector<PIDGains> gains) {
 	if (gains.size() == 1) {
 		return gains.at(0).kp * Matrix3d::Identity();
@@ -31,61 +37,53 @@ POPCBilateralTeleoperation::POPCBilateralTeleoperation(
 	: _motion_force_task(motion_force_task),
 	  _haptic_controller(haptic_controller),
 	  _loop_dt(loop_dt) {
-	_max_alpha_force = _haptic_controller->getDeviceLimits().max_linear_damping;
-	_max_alpha_moment =
-		_haptic_controller->getDeviceLimits().max_angular_damping;
+	_max_damping_force =
+		0.9 * _haptic_controller->getDeviceLimits().max_linear_damping;
+	_max_damping_moment =
+		0.9 * _haptic_controller->getDeviceLimits().max_angular_damping;
+
+	_latest_haptic_controller_type = HapticControlType::CLUTCH;
 
 	reInitialize();
 }
 
 void POPCBilateralTeleoperation::reInitialize() {
 	_passivity_observer_force = 0;
-	_stored_energy_force = 0;
 	_PO_buffer_force = queue<double>();
 
 	_passivity_observer_moment = 0;
-	_stored_energy_moment = 0;
 	_PO_buffer_moment = queue<double>();
-
-	_alpha_force = 0;
-	_damping_force.setZero();
-	_alpha_moment = 0;
-	_damping_moment.setZero();
-
-	// _first_iteration_force = true;
-	// _first_iteration_moment = true;
 }
 
-pair<Vector3d, Vector3d> POPCBilateralTeleoperation::computeAdditionalHapticDampingForce() {
-	pair<Vector3d, Vector3d> damping_force_and_moment;
-	damping_force_and_moment.first = computePOPCForce();
-	if(_haptic_controller->getEnableOrientationTeleoperation()) {
-		damping_force_and_moment.second = computePOPCTorque();
+pair<Vector3d, Vector3d>
+POPCBilateralTeleoperation::computeAdditionalHapticDampingForce() {
+	pair<Vector3d, Vector3d> damping_force_and_moment =
+		make_pair(Vector3d::Zero(), Vector3d::Zero());
+
+	if (_haptic_controller->getHapticControlType() !=
+		HapticControlType::MOTION_MOTION) {
+		return damping_force_and_moment;
 	}
-	else {
-		damping_force_and_moment.second.setZero();
+	if (_latest_haptic_controller_type != HapticControlType::MOTION_MOTION) {
+		reInitialize();
+	}
+	_latest_haptic_controller_type = _haptic_controller->getHapticControlType();
+
+	damping_force_and_moment.first = computePOPCForce();
+	if (_haptic_controller->getEnableOrientationTeleoperation()) {
+		damping_force_and_moment.second = computePOPCTorque();
 	}
 	return damping_force_and_moment;
 }
 
-
 Vector3d POPCBilateralTeleoperation::computePOPCForce() {
-	// // compute dt for passivity observer
-	// chrono::high_resolution_clock::time_point t_curr =
-	// 	chrono::high_resolution_clock::now();
-	// if (_first_iteration_force) {
-	// 	_t_prev_force = t_curr;
-	// 	_first_iteration_force = false;
-	// }
-	// chrono::duration<double> t_diff = t_curr - _t_prev_force;
-	// double dt = t_diff.count();
-
-	// // compute stored energy
-	// Eigen::Vector3d dx =
-	// 	_posori_task->_sigma_position *
-	// 	(_posori_task->_desired_position - _posori_task->_current_position);
-	// _stored_energy_force = 0.5 * _posori_task->_kp_pos * dx.squaredNorm();
-	// _stored_energy_force = 0;
+	// compute stored energy
+	Vector3d robot_position_error = _motion_force_task->getPositionError();
+	Vector3d controller_P_force =
+		extractKpGainMatrix(_motion_force_task->getPosControlGains()) *
+		robot_position_error;
+	double stored_energy_force =
+		0.5 * robot_position_error.dot(controller_P_force);
 
 	// power output on robot side
 	double power_output_robot_side =
@@ -97,73 +95,65 @@ Vector3d POPCBilateralTeleoperation::computePOPCForce() {
 	Vector3d device_force_in_direct_feedback_space =
 		_haptic_controller->getSigmaDirectForceFeedback() *
 		_haptic_controller->getLatestOutput().device_command_force;
-
 	Vector3d device_velocity =
 		_haptic_controller->getLatestInput().device_linear_velocity;
 
 	double power_output_haptic_side =
 		device_velocity.dot(device_force_in_direct_feedback_space);
-	// double power_output_haptic_side =
-	// 	_haptic_task->_current_trans_velocity_device.dot(
-	// 		device_force_in_direct_feedback_space) -
-	// 	_posori_task->_kp_pos *
-	// 		_haptic_task->_current_trans_velocity_device_RobFrame.dot(dx);
 
-	// substract power input to the robot controller
-	Vector3d robot_position_error = _motion_force_task->getPositionError();
+	// power input to the robot controller from the haptic device
 	Vector3d device_velocity_in_robot_frame =
 		_haptic_controller->getRotationWorldToDeviceBase() *
 		_haptic_controller->getScalingFactorPos() * device_velocity;
-	power_output_haptic_side -= device_velocity_in_robot_frame.dot(
-		extractKpGainMatrix(_motion_force_task->getPosControlGains()) *
-		robot_position_error);
+	double power_input_haptic_to_robot =
+		device_velocity_in_robot_frame.dot(controller_P_force);
 
 	// compute total power input
 	double total_power_input =
-		(-power_output_haptic_side - power_output_robot_side) * _loop_dt;
+		(power_input_haptic_to_robot - power_output_haptic_side -
+		 power_output_robot_side) *
+		_loop_dt;
 
 	// compute passivity observer
 	_PO_buffer_force.push(total_power_input);
 	_passivity_observer_force += total_power_input;
 
 	// compute the passivity controller
-	if (_passivity_observer_force + _stored_energy_force < 0.0) {
+	Vector3d damping_force = Vector3d::Zero();
+	if (_passivity_observer_force + stored_energy_force < 0.0) {
+		// passivity controller triggered
 		double vh_norm_square = device_velocity.squaredNorm();
 
-		// if velocity of haptic device is too low, we cannot dissipate
-		// through damping
-		if (vh_norm_square < 1e-6) {
-			vh_norm_square = 1e-6;
+		// Lower bound velocity to ensurre that we can dissipate energy
+		if (vh_norm_square < linvel_lower_bound) {
+			vh_norm_square = linvel_lower_bound;
 		}
 
-		_alpha_force = -(_passivity_observer_force + _stored_energy_force) /
-					   (vh_norm_square * _loop_dt);
-
-		// limit the amount of damping otherwise the real hardware has
-		// issues
-		if (_alpha_force > _max_alpha_force) {
-			_alpha_force = _max_alpha_force;
+		// compute damping gain
+		double alpha_force =
+			-(_passivity_observer_force + stored_energy_force) /
+			(vh_norm_square * _loop_dt);
+		if (alpha_force > _max_damping_force) {
+			alpha_force = _max_damping_force;
 		}
 
-		_damping_force = -_haptic_controller->getSigmaDirectForceFeedback() *
-						 _alpha_force * device_velocity;
+		// compute damping force
+		damping_force = -_haptic_controller->getSigmaDirectForceFeedback() *
+						alpha_force * device_velocity;
 
+		// correction to observer due to damping
 		double passivity_observer_correction =
-			_loop_dt * device_velocity.dot(_damping_force);
+			_loop_dt * device_velocity.dot(damping_force);
 		_passivity_observer_force -= passivity_observer_correction;
 		_PO_buffer_force.back() -= passivity_observer_correction;
 	} else {
-		// no passivity controller correction
-		_alpha_force = 0;
-		_damping_force.setZero();
-
-		while (_PO_buffer_force.size() > _PO_buffer_size_force) {
+		// passivity controller not triggered
+		while (_PO_buffer_force.size() > window_size) {
 			// do not reset if it would make your system think it is going
 			// to be active
 			if (_passivity_observer_force > _PO_buffer_force.front()) {
-				if (_PO_buffer_force.front() >
-					0)	// only forget dissipated energy
-				{
+				// only forget dissipated energy
+				if (_PO_buffer_force.front() > 0) {
 					_passivity_observer_force -= _PO_buffer_force.front();
 				}
 				_PO_buffer_force.pop();
@@ -173,36 +163,26 @@ Vector3d POPCBilateralTeleoperation::computePOPCForce() {
 		}
 	}
 
-	return _damping_force;
+	return damping_force;
 }
 
 Vector3d POPCBilateralTeleoperation::computePOPCTorque() {
-	// // compute dt for passivity observer
-	// chrono::high_resolution_clock::time_point t_curr =
-	// 	chrono::high_resolution_clock::now();
-	// if (_first_iteration_moment) {
-	// 	_t_prev_moment = t_curr;
-	// 	_first_iteration_moment = false;
-	// }
-	// chrono::duration<double> t_diff = t_curr - _t_prev_moment;
-	// double dt = t_diff.count();
+	// compute stored energy
+	Vector3d robot_orientation_error =
+		_motion_force_task->getOrientationError();
+	Vector3d controller_P_moment =
+		extractKpGainMatrix(_motion_force_task->getOriControlGains()) *
+		robot_orientation_error;
+	double stored_energy_moment =
+		0.5 * robot_orientation_error.dot(controller_P_moment);
 
-	// // compute stored energy
-	// Vector3d ori_error =
-	// 	-_posori_task->_sigma_orientation * _posori_task->_orientation_error;
-	// _stored_energy_moment =
-	// 	0.5 * _posori_task->_kp_ori * ori_error.squaredNorm();
-	// _stored_energy_moment = 0;
-
-	// compute power input and output
+	// power output on robot side
 	double power_output_robot_side =
 		_motion_force_task->getCurrentVelocity().dot(
 			_motion_force_task->sigmaOrientation() *
 			_motion_force_task->getUnitMassForce().tail(3));
-	// double power_output_robot_side =
-	// 	_posori_task->_current_angular_velocity.dot(
-	// 		_posori_task->_unit_mass_force.tail(3));
 
+	// power output haptic side
 	Vector3d device_moment_in_motion_space =
 		_haptic_controller->getSigmaDirectMomentFeedback() *
 		_haptic_controller->getLatestOutput().device_command_moment;
@@ -211,65 +191,56 @@ Vector3d POPCBilateralTeleoperation::computePOPCTorque() {
 	double power_output_haptic_side =
 		device_angvel.dot(device_moment_in_motion_space);
 
-	// substract power input to the robot controller
-	Vector3d robot_orientation_error =
-		_motion_force_task->getOrientationError();
+	// power input to the robot controller from the haptic device
 	Vector3d device_angular_velocity_in_robot_frame =
 		_haptic_controller->getRotationWorldToDeviceBase() *
 		_haptic_controller->getScalingFactorOri() * device_angvel;
-	power_output_haptic_side -= device_angular_velocity_in_robot_frame.dot(
-		extractKpGainMatrix(_motion_force_task->getOriControlGains()) *
-		robot_orientation_error);
+	double power_input_haptic_to_robot =
+		device_angular_velocity_in_robot_frame.dot(controller_P_moment);
 
-	// double power_output_haptic_side =
-	// 	_haptic_task->_current_rot_velocity_device.dot(
-	// 		device_moment_in_motion_space) -
-	// 	_posori_task->_kp_ori *
-	// 		_haptic_task->_current_rot_velocity_device_RobFrame.dot(ori_error);
-
+	// total power input
 	double total_power_input =
-		(-power_output_haptic_side - power_output_robot_side) * _loop_dt;
+		(power_input_haptic_to_robot - power_output_haptic_side -
+		 power_output_robot_side) *
+		_loop_dt;
 
 	// compute passivity observer
 	_PO_buffer_moment.push(total_power_input);
 	_passivity_observer_moment += total_power_input;
 
 	// compute the passivity controller
-	if (_passivity_observer_moment + _stored_energy_moment < 0.0) {
+	Vector3d damping_moment = Vector3d::Zero();
+	if (_passivity_observer_moment + stored_energy_moment < 0.0) {
 		double vh_norm_square = device_angvel.squaredNorm();
 
-		// if velocity of haptic device is too low, we cannot dissipate through
-		// gamping
-		if (vh_norm_square < 1e-6) {
-			vh_norm_square = 1e-6;
+		// Lower bound velocity to ensurre that we can dissipate energy
+		if (vh_norm_square < angvel_lower_bound) {
+			vh_norm_square = angvel_lower_bound;
 		}
 
-		_alpha_moment = -(_passivity_observer_moment + _stored_energy_moment) /
-						(vh_norm_square * _loop_dt);
-
-		// limit the amount of damping otherwise the real hardware has issues
-		if (_alpha_moment > _max_alpha_moment) {
-			_alpha_moment = _max_alpha_moment;
+		// compute damping gain
+		double alpha_moment =
+			-(_passivity_observer_moment + stored_energy_moment) /
+			(vh_norm_square * _loop_dt);
+		if (alpha_moment > _max_damping_moment) {
+			alpha_moment = _max_damping_moment;
 		}
 
-		_damping_moment = -_alpha_moment * device_angvel;
+		// compute damping moment
+		damping_moment = -alpha_moment * device_angvel;
 
+		// correction to observer due to damping
 		double passivity_observer_correction =
-			_loop_dt * device_angvel.dot(_damping_moment);
+			_loop_dt * device_angvel.dot(damping_moment);
 		_passivity_observer_moment -= passivity_observer_correction;
 		_PO_buffer_moment.back() -= passivity_observer_correction;
 	} else {
-		// no passivity controller correction
-		_alpha_moment = 0;
-		_damping_moment.setZero();
-
-		while (_PO_buffer_moment.size() > _PO_buffer_size_moment) {
+		while (_PO_buffer_moment.size() > window_size) {
 			// do not reset if it would make your system think it is going to be
 			// active
 			if (_passivity_observer_moment > _PO_buffer_moment.front()) {
-				if (_PO_buffer_moment.front() >
-					0)	// only forget dissipated energy
-				{
+				// only forget dissipated energy
+				if (_PO_buffer_moment.front() > 0) {
 					_passivity_observer_moment -= _PO_buffer_moment.front();
 				}
 				_PO_buffer_moment.pop();
@@ -279,7 +250,7 @@ Vector3d POPCBilateralTeleoperation::computePOPCTorque() {
 		}
 	}
 
-	return _damping_moment;
+	return damping_moment;
 }
 
 } /* namespace Sai2Primitives */
