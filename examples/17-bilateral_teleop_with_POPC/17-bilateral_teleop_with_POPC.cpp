@@ -1,6 +1,7 @@
 #include <signal.h>
 
 #include <iostream>
+#include <mutex>
 #include <string>
 
 #include "Sai2Graphics.h"
