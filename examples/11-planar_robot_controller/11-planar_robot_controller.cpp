@@ -102,9 +102,11 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 	string link_name = "link4";
 	Affine3d compliant_frame = Affine3d::Identity();
 	compliant_frame.translation() = Vector3d(0.5, 0.0, 0.0);
-	vector<Vector3d> controlled_directions_translation = {Vector3d::UnitX(),
-														  Vector3d::UnitY()};
-	vector<Vector3d> controlled_directions_rotation = {Vector3d::UnitZ()};
+	vector<Vector3d> controlled_directions_translation;
+	controlled_directions_translation.push_back(Vector3d::UnitX());
+	controlled_directions_translation.push_back(Vector3d::UnitY());
+	vector<Vector3d> controlled_directions_rotation;
+	controlled_directions_rotation.push_back(Vector3d::UnitZ());
 	auto motion_force_task = make_shared<Sai2Primitives::MotionForceTask>(
 		robot, link_name, controlled_directions_translation,
 		controlled_directions_rotation, compliant_frame);

@@ -101,9 +101,11 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 	int dof = robot->dof();
 
 	// prepare the task to control y-z position and rotation around z
-	vector<Vector3d> controlled_directions_translation = {};
-	vector<Vector3d> controlled_directions_rotation = {
-		Vector3d::UnitX(), Vector3d::UnitY(), Vector3d::UnitZ()};
+	vector<Vector3d> controlled_directions_translation;
+	vector<Vector3d> controlled_directions_rotation;
+	controlled_directions_rotation.push_back(Vector3d::UnitX());
+	controlled_directions_rotation.push_back(Vector3d::UnitY());
+	controlled_directions_rotation.push_back(Vector3d::UnitZ());
 	auto motion_force_task = make_shared<Sai2Primitives::MotionForceTask>(
 		robot, link_name, controlled_directions_translation,
 		controlled_directions_rotation);
