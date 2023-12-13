@@ -32,7 +32,7 @@ runs:
       uses: manips-sai-org/sai2-common/custom_github_actions/sai2-repositories@master
       with:
         token: ${{ inputs.token }}
-        repo-name: sai2-grphics
+        repo-name: sai2-graphics
 
     - name: Setup Sai2-Common
       uses: manips-sai-org/sai2-common/custom_github_actions/sai2-repositories@master
