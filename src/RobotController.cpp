@@ -59,8 +59,7 @@ Eigen::VectorXd RobotController::computeControlTorques() {
 		control_torques += task->computeTorques() - previous_tasks_disturbance;
 	}
 	previous_tasks_disturbance =
-		(MatrixXd::Identity(dof, dof) -
-		 _redundancy_completion_task->getTaskNullspace().transpose()) *
+		_redundancy_completion_task->getPreviousTasksNullspace().transpose() *
 		control_torques;
 	control_torques += _redundancy_completion_task->computeTorques() -
 					   previous_tasks_disturbance;

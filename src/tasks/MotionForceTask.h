@@ -130,12 +130,19 @@ public:
 	const Vector3d& getSensedMoment() const { return _sensed_moment; }
 
 	/**
-	 * @brief Get the nullspace of this task. Will be 0 if ths
-	 * is a full joint task
+	 * @brief Get the nullspace of this task associated with the constrained,
+	 * reduced jacobian
 	 *
 	 * @return const MatrixXd& Nullspace matrix
 	 */
 	MatrixXd getTaskNullspace() const override { return _N; }
+
+	/**
+	 * @brief Get the Nullspace projector of the previous tasks
+	 *
+	 * @return Eigen::MatrixXd
+	 */
+	MatrixXd getPreviousTasksNullspace() const override { return _N_prec; }
 
 	/**
 	 * @brief Get the nullspace of this and the previous tasks. Concretely, it

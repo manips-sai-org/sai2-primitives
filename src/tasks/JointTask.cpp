@@ -16,6 +16,7 @@ JointTask::JointTask(std::shared_ptr<Sai2Model::Sai2Model>& robot,
 	: TemplateTask(robot, task_name, TaskType::JOINT_TASK, loop_timestep) {
 	// selection for full joint task
 	_joint_selection = MatrixXd::Identity(getConstRobotModel()->dof(), getConstRobotModel()->dof());
+	_is_partial_joint_task = false;
 
 	initialSetup();
 }
@@ -39,6 +40,7 @@ JointTask::JointTask(std::shared_ptr<Sai2Model::Sai2Model>& robot,
 			"constructor\n");
 	}
 	_joint_selection = joint_selection_matrix;
+	_is_partial_joint_task = true;
 
 	initialSetup();
 }
@@ -60,7 +62,6 @@ void JointTask::initialSetup() {
 	_M_partial = MatrixXd::Identity(_task_dof, _task_dof);
 	_M_partial_modified = MatrixXd::Identity(_task_dof, _task_dof);
 	_projected_jacobian = _joint_selection;
-	_Jbar = MatrixXd::Zero(_task_dof, robot_dof);
 	_N = MatrixXd::Zero(robot_dof, robot_dof);
 	_current_task_range = MatrixXd::Identity(_task_dof, _task_dof);
 
@@ -172,21 +173,26 @@ void JointTask::updateTaskModel(const MatrixXd& N_prec) {
 
 	_N_prec = N_prec;
 	_projected_jacobian = _joint_selection * _N_prec;
-	_current_task_range = Sai2Model::matrixRangeBasis(_projected_jacobian);
-	if(_current_task_range.norm() == 0)
-	{
-		// there is no controllable degree of freedom for the task, just return
-		// should maybe print a warning here
-		_N.setIdentity(robot_dof, robot_dof);
-		return;
-	}
 
-	Sai2Model::OpSpaceMatrices op_space_matrices =
-		getConstRobotModel()->operationalSpaceMatrices(
-			_current_task_range.transpose() * _projected_jacobian);
-	_M_partial = op_space_matrices.Lambda;
-	_Jbar = op_space_matrices.Jbar;
-	_N = op_space_matrices.N;
+	if (_is_partial_joint_task) {
+		_current_task_range = Sai2Model::matrixRangeBasis(_projected_jacobian);
+		if (_current_task_range.norm() == 0) {
+			// there is no controllable degree of freedom for the task, just
+			// return should maybe print a warning here
+			_N.setIdentity(robot_dof, robot_dof);
+			return;
+		}
+
+		Sai2Model::OpSpaceMatrices op_space_matrices =
+			getConstRobotModel()->operationalSpaceMatrices(
+				_current_task_range.transpose() * _projected_jacobian);
+		_M_partial = op_space_matrices.Lambda;
+		_N = op_space_matrices.N;
+	} else {
+		_current_task_range = MatrixXd::Identity(_task_dof, _task_dof);
+		_M_partial = getConstRobotModel()->M();
+		_N = MatrixXd::Zero(robot_dof, robot_dof);
+	}
 
 	switch (_dynamic_decoupling_type) {
 		case FULL_DYNAMIC_DECOUPLING: {
@@ -201,11 +207,16 @@ void JointTask::updateTaskModel(const MatrixXd& N_prec) {
 					M_BIE(i, i) = 0.1;
 				}
 			}
-			MatrixXd M_inv_BIE = M_BIE.inverse();
-			_M_partial_modified =
-				(_current_task_range.transpose() * _projected_jacobian * M_inv_BIE *
-				 _projected_jacobian.transpose() * _current_task_range)
-					.inverse();
+			if (_is_partial_joint_task) {
+				MatrixXd M_inv_BIE = M_BIE.inverse();
+				_M_partial_modified =
+					(_current_task_range.transpose() * _projected_jacobian *
+					 M_inv_BIE * _projected_jacobian.transpose() *
+					 _current_task_range)
+						.inverse();
+			} else {
+				_M_partial_modified = M_BIE;
+			}
 			break;
 		}
 

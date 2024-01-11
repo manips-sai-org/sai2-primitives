@@ -49,25 +49,34 @@ public:
 	virtual Eigen::VectorXd computeTorques() = 0;
 
 	/**
-	 * @brief Re initializes the task by setting the desired state to the current state.
-	 * 
+	 * @brief Re initializes the task by setting the desired state to the
+	 * current state.
+	 *
 	 */
 	virtual void reInitializeTask() = 0;
 
-    /**
-     * @brief Get the Nullspace projector of this task
-     * 
-     * @return Eigen::MatrixXd
-     */
-    virtual Eigen::MatrixXd getTaskNullspace() const = 0;
+	/**
+	 * @brief Get the Nullspace projector of this task only (N associated with
+	 * the jacobian or constrained jacobian of this task)
+	 *
+	 * @return Eigen::MatrixXd
+	 */
+	virtual Eigen::MatrixXd getTaskNullspace() const = 0;
 
-    /**
-     * @brief Get the Nullspace projector of this task and the previous tasks
-     * 
-     * @return Eigen::MatrixXd
-     */
-	virtual Eigen::MatrixXd getTaskAndPreviousNullspace() const =0;
+	/**
+	 * @brief Get the Nullspace projector of the previous tasks (N_prec
+	 * associated with all the previous tasks)
+	 *
+	 * @return Eigen::MatrixXd
+	 */
+	virtual Eigen::MatrixXd getPreviousTasksNullspace() const = 0;
 
+	/**
+	 * @brief Get the Nullspace projector of this task and the previous tasks (N * N_prec)
+	 *
+	 * @return Eigen::MatrixXd
+	 */
+	virtual Eigen::MatrixXd getTaskAndPreviousNullspace() const = 0;
 
 	/**
 	 * @brief gets a const reference to the internal robot model

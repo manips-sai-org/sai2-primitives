@@ -211,10 +211,15 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 					 motion_force_task->getCurrentPosition())
 						.transpose()
 				 << endl;
-			cout << "position error : "
+			cout << "position error in controlled space : "
 				 << (motion_force_task->posSelectionProjector() *
 					 (motion_force_task->getDesiredPosition() -
 					  motion_force_task->getCurrentPosition()))
+						.norm()
+				 << endl;
+			cout << "position error in full space : "
+				 << (motion_force_task->getDesiredPosition() -
+					 motion_force_task->getCurrentPosition())
 						.norm()
 				 << endl;
 			cout << endl;

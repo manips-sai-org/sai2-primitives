@@ -163,6 +163,13 @@ public:
 	MatrixXd getTaskNullspace() const override { return _N; }
 
 	/**
+	 * @brief Get the Nullspace projector of the previous tasks
+	 *
+	 * @return Eigen::MatrixXd
+	 */
+	MatrixXd getPreviousTasksNullspace() const override { return _N_prec; }
+
+	/**
 	 * @brief Get the nullspace of this and the previous tasks. Concretely, it
 	 * is the task nullspace multiplied by the nullspace of the previous tasks
 	 *
@@ -341,9 +348,10 @@ private:
 	MatrixXd _joint_selection;	// selection matrix for the joint task, defaults
 								// to Identity
 	MatrixXd _projected_jacobian;
-	MatrixXd _Jbar;
 	MatrixXd _N;
 	MatrixXd _current_task_range;
+
+	bool _is_partial_joint_task;
 };
 
 } /* namespace Sai2Primitives */

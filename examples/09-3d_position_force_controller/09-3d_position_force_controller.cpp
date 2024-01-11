@@ -154,11 +154,11 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 
 		// move in x and y plane back and forth
 		if (timer.elapsedCycles() % 2000 == 0) {
-			desired_position(0) += 0.07;
-			desired_position(1) += 0.07;
-		} else if (timer.elapsedCycles() % 2000 == 1000) {
 			desired_position(0) -= 0.07;
 			desired_position(1) -= 0.07;
+		} else if (timer.elapsedCycles() % 2000 == 1000) {
+			desired_position(0) += 0.07;
+			desired_position(1) += 0.07;
 		}
 		if (timer.elapsedCycles() > 2000 && timer.elapsedCycles() < 3000) {
 			desired_position(2) -= 0.00015;
