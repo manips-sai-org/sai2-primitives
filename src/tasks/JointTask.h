@@ -290,6 +290,13 @@ public:
 		_dynamic_decoupling_type = type;
 	}
 
+	MatrixXd getProjectedJacobian() const { return _projected_jacobian; }
+	VectorXd getControlForces() const { return _task_forces; };
+	VectorXd getUnitControlForces() const { return _current_task_range.transpose() * _unit_mass_force; };  // U.transpose() * unit_force
+	MatrixXd getLambdaMatrix() const { return _current_task_range * _M_partial_modified; };  // U * Lambda 
+	void enableRedundancyCompletion() { _redundancy_completion_flag = true; setDynamicDecouplingType(FULL_DYNAMIC_DECOUPLING); };
+	void disableRedundancyCompletion() { _redundancy_completion_flag = false; setDynamicDecouplingType(BOUNDED_INERTIA_ESTIMATES); };
+
 	//-----------------------------------------------
 	//         Member variables
 	//-----------------------------------------------
@@ -344,6 +351,9 @@ private:
 	MatrixXd _Jbar;
 	MatrixXd _N;
 	MatrixXd _current_task_range;
+	VectorXd _task_forces;
+	VectorXd _unit_mass_force;
+	bool _redundancy_completion_flag;  // defaults to false
 };
 
 } /* namespace Sai2Primitives */

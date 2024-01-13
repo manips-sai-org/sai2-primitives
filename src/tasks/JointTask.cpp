@@ -71,6 +71,8 @@ void JointTask::initialSetup() {
 	_otg->setMaxAcceleration(M_PI);
 	_otg->disableJerkLimits();
 
+	disableRedundancyCompletion();
+
 	reInitializeTask();
 }
 
@@ -172,7 +174,11 @@ void JointTask::updateTaskModel(const MatrixXd& N_prec) {
 
 	_N_prec = N_prec;
 	_projected_jacobian = _joint_selection * _N_prec;
-	_current_task_range = Sai2Model::matrixRangeBasis(_projected_jacobian);
+	if (_redundancy_completion_flag) {
+		_current_task_range.setIdentity();
+	} else {
+		_current_task_range = Sai2Model::matrixRangeBasis(_projected_jacobian);
+	}
 	if(_current_task_range.norm() == 0)
 	{
 		// there is no controllable degree of freedom for the task, just return
@@ -181,12 +187,21 @@ void JointTask::updateTaskModel(const MatrixXd& N_prec) {
 		return;
 	}
 
-	Sai2Model::OpSpaceMatrices op_space_matrices =
-		getConstRobotModel()->operationalSpaceMatrices(
-			_current_task_range.transpose() * _projected_jacobian);
-	_M_partial = op_space_matrices.Lambda;
-	_Jbar = op_space_matrices.Jbar;
-	_N = op_space_matrices.N;
+	if (_redundancy_completion_flag) {
+		Sai2Model::OpSpaceMatrices op_space_matrices =
+			getConstRobotModel()->operationalSpaceMatrices(
+				_current_task_range);
+		_M_partial = op_space_matrices.Lambda;
+		_Jbar = op_space_matrices.Jbar;
+		_N = op_space_matrices.N;
+	} else {
+		Sai2Model::OpSpaceMatrices op_space_matrices =
+			getConstRobotModel()->operationalSpaceMatrices(
+				_current_task_range.transpose() * _projected_jacobian);
+		_M_partial = op_space_matrices.Lambda;
+		_Jbar = op_space_matrices.Jbar;
+		_N = op_space_matrices.N;
+	}
 
 	switch (_dynamic_decoupling_type) {
 		case FULL_DYNAMIC_DECOUPLING: {
@@ -278,6 +293,8 @@ VectorXd JointTask::computeTorques() {
 			_kv * (_current_velocity - tmp_desired_velocity) -
 			_ki * _integrated_position_error;
 	}
+
+	_unit_mass_force = (tmp_desired_acceleration + partial_joint_task_torques);
 
 	VectorXd partial_joint_task_torques_in_range_space =
 		_M_partial * _current_task_range.transpose() * tmp_desired_acceleration +

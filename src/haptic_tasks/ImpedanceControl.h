@@ -331,9 +331,9 @@ private:
       double _sensed_task_gripper_force;
 
       // Sensed force filters
-      ButterworthFilter* _force_filter;
-      ButterworthFilter* _moment_filter;
-      ButterworthFilter* _gripper_force_filter;
+      Sai2Common::ButterworthFilter* _force_filter;
+      Sai2Common::ButterworthFilter* _moment_filter;
+      Sai2Common::ButterworthFilter* _gripper_force_filter;
       double _cutOff_frequency_force;
       double _cutOff_frequency_moment;
       double _cutOff_frequency_gripper_force;

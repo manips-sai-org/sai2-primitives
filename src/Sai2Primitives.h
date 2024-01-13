@@ -2,6 +2,7 @@
 // #include "tasks/PositionTask.h"
 // #include "tasks/OrientationTask.h"
 #include "tasks/MotionForceTask.h"
+#include "tasks/ComMotionTask.h"
 // #include "tasks/TwoHandTwoRobotsTask.h"
 #include "tasks/TemplateTask.h"
 

@@ -20,6 +20,7 @@ enum TaskType {
 	UNDEFINED,
 	JOINT_TASK,
 	MOTION_FORCE_TASK,
+	COM_MOTION_TASK
 };
 
 class TemplateTask {

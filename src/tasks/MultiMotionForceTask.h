@@ -1,5 +1,5 @@
 /*
- * MotionForceTask.h
+ * MultiMotionForceTask.h
  *
  *      This class creates a 6Dof position + orientation hybrid controller for a
  * robotic manipulator using operational space formulation and an underlying PID
@@ -15,8 +15,8 @@
  *      Author: Mikael Jorda
  */
 
-#ifndef SAI2_PRIMITIVES_MOTIONFORCETASK_TASK_H_
-#define SAI2_PRIMITIVES_MOTIONFORCETASK_TASK_H_
+#ifndef SAI2_PRIMITIVES_MULTIMOTIONFORCETASK_TASK_H_
+#define SAI2_PRIMITIVES_MULTIMOTIONFORCETASK_TASK_H_
 
 #include <helper_modules/OTG_6dof_cartesian.h>
 #include <helper_modules/POPCExplicitForceControl.h>
@@ -34,7 +34,7 @@ using namespace std;
 
 namespace Sai2Primitives {
 
-class MotionForceTask : public TemplateTask {
+class MultiMotionForceTask : public TemplateTask {
 public:
 	enum DynamicDecouplingType {
 		FULL_DYNAMIC_DECOUPLING,	 // use the real Lambda matrix
@@ -65,18 +65,20 @@ public:
 	 * @param loop_timestep Time taken by a control loop. Used in trajectory
 	 * generation and integral control.
 	 */
-	MotionForceTask(
-		std::shared_ptr<Sai2Model::Sai2Model>& robot, const string& link_name,
-		const Affine3d& compliant_frame = Affine3d::Identity(),
+	MultiMotionForceTask(
+		std::shared_ptr<Sai2Model::Sai2Model>& robot, 
+        const std::vector<string>& link_name,
+		const std::vector<Affine3d>& compliant_frame,
 		const std::string& task_name = "motion_force_task",
 		const bool is_force_motion_parametrization_in_compliant_frame = false,
 		const double loop_timestep = 0.001);
 
-	MotionForceTask(
-		std::shared_ptr<Sai2Model::Sai2Model>& robot, const string& link_name,
-		std::vector<Vector3d> controlled_directions_translation,
+	MultiMotionForceTask(
+		std::shared_ptr<Sai2Model::Sai2Model>& robot, 
+        const vector<string>& link_name,
+		std::vector<std::vector<Vector3d>> controlled_directions_translation,
 		std::vector<Vector3d> controlled_directions_rotation,
-		const Affine3d& compliant_frame = Affine3d::Identity(),
+		const std::vector<Affine3d>& compliant_frame,
 		const std::string& task_name = "partial_motion_force_task",
 		const bool is_force_motion_parametrization_in_compliant_frame = false,
 		const double loop_timestep = 0.001);
@@ -526,9 +528,11 @@ public:
 
 	MatrixXd getProjectedJacobian() const { return _projected_jacobian; }
 	VectorXd getControlForces() const { return _task_force; };
-	VectorXd getUnitControlForces() const { return  _current_task_range.transpose() * _unit_mass_force; };  // U.transpose() * unit_force
-	VectorXd getUnitImpedanceForces() const { return _current_task_range.transpose() * _impedance_force; };
+	VectorXd getUnitControlForces() const 
+	{ return  _current_task_range.transpose() * _unit_mass_force + \
+		_Lambda_modified.inverse() * _current_task_range.transpose() * _impedance_force; };  // U.transpose() * unit_force
 	MatrixXd getLambdaMatrix() const { return _current_task_range * _Lambda_modified; };  // U * Lambda 
+	VectorXd getStepDesiredPosition() const { return _step_}
 
 private:
 	/**
@@ -539,9 +543,9 @@ private:
 	void initialSetup();
 
 	// desired pose defaults to the configuration when the task is created
-	Vector3d _desired_position;			 // in robot frame
-	Matrix3d _desired_orientation;		 // in robot frame
-	Vector3d _desired_velocity;			 // in robot frame
+	std::vector<Vector3d> _desired_position;  // in robot frame
+	std::vector<Matrix3d> _desired_orientation;		 // in robot frame
+	std::vector<Vector3d> _desired_velocity;			 // in robot frame
 	Vector3d _desired_angular_velocity;	 // in robot frame
 	Vector3d _desired_acceleration;
 	Vector3d _desired_angular_acceleration;

@@ -1,5 +1,5 @@
 /*
- * MotionForceTask.h
+ * ComMotionTask.h
  *
  *      This class creates a 6Dof position + orientation hybrid controller for a
  * robotic manipulator using operational space formulation and an underlying PID
@@ -15,8 +15,8 @@
  *      Author: Mikael Jorda
  */
 
-#ifndef SAI2_PRIMITIVES_MOTIONFORCETASK_TASK_H_
-#define SAI2_PRIMITIVES_MOTIONFORCETASK_TASK_H_
+#ifndef SAI2_PRIMITIVES_COMMOTIONTASK_TASK_H_
+#define SAI2_PRIMITIVES_COMMOTIONTASK_TASK_H_
 
 #include <helper_modules/OTG_6dof_cartesian.h>
 #include <helper_modules/POPCExplicitForceControl.h>
@@ -34,7 +34,7 @@ using namespace std;
 
 namespace Sai2Primitives {
 
-class MotionForceTask : public TemplateTask {
+class ComMotionTask : public TemplateTask {
 public:
 	enum DynamicDecouplingType {
 		FULL_DYNAMIC_DECOUPLING,	 // use the real Lambda matrix
@@ -65,20 +65,9 @@ public:
 	 * @param loop_timestep Time taken by a control loop. Used in trajectory
 	 * generation and integral control.
 	 */
-	MotionForceTask(
-		std::shared_ptr<Sai2Model::Sai2Model>& robot, const string& link_name,
-		const Affine3d& compliant_frame = Affine3d::Identity(),
-		const std::string& task_name = "motion_force_task",
-		const bool is_force_motion_parametrization_in_compliant_frame = false,
-		const double loop_timestep = 0.001);
-
-	MotionForceTask(
-		std::shared_ptr<Sai2Model::Sai2Model>& robot, const string& link_name,
-		std::vector<Vector3d> controlled_directions_translation,
-		std::vector<Vector3d> controlled_directions_rotation,
-		const Affine3d& compliant_frame = Affine3d::Identity(),
-		const std::string& task_name = "partial_motion_force_task",
-		const bool is_force_motion_parametrization_in_compliant_frame = false,
+	ComMotionTask(
+		std::shared_ptr<Sai2Model::Sai2Model>& robot, 
+		const std::string& task_name = "com_motion_task",
 		const double loop_timestep = 0.001);
 
 	//------------------------------------------------
@@ -97,37 +86,6 @@ public:
 	 * @return const Vector3d& current velocity of the control point
 	 */
 	const Vector3d& getCurrentVelocity() const { return _current_velocity; }
-
-	/**
-	 * @brief Get the Current Orientation
-	 *
-	 * @return const Matrix3d& current orientation of the control frame
-	 */
-	const Matrix3d& getCurrentOrientation() const {
-		return _current_orientation;
-	}
-	/**
-	 * @brief Get the Current Angular Velocity
-	 *
-	 * @return const Vector3d& current angular velocity of the control frame
-	 */
-	const Vector3d& getCurrentAngularVelocity() const {
-		return _current_angular_velocity;
-	}
-
-	/**
-	 * @brief Get the Sensed Force resolved at the control frame
-	 *
-	 * @return const Vector3d& current sensed force in the control frame
-	 */
-	const Vector3d& getSensedForce() const { return _sensed_force; }
-
-	/**
-	 * @brief Get the Sensed Moment resolved at the control frame
-	 *
-	 * @return const Vector3d& current sensed moment in the control frame
-	 */
-	const Vector3d& getSensedMoment() const { return _sensed_moment; }
 
 	/**
 	 * @brief Get the nullspace of this task. Will be 0 if ths
@@ -151,35 +109,16 @@ public:
 	}
 	const Vector3d& getDesiredPosition() const { return _desired_position; }
 
-	void setDesiredOrientation(const Matrix3d& desired_orientation) {
-		_desired_orientation = desired_orientation;
-	}
-	Matrix3d getDesiredOrientation() const { return _desired_orientation; }
-
 	void setDesiredVelocity(const Vector3d& desired_velocity) {
 		_desired_velocity = desired_velocity;
 	}
 	const Vector3d& getDesiredVelocity() const { return _desired_velocity; }
-
-	void setDesiredAngularVelocity(const Vector3d& desired_angvel) {
-		_desired_angular_velocity = desired_angvel;
-	}
-	const Vector3d& getDesiredAngularVelocity() const {
-		return _desired_angular_velocity;
-	}
 
 	void setDesiredAcceleration(const Vector3d& desired_acceleration) {
 		_desired_acceleration = desired_acceleration;
 	}
 	const Vector3d& getDesiredAcceleration() const {
 		return _desired_acceleration;
-	}
-
-	void setDesiredAngularAcceleration(const Vector3d& desired_angaccel) {
-		_desired_angular_acceleration = desired_angaccel;
-	}
-	const Vector3d& getDesiredAngularAcceleration() const {
-		return _desired_angular_acceleration;
 	}
 
 	// Gains for motion controller
@@ -190,74 +129,6 @@ public:
 	void setPosControlGains(const Vector3d& kp_pos, const Vector3d& kv_pos,
 							const Vector3d& ki_pos = Vector3d::Zero());
 	vector<PIDGains> getPosControlGains() const;
-
-	void setOriControlGains(const PIDGains& gains) {
-		setOriControlGains(gains.kp, gains.kv, gains.ki);
-	}
-	void setOriControlGains(double kp_ori, double kv_ori, double ki_ori = 0);
-	void setOriControlGains(const Vector3d& kp_ori, const Vector3d& kv_ori,
-							const Vector3d& ki_ori = Vector3d::Zero());
-	vector<PIDGains> getOriControlGains() const;
-
-	void setForceControlGains(const PIDGains& gains) {
-		setForceControlGains(gains.kp, gains.kv, gains.ki);
-	}
-	void setForceControlGains(double kp_force, double kv_force,
-							  double ki_force) {
-		_kp_force = kp_force * Matrix3d::Identity();
-		_kv_force = kv_force * Matrix3d::Identity();
-		_ki_force = ki_force * Matrix3d::Identity();
-	}
-	vector<PIDGains> getForceControlGains() const {
-		return vector<PIDGains>(
-			1, PIDGains(_kp_force(0, 0), _kv_force(0, 0), _ki_force(0, 0)));
-	}
-
-	void setMomentControlGains(const PIDGains& gains) {
-		setMomentControlGains(gains.kp, gains.kv, gains.ki);
-	}
-	void setMomentControlGains(double kp_moment, double kv_moment,
-							   double ki_moment) {
-		_kp_moment = kp_moment * Matrix3d::Identity();
-		_kv_moment = kv_moment * Matrix3d::Identity();
-		_ki_moment = ki_moment * Matrix3d::Identity();
-	}
-	vector<PIDGains> getMomentControlGains() const {
-		return vector<PIDGains>(
-			1, PIDGains(_kp_moment(0, 0), _kv_moment(0, 0), _ki_moment(0, 0)));
-	}
-
-	/**
-	 * @brief Set the Desired Force in robot base frame
-	 *
-	 * @param desired_force
-	 */
-	void setDesiredForce(const Vector3d& desired_force) {
-		_desired_force = desired_force;
-	}
-
-	/**
-	 * @brief Get the Desired Force in robot base frame
-	 *
-	 * @return const Vector3d& desired force in robot base frame
-	 */
-	Vector3d getDesiredForce() const;
-
-	/**
-	 * @brief Set the Desired Moment in robot base frame
-	 *
-	 * @param desired_moment
-	 */
-	void setDesiredMoment(const Vector3d& desired_moment) {
-		_desired_moment = desired_moment;
-	}
-
-	/**
-	 * @brief Get the Desired Moment in robot base frame
-	 *
-	 * @return const Vector3d& desired moment in robot base frame
-	 */
-	Vector3d getDesiredMoment() const;
 
 	// internal otg functions
 	/**
@@ -298,8 +169,7 @@ public:
 	void disableInternalOtg() { _use_internal_otg_flag = false; }
 
 	// Velocity saturation flag and saturation values
-	void enableVelocitySaturation(const double linear_vel_sat = 0.3,
-								  const double angular_vel_sat = M_PI / 3);
+	void enableVelocitySaturation(const double linear_vel_sat = 0.3);
 	void disableVelocitySaturation() { _use_velocity_saturation_flag = false; }
 
 	bool getVelocitySaturationEnabled() const {
@@ -308,14 +178,6 @@ public:
 	double getLinearSaturationVelocity() const {
 		return _linear_saturation_velocity;
 	}
-	double getAngularSaturationVelocity() const {
-		return _angular_saturation_velocity;
-	}
-
-	// Lambda smoothing near singularity 
-	void enableLambdaSmoothing() { _use_lambda_smoothing_flag = true; setDynamicDecouplingType(FULL_DYNAMIC_DECOUPLING); }
-	void disableLambdaSmoothing() { _use_lambda_smoothing_flag = false; setDynamicDecouplingType(BOUNDED_INERTIA_ESTIMATES); }
-	void setSmoothingBounds(const double& e_min, const double& e_max);
 
 	//------------------------------------------------
 	// Methods
@@ -375,19 +237,6 @@ public:
 							 const bool verbose = false);
 
 	/**
-	 * @brief      Checks if the desired orientation has reched the goal up to a
-	 * tolerance
-	 *
-	 * @param[in]  tolerance  The tolerance
-	 * @param[in]  verbose    display info or not
-	 *
-	 * @return     true if the norm of the orientation error is smaller than the
-	 * tolerance
-	 */
-	bool goalOrientationReached(const double tolerance,
-								const bool verbose = false);
-
-	/**
 	 * @brief Set the Dynamic Decoupling Type. See the definition of the
 	 * DynamicDecouplingType enum for more details
 	 *
@@ -397,103 +246,6 @@ public:
 	void setDynamicDecouplingType(const DynamicDecouplingType type) {
 		_dynamic_decoupling_type = type;
 	}
-
-	// -------- force control related methods --------
-
-	/**
-	 * @brief      Sets the force sensor frame.
-	 *
-	 * @param[in]  link_name               The link name on which the sensor is
-	 * attached
-	 * @param[in]  transformation_in_link  The transformation in link of the
-	 * sensor
-	 */
-	void setForceSensorFrame(const string link_name,
-							 const Affine3d transformation_in_link);
-
-	/**
-	 * @brief      Updates the velues of the sensed force and sensed moment from
-	 *             sensor values
-	 * @details    Assumes that the sensor is attached to the same link as the
-	 *             control frame and that the setSensorFrame finction has been
-	 * called. The force and moment values given to this function are assumed to
-	 * be in the force sensor frame (values taken directly from the force
-	 * sensor) These values are supposed to be the forces that the sensor
-	 * applies to the environment (so the opposite of what the sensor feels)
-	 *
-	 * @param      sensed_force_sensor_frame   The sensed force as the force
-	 *                                         that the sensor applies to the
-	 *                                         environment in sensor frame
-	 * @param      sensed_moment_sensor_frame  The sensed moment as the moment
-	 *                                         that the sensor applies to the
-	 *                                         environment in sensor frame
-	 */
-	void updateSensedForceAndMoment(const Vector3d sensed_force_sensor_frame,
-									const Vector3d sensed_moment_sensor_frame);
-
-	/**
-	 * @brief Parametrizes the force space and motion space for translational
-	 * control The first argument is the dimension of the force space (between
-	 * 0 and 3, 0 meaning the whole translation is controlled in motion and 3
-	 * meaning the whole translation is controlled in force) and the second
-	 * argument is the axis defining the space of dimension one (unused if the
-	 * first parameter is 0 or 3, and representing the direction of the force
-	 * space is the first parameter is 1, or the direction of the motion space
-	 * if the first parameter is 2)
-	 *
-	 * @param force_space_dimension  between 0 and 3
-	 * @param force_or_motion_single_axis non singular axis (unused if
-	 * force_space_dimension is 0 or 3)
-	 */
-	void parametrizeForceMotionSpaces(
-		const int force_space_dimension,
-		const Vector3d& force_or_motion_single_axis = Vector3d::Zero());
-
-	/**
-	 * @brief Parametrizes the moment space and rotational motion space.
-	 * The first argument is the dimension of the moment space (between
-	 * 0 and 3, 0 meaning the whole rotation is controlled in motion and 3
-	 * meaning the whole rotation is controlled in moments) and the second
-	 * argument is the axis defining the space of dimension one (unused if the
-	 * first parameter is 0 or 3, and representing the direction of the moment
-	 * space is the first parameter is 1, or the direction of the rotational
-	 * motion space if the first parameter is 2)
-	 *
-	 * @param moment_space_dimension betawwn 0 and 3
-	 * @param moment_or_rot_motion_single_axis non singular axis (unused if
-	 * moment_space_dimension is 0 or 3)
-	 */
-	void parametrizeMomentRotMotionSpaces(
-		const int moment_space_dimension,
-		const Vector3d& moment_or_rot_motion_single_axis = Vector3d::Zero());
-
-	Matrix3d sigmaForce() const;
-	Matrix3d sigmaPosition() const;
-	Matrix3d sigmaMoment() const;
-	Matrix3d sigmaOrientation() const;
-
-	/**
-	 * @brief      Changes the behavior to closed loop force/moment control for
-	 * the force controlled directions in the linear/angular parts of the
-	 *             controller
-	 */
-	void setClosedLoopForceControl(
-		const bool closed_loop_force_control = true) {
-		_closed_loop_force_control = closed_loop_force_control;
-		resetIntegratorsLinear();
-	}
-	void setClosedLoopMomentControl(
-		const bool closed_loop_moment_control = true) {
-		_closed_loop_moment_control = closed_loop_moment_control;
-		resetIntegratorsAngular();
-	}
-
-	/**
-	 * @brief      Enables or disables the passivity based stability for the
-	 * closed loop force control (enabled by default)
-	 */
-	void enablePassivity() { _POPC_force->enable(); }
-	void disablePassivity() { _POPC_force->disable(); }
 
 	// ------- helper methods -------
 
@@ -509,26 +261,10 @@ public:
 	 */
 	void resetIntegratorsLinear();
 
-	/**
-	 * @brief      Resets the integrated errors used in I terms for angular part
-	 *             of task (orientation_integrated_error and
-	 *             moment_integrated_error)
-	 */
-	void resetIntegratorsAngular();
-
-	Matrix3d posSelectionProjector() const {
-		return _partial_task_projection.block<3, 3>(0, 0);
-	}
-
-	Matrix3d oriSelectionProjector() const {
-		return _partial_task_projection.block<3, 3>(3, 3);
-	}
-
 	MatrixXd getProjectedJacobian() const { return _projected_jacobian; }
 	VectorXd getControlForces() const { return _task_force; };
-	VectorXd getUnitControlForces() const { return  _current_task_range.transpose() * _unit_mass_force; };  // U.transpose() * unit_force
-	VectorXd getUnitImpedanceForces() const { return _current_task_range.transpose() * _impedance_force; };
-	MatrixXd getLambdaMatrix() const { return _current_task_range * _Lambda_modified; };  // U * Lambda 
+	VectorXd getUnitControlForces() const { return  _unit_mass_force; }; 
+	MatrixXd getLambdaMatrix() const { return _Lambda; };  
 
 private:
 	/**
@@ -540,17 +276,14 @@ private:
 
 	// desired pose defaults to the configuration when the task is created
 	Vector3d _desired_position;			 // in robot frame
-	Matrix3d _desired_orientation;		 // in robot frame
 	Vector3d _desired_velocity;			 // in robot frame
-	Vector3d _desired_angular_velocity;	 // in robot frame
 	Vector3d _desired_acceleration;
-	Vector3d _desired_angular_acceleration;
 
 	// gains for motion controller
 	// defaults to isptropic 50 for p gains, 14 for d gains and 0 for i gains
-	Matrix3d _kp_pos, _kp_ori;
-	Matrix3d _kv_pos, _kv_ori;
-	Matrix3d _ki_pos, _ki_ori;
+	Matrix3d _kp_pos;
+	Matrix3d _kv_pos;
+	Matrix3d _ki_pos;
 
 	// gains for the closed loop force controller
 	// by default, the force controller is open loop

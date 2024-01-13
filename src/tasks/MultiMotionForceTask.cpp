@@ -18,9 +18,10 @@ const double MAX_FEEDBACK_FORCE_FORCE_CONTROLLER = 20.0;
 const double MAX_FEEDBACK_MOMENT_FORCE_CONTROLLER = 10.0;
 }  // namespace
 
-MotionForceTask::MotionForceTask(
-	std::shared_ptr<Sai2Model::Sai2Model>& robot, const string& link_name,
-	const Affine3d& compliant_frame,
+MotionForceTask::MultiMotionForceTask(
+	std::shared_ptr<Sai2Model::Sai2Model>& robot, 
+    const std::vector<string>& link_name,
+	const std::vector<Affine3d>& compliant_frame,
 	const std::string& task_name,
 	const bool is_force_motion_parametrization_in_compliant_frame,
 	const double loop_timestep)
@@ -229,7 +230,7 @@ void MotionForceTask::updateTaskModel(const MatrixXd& N_prec) {
 	// smoothing lambda; already takes care of the projected jacobian matrix range
 	if (_use_lambda_smoothing_flag) {
 		const double e_diff = _e_max - _e_min;
-		// _current_task_range = MatrixXd::Identity(6, 6);  // ensures force continuity 
+		_current_task_range = MatrixXd::Identity(6, 6);  // ensures force continuity 
 
 		MatrixXd Lambda_inv = _projected_jacobian * getConstRobotModel()->MInv() * _projected_jacobian.transpose();
 		Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double, 6, 6>> eigensolver(Lambda_inv);

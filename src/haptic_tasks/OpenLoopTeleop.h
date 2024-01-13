@@ -548,8 +548,8 @@ private:
 	double _force_guidance_position_damping;
 
 	// Sensed force filters
-	ButterworthFilter* _force_filter;
-	ButterworthFilter* _moment_filter;
+	Sai2Common::ButterworthFilter* _force_filter;
+	Sai2Common::ButterworthFilter* _moment_filter;
 	double _cutOff_frequency_force;
 	double _cutOff_frequency_moment;
 
