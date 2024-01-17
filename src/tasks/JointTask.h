@@ -21,6 +21,7 @@
 
 #include "Sai2Model.h"
 #include "TemplateTask.h"
+#include "helper_modules/Sai2PrimitivesCommonDefinitions.h"
 
 using namespace Eigen;
 namespace Sai2Primitives {
@@ -103,6 +104,8 @@ public:
 	 */
 	const MatrixXd getJointSelectionMatrix() const { return _joint_selection; }
 
+	int getTaskDof() const { return _task_dof; }
+
 	/**
 	 * @brief Get the Current Position
 	 *
@@ -129,14 +132,14 @@ public:
 	 *
 	 * @param desired_velocity
 	 */
-	void setDesiredvelocity(const VectorXd& desired_velocity);
+	void setDesiredVelocity(const VectorXd& desired_velocity);
 
 	/**
 	 * @brief Get the Desired Velocity
 	 *
 	 * @return desired velocity as a VectorXd
 	 */
-	const VectorXd& getDesiredvelocity() const { return _desired_velocity; }
+	const VectorXd& getDesiredVelocity() const { return _desired_velocity; }
 
 	/**
 	 * @brief Set the Desired Acceleration
@@ -179,7 +182,9 @@ public:
 	}
 
 	/**
-	 * @brief Set non isotropic gains
+	 * @brief Set gains from vectors. The vectors must be either all of size 1
+	 * (in which case isotropic gains will be set) or of size robot_dof (for non
+	 * isotropic gains).
 	 *
 	 * @param kp
 	 * @param kv
@@ -188,17 +193,18 @@ public:
 	void setGains(const VectorXd& kp, const VectorXd& kv, const VectorXd& ki);
 
 	/**
-	 * @brief Set non isotropic gains with ki = 0
+	 * @brief Set the gains from vectors with only kp and kv (ki will be set to
+	 * 0)
 	 *
 	 * @param kp
 	 * @param kv
 	 */
 	void setGains(const VectorXd& kp, const VectorXd& kv) {
-		setGains(kp, kv, VectorXd::Zero(getConstRobotModel()->dof()));
+		setGains(kp, kv, VectorXd::Zero(kp.size()));
 	}
 
 	/**
-	 * @brief Set isotropic gains
+	 * @brief Set isotropic gains from double values
 	 *
 	 * @param kp
 	 * @param kv
@@ -206,9 +212,12 @@ public:
 	 */
 	void setGains(const double kp, const double kv, const double ki = 0);
 
+	vector<PIDGains> getGains() const;
+
 	/**
 	 * @brief Enables the internal trajectory generation and sets the max
-	 * velocity and acceleration (different for each joint)
+	 * velocity and acceleration (different for each joint if the vectors are of
+	 * size robot_dof, otherwise the same for all joints)
 	 *
 	 * @param max_velocity
 	 * @param max_acceleration
@@ -232,7 +241,8 @@ public:
 
 	/**
 	 * @brief      Enables the internal trajectory generation and sets the max
-	 * velocity, acceleration and jerk (different for each joint)
+	 * velocity, acceleration and jerk (different for each joint if the vectors
+	 * are of size robot_dof, otherwise the same for all joints)
 	 *
 	 * @param[in]  max_velocity      The maximum velocity
 	 * @param[in]  max_acceleration  The maximum acceleration
@@ -265,9 +275,14 @@ public:
 	 */
 	void disableInternalOtg() { _use_internal_otg_flag = false; }
 
+	bool getInternalOtgEnabled() const { return _use_internal_otg_flag; }
+
+	const OTG_joints& getInternalOtg() const { return *_otg; }
+
 	/**
 	 * @brief      Enables the velocity saturation and sets the saturation
-	 * velocity (different for each joint)
+	 * velocity (different for each joint if the vectors are of size robot_dof,
+	 * otherwise the same for all joints)
 	 *
 	 * @param[in]  saturation_velocity  The saturation velocity
 	 */
@@ -288,6 +303,14 @@ public:
 	 * @brief      Disables the velocity saturation
 	 */
 	void disableVelocitySaturation() { _use_velocity_saturation_flag = false; }
+
+	bool getVelocitySaturationEnabled() const {
+		return _use_velocity_saturation_flag;
+	}
+
+	VectorXd getVelocitySaturationMaxVelocity() const {
+		return _saturation_velocity;
+	}
 
 	/**
 	 * @brief      Sets the dynamic decoupling type. See the enum for more info

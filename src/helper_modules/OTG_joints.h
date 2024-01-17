@@ -61,6 +61,8 @@ public:
 		setMaxVelocity(max_velocity * VectorXd::Ones(_dim));
 	}
 
+	VectorXd getMaxVelocity() const { return _input.max_velocity; }
+
 	/**
 	 * @brief      Sets the maximum acceleration.
 	 *
@@ -76,6 +78,8 @@ public:
 	void setMaxAcceleration(const double max_acceleration) {
 		setMaxAcceleration(max_acceleration * VectorXd::Ones(_dim));
 	}
+
+	VectorXd getMaxAcceleration() const { return _input.max_acceleration; }
 
 	/**
 	 * @brief      Sets the maximum jerk and enables jerk limitation for the
@@ -95,11 +99,15 @@ public:
 		setMaxJerk(max_jerk * VectorXd::Ones(_dim));
 	}
 
+	VectorXd getMaxJerk() const { return _input.max_jerk; }
+
 	/**
 	 * @brief      Disables jerk limitation for the trajectory generator (enable
 	 * them by setting jerk limits with the setMaxJerk function)
 	 */
 	void disableJerkLimits();
+
+	bool getJerkLimitEnabled() const;
 
 	/**
 	 * @brief      Sets the goal position and velocity

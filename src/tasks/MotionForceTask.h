@@ -201,6 +201,11 @@ public:
 	void setPosControlGains(double kp_pos, double kv_pos, double ki_pos = 0);
 	void setPosControlGains(const Vector3d& kp_pos, const Vector3d& kv_pos,
 							const Vector3d& ki_pos = Vector3d::Zero());
+	void setPosControlGains(const VectorXd& kp_pos, const VectorXd& kv_pos,
+							const VectorXd& ki_pos);
+	void setPosControlGains(const VectorXd& kp_pos, const VectorXd& kv_pos) {
+		setPosControlGains(kp_pos, kv_pos, VectorXd::Zero(kp_pos.size()));
+	}
 	vector<PIDGains> getPosControlGains() const;
 
 	void setOriControlGains(const PIDGains& gains) {
@@ -209,6 +214,11 @@ public:
 	void setOriControlGains(double kp_ori, double kv_ori, double ki_ori = 0);
 	void setOriControlGains(const Vector3d& kp_ori, const Vector3d& kv_ori,
 							const Vector3d& ki_ori = Vector3d::Zero());
+	void setOriControlGains(const VectorXd& kp_ori, const VectorXd& kv_ori,
+							const VectorXd& ki_ori);
+	void setOriControlGains(const VectorXd& kp_ori, const VectorXd& kv_ori) {
+		setOriControlGains(kp_ori, kv_ori, VectorXd::Zero(kp_ori.size()));
+	}
 	vector<PIDGains> getOriControlGains() const;
 
 	void setForceControlGains(const PIDGains& gains) {
@@ -308,6 +318,12 @@ public:
 									  const double max_angular_jerk);
 
 	void disableInternalOtg() { _use_internal_otg_flag = false; }
+
+	bool getInternalOtgEnabled() const { return _use_internal_otg_flag; }
+
+	const OTG_6dof_cartesian& getInternalOtg() const {
+		return *_otg;
+	}
 
 	// Velocity saturation flag and saturation values
 	void enableVelocitySaturation(const double linear_vel_sat = 0.3,
@@ -456,6 +472,11 @@ public:
 		const int force_space_dimension,
 		const Vector3d& force_or_motion_single_axis = Vector3d::Zero());
 
+	int getForceSpaceDimension() const { return _force_space_dimension; }
+	Vector3d getForceMotionSingleAxis() const {
+		return _force_or_motion_axis;
+	}
+
 	/**
 	 * @brief Parametrizes the moment space and rotational motion space.
 	 * The first argument is the dimension of the moment space (between
@@ -473,6 +494,11 @@ public:
 	void parametrizeMomentRotMotionSpaces(
 		const int moment_space_dimension,
 		const Vector3d& moment_or_rot_motion_single_axis = Vector3d::Zero());
+
+	int getMomentSpaceDimension() const { return _moment_space_dimension; }
+	Vector3d getMomentRotMotionSingleAxis() const {
+		return _moment_or_rotmotion_axis;
+	}
 
 	Matrix3d sigmaForce() const;
 	Matrix3d sigmaPosition() const;

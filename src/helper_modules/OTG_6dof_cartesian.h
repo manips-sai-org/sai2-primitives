@@ -70,6 +70,8 @@ public:
 		setMaxLinearVelocity(max_linear_velocity * Vector3d::Ones());
 	}
 
+	Vector3d getMaxLinearVelocity() const { return _input.max_velocity.head<3>(); }
+
 	/**
 	 * @brief      Sets the maximum linear acceleration.
 	 *
@@ -84,6 +86,10 @@ public:
 	 */
 	void setMaxLinearAcceleration(const double max_linear_acceleration) {
 		setMaxLinearAcceleration(max_linear_acceleration * Vector3d::Ones());
+	}
+
+	Vector3d getMaxLinearAcceleration() const {
+		return _input.max_acceleration.head<3>();
 	}
 
 	/**
@@ -105,6 +111,10 @@ public:
 		setMaxAngularVelocity(max_angular_velocity * Vector3d::Ones());
 	}
 
+	Vector3d getMaxAngularVelocity() const {
+		return _input.max_velocity.tail<3>();
+	}
+
 	/**
 	 * @brief      Sets the maximum angular acceleration.
 	 *
@@ -119,6 +129,10 @@ public:
 	 */
 	void setMaxAngularAcceleration(const double max_angular_acceleration) {
 		setMaxAngularAcceleration(max_angular_acceleration * Vector3d::Ones());
+	}
+
+	Vector3d getMaxAngularAcceleration() const {
+		return _input.max_acceleration.tail<3>();
 	}
 
 	/**
@@ -140,12 +154,19 @@ public:
 				   max_angular_jerk * Vector3d::Ones());
 	}
 
+	Vector3d getMaxLinearJerk() const { return _input.max_jerk.head<3>(); }
+	Vector3d getMaxAngularJerk() const { return _input.max_jerk.tail<3>(); }
+
 	/**
 	 * @brief      Disables jerk limitation for the trajectory generator (enable
 	 * them by setting jerk limits with the setMaxJerk function)
 	 */
 	void disableJerkLimits() {
 		_input.max_jerk.setConstant(std::numeric_limits<double>::infinity());
+	}
+
+	bool getJerkLimitEnabled() const {
+		return _input.max_jerk != Vector6d::Constant(std::numeric_limits<double>::infinity());
 	}
 
 	/**

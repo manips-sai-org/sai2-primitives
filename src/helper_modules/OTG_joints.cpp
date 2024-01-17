@@ -90,6 +90,10 @@ void OTG_joints::disableJerkLimits() {
 	_input.current_acceleration.setZero();
 }
 
+bool OTG_joints::getJerkLimitEnabled() const {
+	return _input.max_jerk != VectorXd::Constant(_dim, std::numeric_limits<double>::infinity());
+}
+
 void OTG_joints::setGoalPositionAndVelocity(const VectorXd& goal_position,
 											const VectorXd& goal_velocity) {
 	if (goal_position.size() != _dim || goal_velocity.size() != _dim) {
@@ -111,6 +115,10 @@ void OTG_joints::setGoalPositionAndVelocity(const VectorXd& goal_position,
 }
 
 void OTG_joints::update() {
+	if(_goal_reached)
+	{
+		return;
+	}
 	// compute next state and get result value
 	_result_value = _otg->update(_input, _output);
 
