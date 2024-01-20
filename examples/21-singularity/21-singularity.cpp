@@ -128,7 +128,8 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
                                       Vector3d(0, -2, 0), Vector3d(0, 0, 0),
                                       Vector3d(0, 0, 2), Vector3d(0, 0, 0)};
     // vector<Vector3d> desired_offsets {Vector3d(2, 0, 0)};
-    double t_wait = 5;  // wait between switching desired positions 
+	double t_initial = 2;
+    double t_wait = 10;  // wait between switching desired positions 
     double prev_time = 0;
     int cnt = 0;
     int max_cnt = desired_offsets.size();

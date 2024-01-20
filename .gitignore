@@ -33,5 +33,7 @@
 
 # folders
 **/build/
+**/archive/
 
+.vscode/
 **.DS_Store
