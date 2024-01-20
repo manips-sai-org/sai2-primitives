@@ -28,6 +28,7 @@
 
 #include "Sai2Model.h"
 #include "TemplateTask.h"
+#include "SingularityHandler.h"
 
 using namespace Eigen;
 using namespace std;
@@ -341,11 +342,6 @@ public:
 	double getAngularSaturationVelocity() const {
 		return _angular_saturation_velocity;
 	}
-
-	// Lambda smoothing near singularity 
-	void enableLambdaSmoothing() { _use_lambda_smoothing_flag = true; setDynamicDecouplingType(FULL_DYNAMIC_DECOUPLING); }
-	void disableLambdaSmoothing() { _use_lambda_smoothing_flag = false; setDynamicDecouplingType(BOUNDED_INERTIA_ESTIMATES); }
-	void setSmoothingBounds(const double& e_min, const double& e_max);
 
 	//------------------------------------------------
 	// Methods
@@ -678,8 +674,6 @@ private:
 	MatrixXd _Lambda, _Lambda_modified;
 	MatrixXd _Jbar;
 	MatrixXd _N;
-	double _e_max, _e_min;  // range of eigenvalues to smooth Lambda 
-	bool _use_lambda_smoothing_flag;
 
 	MatrixXd _current_task_range;
 	int _pos_range, _ori_range;
