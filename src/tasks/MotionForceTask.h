@@ -520,6 +520,17 @@ public:
 		return _partial_task_projection.block<3, 3>(3, 3);
 	}
 
+	/**
+	 * @brief	Change the bounds for singularity cut-off
+	 * 
+	 * @param e_max 
+	 * @param e_min 
+	 */
+	void setSingularityBounds(const double& e_max, const double& e_min) {
+		_e_max = e_max;
+		_e_min = e_min;
+	}
+
 private:
 	/**
 	 * @brief Initial setup of the task, called in the constructor to avoid
@@ -530,12 +541,12 @@ private:
 
 	// singularity handling
 	std::shared_ptr<SingularityHandler> _singularity_handler;
-	double _e_max = 2e-2;
-	double _e_min = 2e-3;
+	double _e_max, _e_min;
 	double _e_ratio, _alpha;
 	MatrixXd _Lambda_s, _Lambda_ns, _Lambda_s_modified, _Lambda_ns_modified;
 	MatrixXd _U_ns, _U_s;
 	MatrixXd _orthogonal_projection_ns, _orthogonal_projection_s;
+	MatrixXd _combined_projection_ns, _combined_projection_s;
 	MatrixXd _projected_jacobian_s, _projected_jacobian_ns;
 
 	// desired pose defaults to the configuration when the task is created
