@@ -567,6 +567,17 @@ public:
 		return _partial_task_projection.block<3, 3>(3, 3);
 	}
 
+	/**
+	 * @brief	Change the bounds for singularity cut-off
+	 * 
+	 * @param e_max 
+	 * @param e_min 
+	 */
+	void setSingularityBounds(const double& e_max, const double& e_min) {
+		_e_max = e_max;
+		_e_min = e_min;
+	}
+
 private:
 	/**
 	 * @brief Initial setup of the task, called in the constructor to avoid

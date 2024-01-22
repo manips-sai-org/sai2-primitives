@@ -129,7 +129,9 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
                                       Vector3d(0, 0, 2), Vector3d(0, 0, 0)};
     // vector<Vector3d> desired_offsets {Vector3d(2, 0, 0)};
 	double t_initial = 2;
-    double t_wait = 10;  // wait between switching desired positions 
+	vector<double> t_wait {5, 10};
+    // double t_wait = 10;  // wait between switching desired positions 
+	// double t_reset_wait = 5;  // wait when resetting position 
     double prev_time = 0;
     int cnt = 0;
     int max_cnt = desired_offsets.size();
@@ -160,7 +162,7 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 
 		// -------- set task goals and compute control torques
 		// position: move to workspace extents 
-        if (time - prev_time > t_wait) {
+        if (time - prev_time > t_wait[cnt % 2]) {
             motion_force_task->setDesiredPosition(initial_position + desired_offsets[cnt]);
             cnt++;
             prev_time = time;
