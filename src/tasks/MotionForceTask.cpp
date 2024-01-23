@@ -612,7 +612,7 @@ VectorXd MotionForceTask::computeTorques() {
 
 	// computation with Lambda_ns and/or Lambda_s
 	if (_orthogonal_projection_s.norm() == 0) {
-		_task_force = _Lambda_ns_modified * _combined_projection_ns * position_orientation_contribution + \
+		_task_force = _Lambda_ns_modified * _combined_projection_ns * _unit_mass_force + \
 							_combined_projection_ns * (force_moment_contribution + feedforward_force_moment);
 		task_joint_torques = _projected_jacobian_ns.transpose() * _task_force;
 	} else {

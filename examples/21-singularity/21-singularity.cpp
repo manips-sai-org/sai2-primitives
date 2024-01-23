@@ -168,8 +168,8 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
             prev_time = time;
             if (cnt == max_cnt) cnt = max_cnt - 1;
         }
-        motion_force_task->setDesiredVelocity(VectorXd::Zero(6));
-        motion_force_task->setDesiredAcceleration(VectorXd::Zero(6));
+        motion_force_task->setDesiredVelocity(Vector3d::Zero());
+        motion_force_task->setDesiredAcceleration(Vector3d::Zero());
 
 		// compute torques for the different tasks
 		motion_force_task_torques = motion_force_task->computeTorques();

@@ -531,6 +531,18 @@ public:
 		_e_min = e_min;
 	}
 
+	MatrixXd getProjectedJacobian() {
+		return _projected_jacobian_ns;
+	}
+
+	VectorXd getUnitControlForces() {
+		return _unit_mass_force;
+	}
+
+	MatrixXd getLambdaMatrix() {
+		return _Lambda_ns_modified * _combined_projection_ns;
+	}
+
 private:
 	/**
 	 * @brief Initial setup of the task, called in the constructor to avoid
