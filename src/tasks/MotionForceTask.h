@@ -139,6 +139,13 @@ public:
 	MatrixXd getTaskNullspace() const override { return _N; }
 
 	/**
+	 * @brief Get the Nullspace projector of the previous tasks
+	 *
+	 * @return Eigen::MatrixXd
+	 */
+	MatrixXd getPreviousTasksNullspace() const override { return _N_prec; }
+
+	/**
 	 * @brief Get the nullspace of this and the previous tasks. Concretely, it
 	 * is the task nullspace multiplied by the nullspace of the previous tasks
 	 *
@@ -539,6 +546,10 @@ public:
 		return _unit_mass_force;
 	}
 
+	VectorXd getControlForces() {
+		return _Lambda_ns_modified * _combined_projection_ns * _unit_mass_force;
+	}
+
 	MatrixXd getLambdaMatrix() {
 		return _Lambda_ns_modified * _combined_projection_ns;
 	}
@@ -553,8 +564,9 @@ private:
 
 	// singularity handling
 	std::shared_ptr<SingularityHandler> _singularity_handler;
+	double _alpha;
 	double _e_max, _e_min;
-	double _e_ratio, _alpha;
+	double _e_ratio;
 	MatrixXd _Lambda_s, _Lambda_ns, _Lambda_s_modified, _Lambda_ns_modified;
 	MatrixXd _U_ns, _U_s;
 	MatrixXd _orthogonal_projection_ns, _orthogonal_projection_s;

@@ -40,7 +40,8 @@ public:
                          const MatrixXd& orthogonal_projection_s,
                          const MatrixXd& Lambda_ns, 
                          const MatrixXd& Lambda_s,
-                         const MatrixXd& N,
+                         const MatrixXd& N_ns,
+                         const MatrixXd& N_prec,
                          const MatrixXd& U_s,
                          const double& alpha);
     MatrixXd getNullspace() { return _N; };
@@ -82,7 +83,7 @@ private:
     MatrixXd _full_jacobian;
     MatrixXd _projected_jacobian;
     MatrixXd _current_task_range, _joint_orthogonal_projection;
-    MatrixXd _N;
+    MatrixXd _N_ns, _N_prec, _N;
     MatrixXd _Jbar;
     MatrixXd _M_partial;
     MatrixXd _Lambda_ns, _Lambda_s;

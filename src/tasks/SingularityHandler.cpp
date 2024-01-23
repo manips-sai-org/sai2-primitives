@@ -36,7 +36,8 @@ void SingularityHandler::updateTaskModel(const MatrixXd& full_jacobian,
                                          const MatrixXd& orthogonal_projection_s, 
                                          const MatrixXd& Lambda_ns, 
                                          const MatrixXd& Lambda_s,
-                                         const MatrixXd& N,
+                                         const MatrixXd& N_ns,
+                                         const MatrixXd& N_prec,
                                          const MatrixXd& U_s,
                                          const double& alpha) 
 {
@@ -48,23 +49,25 @@ void SingularityHandler::updateTaskModel(const MatrixXd& full_jacobian,
     _orthogonal_projection_s = orthogonal_projection_s;
     _Lambda_ns = Lambda_ns;
     _Lambda_s = Lambda_s;             
-    _N = N;
+    _N_ns = N_ns;
+    _N_prec = N_prec;
     _U_s = U_s;
     _alpha = alpha;
 
     // update nullspace
-    _projected_jacobian = _J_posture * _N;
+    _projected_jacobian = _J_posture * _N_ns * _N_prec;
     _current_task_range = Sai2Model::matrixRangeBasis(_projected_jacobian);  
 
     if (_alpha == 1) {
-        _sing_type = NO_SINGULARITY;
+        setSingularity(NO_SINGULARITY);
+        _N = N_ns;
         return;  // _N = N_ns
 	}
 
 	Sai2Model::OpSpaceMatrices op_space_matrices =
 		_robot->operationalSpaceMatrices(_current_task_range.transpose() * _projected_jacobian);
     _M_partial = op_space_matrices.Lambda;
-	_N = op_space_matrices.N;  // _N = N_partial_joint * N_ns 
+	_N = op_space_matrices.N * N_ns;  // _N = N_partial_joint * N_ns 
 
     // classify singularity 
     classifySingularity();
@@ -91,12 +94,12 @@ void SingularityHandler::classifySingularity()
     if ((dot_product_matrix.array().abs() > _type_1_tol).any()) {
         std::cout << "Type 1 singularity\n";
         if (_sing_type != TYPE_2_SINGULARITY) {
-            _sing_type = TYPE_1_SINGULARITY;
+            setSingularity(TYPE_1_SINGULARITY);
         }
     } else {
         std::cout << "Type 2 singularity\n";
         if (_sing_type != TYPE_1_SINGULARITY) {
-            _sing_type = TYPE_2_SINGULARITY;
+            setSingularity(TYPE_2_SINGULARITY);
         }
     }
 }
