@@ -586,6 +586,10 @@ public:
 		return _unit_mass_force;
 	}
 
+	VectorXd getControlForces() {
+		return _Lambda_ns_modified * _combined_projection_ns * _unit_mass_force;
+	}
+
 	MatrixXd getLambdaMatrix() {
 		return _Lambda_ns_modified * _combined_projection_ns;
 	}

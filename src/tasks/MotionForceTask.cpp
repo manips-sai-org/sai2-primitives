@@ -165,7 +165,7 @@ void MotionForceTask::initialSetup() {
 	enableInternalOtgAccelerationLimited(0.3, 1.0, M_PI / 3, M_PI);
 
 	// singularity handling
-	setSingularityBounds(2e-2, 2e-3);
+	setSingularityBounds(2e-2, 2e-3);  // default for panda 
 	MatrixXd J_posture = getConstRobotModel()->linkDependency(_link_name);
 	_singularity_handler = std::make_shared<SingularityHandler>(getConstRobotModel(), J_posture);
 
@@ -266,7 +266,7 @@ void MotionForceTask::updateTaskModel(const MatrixXd& N_prec) {
 		_Lambda_s = MatrixXd::Zero(6, 6);
 		_Lambda_ns = op_space_matrices.Lambda;
 		// _Jbar = op_space_matrices.Jbar;
-		_N = op_space_matrices.N;
+		// _N = op_space_matrices.N;
 	}
 
 	// compute combined projections 
@@ -281,13 +281,13 @@ void MotionForceTask::updateTaskModel(const MatrixXd& N_prec) {
 	_Lambda_ns = (_projected_jacobian_ns * getConstRobotModel()->MInv() * \
 					_projected_jacobian_ns.transpose()).completeOrthogonalDecomposition().pseudoInverse();
 
-	// compute the nullspace of the non-singular space 
+	// get non-singular matrices 
 	MatrixXd Jbar_ns = getConstRobotModel()->MInv() * _projected_jacobian_ns.transpose() * _Lambda_ns;
 	MatrixXd N_ns = MatrixXd::Identity(robot_dof, robot_dof) - Jbar_ns * _projected_jacobian_ns;
 
-	double alpha = 1;
+	_alpha = 1;
 	if (_e_ratio < _e_max) {
-		alpha = std::clamp((_e_ratio - _e_min) / (_e_max - _e_min), 0., 1.);
+		_alpha = std::clamp((_e_ratio - _e_min) / (_e_max - _e_min), 0., 1.);
 	}
 
 	switch (_dynamic_decoupling_type) {
@@ -365,7 +365,6 @@ void MotionForceTask::updateTaskModel(const MatrixXd& N_prec) {
 		}
 	}
 
-	// update singularity handler 	
 	_singularity_handler->updateTaskModel(_projected_jacobian,
 										  _projected_jacobian_ns,
 										  _projected_jacobian_s,
@@ -373,11 +372,11 @@ void MotionForceTask::updateTaskModel(const MatrixXd& N_prec) {
 										  _orthogonal_projection_s, 
 										  _Lambda_ns_modified, 
 										  _Lambda_s_modified,
-										  N_ns * _N_prec,
+										  N_ns,
+										  _N_prec,
 										  _U_s,
-										  alpha);
-	_N = _singularity_handler->getNullspace() * N_ns;
-
+										  _alpha);
+	_N = _singularity_handler->getNullspace();  // N_joint * N_ns if singular, else N_ns
 }
 
 VectorXd MotionForceTask::computeTorques() {
@@ -598,7 +597,7 @@ VectorXd MotionForceTask::computeTorques() {
 	_linear_motion_control = position_related_force;
 
 	// computation with Lambda_ns and/or Lambda_s
-	if (_orthogonal_projection_s.norm() == 0) {
+	if (_alpha == 1) {
 		_task_force = _Lambda_ns_modified * _combined_projection_ns * _unit_mass_force + \
 							_combined_projection_ns * (force_moment_contribution + feedforward_force_moment);
 		task_joint_torques = _projected_jacobian_ns.transpose() * _task_force;
