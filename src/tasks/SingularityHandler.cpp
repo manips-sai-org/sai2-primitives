@@ -86,9 +86,9 @@ void SingularityHandler::classifySingularity()
 
     _Jbar = _robot->MInv() * _full_jacobian.transpose() * (_Lambda_s + _Lambda_ns);
     Sai2Model::SvdData JbarJT = Sai2Model::matrixSvd(_Jbar.transpose() * (_current_task_range.transpose() * _projected_jacobian).transpose());
-    VectorXd dot_product_vector = JbarJT.U.transpose() * _U_s;  
+    MatrixXd dot_product_matrix = JbarJT.U.transpose() * _U_s;  
 
-    if ((dot_product_vector.array().abs() > _type_1_tol).any()) {
+    if ((dot_product_matrix.array().abs() > _type_1_tol).any()) {
         std::cout << "Type 1 singularity\n";
         if (_sing_type != TYPE_2_SINGULARITY) {
             _sing_type = TYPE_1_SINGULARITY;
