@@ -29,6 +29,7 @@
 #include "Sai2Model.h"
 #include "TemplateTask.h"
 #include "SingularityHandler.h"
+#include <helper_modules/ForceSensor.h>
 
 using namespace Eigen;
 using namespace std;
@@ -78,6 +79,15 @@ public:
 		std::vector<Vector3d> controlled_directions_translation,
 		std::vector<Vector3d> controlled_directions_rotation,
 		const Affine3d& compliant_frame = Affine3d::Identity(),
+		const std::string& task_name = "partial_motion_force_task",
+		const bool is_force_motion_parametrization_in_compliant_frame = false,
+		const double loop_timestep = 0.001);
+
+	MotionForceTask(
+		std::shared_ptr<Sai2Model::Sai2Model>& robot, const string& link_name,
+		const bool is_force_motion_parametrization_in_force_frame,
+		const Affine3d& compliant_frame = Affine3d::Identity(),
+		const Affine3d& force_frame = Affine3d::Identity(),
 		const std::string& task_name = "partial_motion_force_task",
 		const bool is_force_motion_parametrization_in_compliant_frame = false,
 		const double loop_timestep = 0.001);
@@ -249,7 +259,7 @@ public:
 	 *
 	 * @return const Vector3d& desired force in robot base frame
 	 */
-	Vector3d getDesiredForce() const;
+	Vector3d getDesiredForce(const bool velocity_scaling = false) const;
 
 	/**
 	 * @brief Set the Desired Moment in robot base frame
@@ -403,6 +413,8 @@ public:
 
 	// -------- force control related methods --------
 
+	void setLoadInertia(const double mass, const Vector3d& com, const Matrix3d& inertia);
+
 	/**
 	 * @brief      Sets the force sensor frame.
 	 *
@@ -434,6 +446,9 @@ public:
 	void updateSensedForceAndMoment(const Vector3d sensed_force_sensor_frame,
 									const Vector3d sensed_moment_sensor_frame);
 
+	void processSensedForceAndMoment(const Vector3d sensed_force_sensor_frame,
+									 const Vector3d sensed_moment_sensor_frame);
+
 	/**
 	 * @brief Parametrizes the force space and motion space for translational
 	 * control The first argument is the dimension of the force space (between
@@ -462,7 +477,7 @@ public:
 	 * space is the first parameter is 1, or the direction of the rotational
 	 * motion space if the first parameter is 2)
 	 *
-	 * @param moment_space_dimension betawwn 0 and 3
+	 * @param moment_space_dimension between 0 and 3
 	 * @param moment_or_rot_motion_single_axis non singular axis (unused if
 	 * moment_space_dimension is 0 or 3)
 	 */
@@ -554,6 +569,35 @@ public:
 		return _Lambda_ns_modified * _combined_projection_ns;
 	}
 
+	void setProxyFrame(const Affine3d& proxy_frame) { _T_base_to_proxy = proxy_frame; }
+
+	void setMomentFrame(const Affine3d& moment_frame) { _T_base_to_moment = moment_frame; }
+
+	void setPosProxyMode(const bool enable) { _is_pos_proxy_mode = enable; }
+	void setOriProxyMode(const bool enable) { _is_ori_proxy_mode = enable; }
+
+	void setForceVelocityBounds(const double v_min, const double v_max) {
+		_vel_min = v_min;
+		_vel_max = v_max;
+	}
+
+	void setMomentVelocityBounds(const double v_min, const double v_max) {
+		_ang_vel_min = v_min;
+		_ang_vel_max = v_max;
+	}
+
+	Vector3d getRotationCenter(const std::string& link_name);
+	Vector3d getZeroMomentPoint();
+	void computePosProxyLimits();
+	void computeOriProxyLimits();
+	void setProxyLimits(const double radius, const double angle) {
+		_max_proxy_radius = radius;
+		_max_proxy_angle = angle;
+	}
+	void setForceThreshold(const double force) {
+		_force_threshold = force;
+	}
+
 private:
 	/**
 	 * @brief Initial setup of the task, called in the constructor to avoid
@@ -617,9 +661,15 @@ private:
 	Eigen::MatrixXd _N_prec;
 
 	// internal variables, not to be touched by the user
+	std::shared_ptr<ForceSensor> _force_sensor;
 	string _link_name;
 	Affine3d _compliant_frame;	// in link_frame
 	bool _is_force_motion_parametrization_in_compliant_frame;
+	bool _is_moment_parametrization_in_moment_frame;
+	bool _is_pos_proxy_mode, _is_ori_proxy_mode;
+	bool _is_in_contact;
+	double _max_proxy_radius, _max_proxy_angle;
+	double _force_threshold;
 
 	// motion quantities
 	Vector3d _current_position;		// robot frame
@@ -634,6 +684,8 @@ private:
 
 	// force quantities
 	Affine3d _T_control_to_sensor;
+	Affine3d _T_base_to_moment;
+	Affine3d _T_base_to_proxy;
 
 	Vector3d _sensed_force;	  // robot frame
 	Vector3d _sensed_moment;  // robot frame
@@ -647,6 +699,10 @@ private:
 	bool _closed_loop_force_control;
 	bool _closed_loop_moment_control;
 	double _k_ff;
+
+	bool _pos_proxy_mode;
+	double _vel_min, _vel_max;
+	double _ang_vel_min, _ang_vel_max;
 
 	// POPC for closed loop force control
 	std::unique_ptr<POPCExplicitForceControl> _POPC_force;
