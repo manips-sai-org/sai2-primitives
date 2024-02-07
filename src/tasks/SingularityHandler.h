@@ -89,6 +89,8 @@ public:
 
     MatrixXd getBlockMatrix(const MatrixXd& A, const MatrixXd& B);
 
+    VectorXd getSigmaValues();
+
 private:
     std::shared_ptr<Sai2Model::Sai2Model> _robot;
     std::pair<SingularityType, SingularityType> _sing_type;
@@ -117,9 +119,14 @@ private:
     MatrixXd _projected_jacobian_ns, _projected_jacobian_s;
     MatrixXd _Lambda_ns, _N_ns;
     MatrixXd _Lambda_s, _N_s, _Jbar_s;
+    MatrixXd _Jbar_s_linear, _Jbar_s_angular;
 
     // joint task
     MatrixXd _posture_projected_jacobian, _current_task_range, _M_partial;
+    MatrixXd _projected_jacobian_s_linear, _projected_jacobian_s_angular;
+
+    // debug
+    VectorXd _linear_singular_values;
 
 };
 

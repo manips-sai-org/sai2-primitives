@@ -16,6 +16,7 @@
 #include "tasks/JointTask.h"
 #include "tasks/MotionForceTask.h"
 #include "timer/LoopTimer.h"
+#include "logger/Logger.h"
 bool fSimulationRunning = false;
 void sighandler(int) { fSimulationRunning = false; }
 
@@ -138,6 +139,12 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
     int cnt = 6 * 0;
     int max_cnt = desired_offsets.size();
 
+	// create logger
+	Sai2Common::Logger logger("singular_values", false);
+	Vector3d svalues = Vector3d::Zero();
+	logger.addToLog(svalues, "svalues");
+	logger.start();
+
 	// create a loop timer
 	double control_freq = 1000;
 	Sai2Common::LoopTimer timer(control_freq, 1e6);
@@ -183,6 +190,9 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 			control_torques = motion_force_task_torques + joint_task_torques;
 		}
 
+		//------ logging data
+		svalues = motion_force_task->getConstSingularityModel()->getSigmaValues();
+
 		// -------------------------------------------
 		if (timer.elapsedCycles() % 500 == 0) {
 			cout << "time: " << time << endl;
@@ -194,6 +204,7 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 			cout << endl;
 		}
 	}
+	logger.stop();
 	timer.stop();
 	cout << "\nControl loop timer stats:\n";
 	timer.printInfoPostRun();
