@@ -95,7 +95,8 @@ MotionForceTask::MotionForceTask(
 }
 
 void MotionForceTask::initialSetup() {
-	setDynamicDecouplingType(BOUNDED_INERTIA_ESTIMATES);
+	// setDynamicDecouplingType(BOUNDED_INERTIA_ESTIMATES);
+	setDynamicDecouplingType(FULL_DYNAMIC_DECOUPLING);  // debug
 
 	int dof = getConstRobotModel()->dof();
 	_T_control_to_sensor = Affine3d::Identity();
@@ -165,11 +166,12 @@ void MotionForceTask::initialSetup() {
 	enableInternalOtgAccelerationLimited(0.3, 1.0, M_PI / 3, M_PI);
 
 	// singularity handling
-	setSingularityBounds(2e-2, 2e-3);  // default for panda 
 	MatrixXd J_posture = getConstRobotModel()->linkDependency(_link_name);
 	_singularity_handler = std::make_shared<SingularityHandler>(getConstRobotModel(), J_posture);
+	setSingularityBounds(1e-3, 4e-1, 1e-2, 1e-1); 
+	// setSingularityBounds(1e2, 1e3, 1e2, 1e3); 
 
-	reInitializeTask();
+	reInitializeTask();	
 }
 
 void MotionForceTask::reInitializeTask() {
@@ -226,69 +228,56 @@ void MotionForceTask::updateTaskModel(const MatrixXd& N_prec) {
 					_link_name, _compliant_frame.translation());
 	_projected_jacobian = _jacobian * _N_prec;
 
-	// construct Lambda_ns and Lambda_s (eigenvalues in increasing order, 6 x 6 matrix size)
-	MatrixXd Lambda_inv = _projected_jacobian * getConstRobotModel()->MInv() * _projected_jacobian.transpose();
-	Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double, 6, 6>> eigensolver(Lambda_inv);
-	const VectorXd& e = eigensolver.eigenvalues();  
-	const MatrixXd& U = eigensolver.eigenvectors();
-	int n_cols = 0;
-	for (int i = 5; i >= 0; --i) {
-		_e_ratio = e(i);
-		// _e_ratio = e(i) / e.maxCoeff();
-		if (_e_ratio < _e_max) {
-			n_cols = i + 1;
-			break;
-		}
-	}
-	if (n_cols != 0) {
-		_U_s = U.leftCols(n_cols);
-		_U_ns = U.rightCols(6 - n_cols);
-		_orthogonal_projection_s = _U_s * _U_s.transpose();
-		_orthogonal_projection_ns = _U_ns * _U_ns.transpose();
-		VectorXd D_s(n_cols);
-		VectorXd D_ns(6 - n_cols);
-		for (int i = 0; i < n_cols; ++i) {
-			D_s(i) = 1 / e(i);
-		}
-		for (int i = 0; i < 6 - n_cols; ++i) {
-			D_ns(i) = 1 / e(i + n_cols);
-		}
-		_Lambda_ns = _U_ns * D_ns.asDiagonal() * _U_ns.transpose();
-		_Lambda_s = _U_s * D_s.asDiagonal() * _U_s.transpose();
-	} else {
-		_U_s = MatrixXd::Zero(6, 6);
-		_U_ns = MatrixXd::Identity(6, 6);
-		_orthogonal_projection_s = MatrixXd::Zero(6, 6);
-		_orthogonal_projection_ns = MatrixXd::Identity(6, 6);
-		Sai2Model::OpSpaceMatrices op_space_matrices =
-			getConstRobotModel()->operationalSpaceMatrices(
-				_projected_jacobian);
-		_Lambda_s = MatrixXd::Zero(6, 6);
-		_Lambda_ns = op_space_matrices.Lambda;
-		// _Jbar = op_space_matrices.Jbar;
-		// _N = op_space_matrices.N;
-	}
+	// // debug singularity 
+	// auto svd_data = Sai2Model::matrixSvd(_projected_jacobian.topRows(3));
+	// std::cout << getConstRobotModel()->q().transpose() << "\n";
+	// std::cout << svd_data.s.transpose() << "\n";
+	// std::cout << svd_data.U << "\n";
+	// throw runtime_error("");
 
-	// compute combined projections 
-	_combined_projection_ns = _orthogonal_projection_ns * _partial_task_projection;
-	_combined_projection_s = _orthogonal_projection_s * _partial_task_projection;
-	_projected_jacobian_ns = _combined_projection_ns * _projected_jacobian;
-	_projected_jacobian_s = _combined_projection_s * _projected_jacobian;
+	// /*
+	// 	Original implementation 
+	// */
+	// MatrixXd range_pos =
+	// 	Sai2Model::matrixRangeBasis(_projected_jacobian.topRows(3), 1e-6);
+	// MatrixXd range_ori =
+	// 	Sai2Model::matrixRangeBasis(_projected_jacobian.bottomRows(3), 1e-6);
 
-	// reconstruct Lambda from new projected jacobians
-	_Lambda_s = (_projected_jacobian_s * getConstRobotModel()->MInv() * \
-					_projected_jacobian_s.transpose()).completeOrthogonalDecomposition().pseudoInverse();
-	_Lambda_ns = (_projected_jacobian_ns * getConstRobotModel()->MInv() * \
-					_projected_jacobian_ns.transpose()).completeOrthogonalDecomposition().pseudoInverse();
+	// _pos_range = range_pos.norm() == 0 ? 0 : range_pos.cols();
+	// _ori_range = range_ori.norm() == 0 ? 0 : range_ori.cols();
 
-	// get non-singular matrices 
-	MatrixXd Jbar_ns = getConstRobotModel()->MInv() * _projected_jacobian_ns.transpose() * _Lambda_ns;
-	MatrixXd N_ns = MatrixXd::Identity(robot_dof, robot_dof) - Jbar_ns * _projected_jacobian_ns;
+	// if (_pos_range + _ori_range == 0) {
+	// 	// there is no controllable degree of freedom for the task, just return
+	// 	// should maybe print a warning here
+	// 	_N.setIdentity(robot_dof, robot_dof);
+	// 	return;
+	// }
 
-	_alpha = 1;
-	if (_e_ratio < _e_max) {
-		_alpha = std::clamp((_e_ratio - _e_min) / (_e_max - _e_min), 0., 1.);
-	}
+	// _current_task_range.setZero(6, _pos_range + _ori_range);
+	// if (_pos_range > 0) {
+	// 	_current_task_range.block(0, 0, 3, _pos_range) = range_pos;
+	// }
+	// if (_ori_range > 0) {
+	// 	_current_task_range.block(3, _pos_range, 3, _ori_range) = range_ori;
+	// }
+
+	// Sai2Model::OpSpaceMatrices op_space_matrices =
+	// 	getConstRobotModel()->operationalSpaceMatrices(
+	// 		_current_task_range.transpose() * _projected_jacobian);
+	// _Lambda = op_space_matrices.Lambda;
+	// _Jbar = op_space_matrices.Jbar;
+	// _N = op_space_matrices.N;
+
+	/*
+		Singularity handler implementation 
+	*/
+	SingularityOpSpaceMatrices singularity_op_space_matrices = _singularity_handler->updateTaskModel(_projected_jacobian, _N_prec);
+	_projected_jacobian_ns = singularity_op_space_matrices.projected_jacobian_ns;
+	_Lambda_ns = singularity_op_space_matrices.Lambda_ns;
+	_task_range_ns = singularity_op_space_matrices.task_range_ns;
+	_projected_jacobian_s = singularity_op_space_matrices.projected_jacobian_s;
+	_Lambda_s = singularity_op_space_matrices.Lambda_s;
+	_task_range_s = singularity_op_space_matrices.task_range_s;
 
 	switch (_dynamic_decoupling_type) {
 		case FULL_DYNAMIC_DECOUPLING: {
@@ -320,6 +309,8 @@ void MotionForceTask::updateTaskModel(const MatrixXd& N_prec) {
 		case IMPEDANCE: {
 			_Lambda_modified = MatrixXd::Identity(_pos_range + _ori_range,
 												  _pos_range + _ori_range);
+			_Lambda_ns_modified.setIdentity();
+			_Lambda_s_modified.setIdentity();
 			break;
 		}
 
@@ -342,10 +333,10 @@ void MotionForceTask::updateTaskModel(const MatrixXd& N_prec) {
 				_projected_jacobian_ns *
 				M_inv_BIE * 
 				_projected_jacobian_ns.transpose();
-			_Lambda_ns_modified = Lambda_inv_BIE.completeOrthogonalDecomposition().pseudoInverse();
+			_Lambda_ns_modified = Lambda_inv_BIE.inverse();
 
 			// singular lambda
-			if (_orthogonal_projection_s.norm() != 0) {
+			if (_task_range_s.norm() != 0) {
 				Lambda_inv_BIE =
 					_projected_jacobian_s *
 					M_inv_BIE * 
@@ -365,18 +356,26 @@ void MotionForceTask::updateTaskModel(const MatrixXd& N_prec) {
 		}
 	}
 
-	_singularity_handler->updateTaskModel(_projected_jacobian,
-										  _projected_jacobian_ns,
-										  _projected_jacobian_s,
-										  _orthogonal_projection_ns, 
-										  _orthogonal_projection_s, 
-										  _Lambda_ns_modified, 
-										  _Lambda_s_modified,
-										  N_ns,
-										  _N_prec,
-										  _U_s,
-										  _alpha);
-	_N = _singularity_handler->getNullspace();  // N_joint * N_ns if singular, else N_ns
+	// std::cout << "Lambda ns \n" << _Lambda_ns_modified << "\n";
+	// std::cout << "Lambda s \n" << _Lambda_s_modified << "\n";
+
+	// saturate lambda diagonal
+	// double max_sat = 20;
+	// for (int i = 0; i < _Lambda_ns_modified.rows(); ++i) {
+	// 	if (_Lambda_ns_modified(i, i) > max_sat) {
+	// 		_Lambda_ns_modified(i, i) = max_sat;
+	// 	}
+	// }
+	// for (int i = 0; i < _Lambda_s_modified.rows(); ++i) {
+	// 	if (_Lambda_s_modified(i, i) > max_sat) {
+	// 		_Lambda_s_modified(i, i) = max_sat;
+	// 	}
+	// }
+
+	// update singularity handler with modified Lambda
+	_singularity_handler->setLambda(_Lambda_ns_modified, _Lambda_s_modified);
+	_N = _singularity_handler->getNullspace();  // N_posture * N_ns or N_ns 
+
 }
 
 VectorXd MotionForceTask::computeTorques() {
@@ -401,13 +400,7 @@ VectorXd MotionForceTask::computeTorques() {
 		_projected_jacobian.block(3, 0, 3, getConstRobotModel()->dof()) *
 		getConstRobotModel()->dq();
 
-	// if (_pos_range + _ori_range == 0) {
-	// 	// there is no controllable degree of freedom for the task, just return
-	// 	// zero torques. should maybe print a warning here
-	// 	return task_joint_torques;
-	// }
-
-	if (_orthogonal_projection_ns.norm() == 0) {
+	if (_pos_range + _ori_range == 0) {
 		// there is no controllable degree of freedom for the task, just return
 		// zero torques. should maybe print a warning here
 		return task_joint_torques;
@@ -596,15 +589,17 @@ VectorXd MotionForceTask::computeTorques() {
 		force_feedback_related_force + feedforward_force_moment.head(3);
 	_linear_motion_control = position_related_force;
 
-	// computation with Lambda_ns and/or Lambda_s
-	if (_alpha == 1) {
-		_task_force = _Lambda_ns_modified * _combined_projection_ns * _unit_mass_force + \
-							_combined_projection_ns * (force_moment_contribution + feedforward_force_moment);
-		task_joint_torques = _projected_jacobian_ns.transpose() * _task_force;
-	} else {
-		task_joint_torques = _singularity_handler->computeTorques(_unit_mass_force);
-		task_joint_torques += _projected_jacobian_ns.transpose() * _combined_projection_ns * (force_moment_contribution + feedforward_force_moment);
-	}
+	// _task_force = _Lambda_modified * _current_task_range.transpose() *
+	// 				(position_orientation_contribution) +
+	// 			_current_task_range.transpose() *
+	// 				(force_moment_contribution + feedforward_force_moment);
+
+	// // compute task torques
+	// task_joint_torques =
+	// 	_projected_jacobian.transpose() * _current_task_range * _task_force;
+
+	// compute torque through singularity handler 
+	task_joint_torques = _singularity_handler->computeTorques(_unit_mass_force, (force_moment_contribution + feedforward_force_moment));
 
 	return task_joint_torques;
 }

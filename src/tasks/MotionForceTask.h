@@ -573,9 +573,14 @@ public:
 	 * @param e_max 
 	 * @param e_min 
 	 */
-	void setSingularityBounds(const double& e_max, const double& e_min) {
-		_e_max = e_max;
-		_e_min = e_min;
+	void setSingularityBounds(const double linear_sing_tol_min, 
+							  const double linear_sing_tol_max,
+							  const double angular_sing_tol_min,
+							  const double angular_sing_tol_max) {
+		_singularity_handler->setSingularityBounds(linear_sing_tol_min,
+												   linear_sing_tol_max,
+												   angular_sing_tol_min,
+												   angular_sing_tol_max);
 	}
 
 	MatrixXd getProjectedJacobian() {
@@ -587,11 +592,11 @@ public:
 	}
 
 	VectorXd getControlForces() {
-		return _Lambda_ns_modified * _combined_projection_ns * _unit_mass_force;
+		return _Lambda_ns_modified * _task_range_ns.transpose() * _unit_mass_force;
 	}
 
 	MatrixXd getLambdaMatrix() {
-		return _Lambda_ns_modified * _combined_projection_ns;
+		return _Lambda_ns_modified * _task_range_ns.transpose();
 	}
 
 private:
