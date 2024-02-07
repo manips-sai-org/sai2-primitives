@@ -559,6 +559,10 @@ public:
 		return _Lambda_ns_modified * _task_range_ns.transpose();
 	}
 
+	const std::shared_ptr<SingularityHandler>& getConstSingularityModel() const {
+		return _singularity_handler;
+	}
+
 private:
 	/**
 	 * @brief Initial setup of the task, called in the constructor to avoid
