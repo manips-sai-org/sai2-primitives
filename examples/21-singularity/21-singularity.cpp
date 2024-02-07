@@ -60,6 +60,8 @@ int main(int argc, char** argv) {
 	robot->setQ(sim->getJointPositions(robot_name));
 	robot->updateModel();
 
+	// sim->setJointPositions(robot_name, 0 * robot->q());
+
 	// intitialize global torques variables
 	ui_torques = VectorXd::Zero(robot->dof());
 	control_torques = VectorXd::Zero(robot->dof());
@@ -129,11 +131,11 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
                                       Vector3d(0, 0, 2), Vector3d(0, 0, 0)};
     // vector<Vector3d> desired_offsets {Vector3d(2, 0, 0)};
 	double t_initial = 2;
-	vector<double> t_wait {5, 10};
+	vector<double> t_wait {5, 5};
     // double t_wait = 10;  // wait between switching desired positions 
 	// double t_reset_wait = 5;  // wait when resetting position 
     double prev_time = 0;
-    int cnt = 0;
+    int cnt = 6 * 0;
     int max_cnt = desired_offsets.size();
 
 	// create a loop timer
@@ -201,6 +203,8 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 void simulation(shared_ptr<Sai2Model::Sai2Model> robot,
 				shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 	fSimulationRunning = true;
+
+	sim->disableJointLimits(robot_name);
 
 	// create a timer
 	double sim_freq = 2000;
