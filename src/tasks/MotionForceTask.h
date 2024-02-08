@@ -543,6 +543,10 @@ public:
 												   angular_sing_tol_max);
 	}
 
+	void setSingularityBounds(const double e_max, const double e_min) {
+		_singularity_handler->setSingularityBounds(e_max, e_min);
+	}
+
 	MatrixXd getProjectedJacobian() {
 		return _projected_jacobian_ns;
 	}

@@ -43,6 +43,8 @@ struct SingularityOpSpaceMatrices {
     MatrixXd task_range_s;
 };
 
+using Vector6d = Eigen::Matrix<double, 6, 1>;
+
 class SingularityHandler {
 public:
     SingularityHandler(std::shared_ptr<Sai2Model::Sai2Model> robot,
@@ -50,6 +52,7 @@ public:
                        const double type_1_tol = 0.8,
                        const int buffer_size = 50);
     SingularityOpSpaceMatrices updateTaskModel(const MatrixXd& projected_jacobian, const MatrixXd& N_prec);
+    void classifySingularity(const MatrixXd& singular_task_range);
     void classifyLinearSingularity(const MatrixXd& singular_task_range);
     void classifyAngularSingularity(const MatrixXd& singular_task_range);
     VectorXd computeTorques(const VectorXd& unit_mass_force, const VectorXd& force_related_terms);
@@ -64,6 +67,11 @@ public:
         _linear_sing_tol_max = linear_sing_tol_max;
         _angular_sing_tol_min = angular_sing_tol_min;
         _angular_sing_tol_max = angular_sing_tol_max;
+    }
+
+    void setSingularityBounds(const double e_max, const double e_min) {
+        _e_max = e_max;
+        _e_min = e_min;
     }
 
     void setLambda(const MatrixXd& Lambda_ns, const MatrixXd& Lambda_s) {
@@ -99,7 +107,7 @@ private:
     // type 1 specifications
     std::pair<Eigen::VectorXd, Eigen::VectorXd> _q_prior;
     std::pair<Eigen::VectorXd, Eigen::VectorXd> _dq_prior; 
-    std::pair<std::queue<Eigen::Vector3d>, std::queue<Eigen::Vector3d>> _sing_direction_buffer;
+    std::pair<std::queue<Vector6d>, std::queue<Vector6d>> _sing_direction_buffer;
     double _kp, _kv;
     double _type_1_tol;
 
@@ -108,16 +116,18 @@ private:
     VectorXd _type_2_torque_vector;
 
     // singularity information
+    double _alpha;
     double _alpha_linear, _alpha_angular;
     MatrixXd _N;
 
     // singularity bounds 
+    double _e_max, _e_min;
     double _linear_sing_tol_min, _linear_sing_tol_max, _angular_sing_tol_min, _angular_sing_tol_max;
     MatrixXd _linear_task_range_ns, _linear_task_range_s;
     MatrixXd _angular_task_range_ns, _angular_task_range_s;
     MatrixXd _task_range_ns, _task_range_s;
     MatrixXd _projected_jacobian_ns, _projected_jacobian_s;
-    MatrixXd _Lambda_ns, _N_ns;
+    MatrixXd _Lambda_ns, _N_ns, _Jbar_ns;
     MatrixXd _Lambda_s, _N_s, _Jbar_s;
     MatrixXd _Jbar_s_linear, _Jbar_s_angular;
 
@@ -127,6 +137,7 @@ private:
 
     // debug
     VectorXd _linear_singular_values;
+    Vector6d _e_values;
 
 };
 
