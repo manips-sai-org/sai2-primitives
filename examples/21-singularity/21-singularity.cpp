@@ -141,7 +141,7 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 
 	// create logger
 	Sai2Common::Logger logger("singular_values", false);
-	Vector3d svalues = Vector3d::Zero();
+	VectorXd svalues = VectorXd::Zero(6);
 	logger.addToLog(svalues, "svalues");
 	logger.start();
 

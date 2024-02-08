@@ -573,14 +573,8 @@ public:
 	 * @param e_max 
 	 * @param e_min 
 	 */
-	void setSingularityBounds(const double linear_sing_tol_min, 
-							  const double linear_sing_tol_max,
-							  const double angular_sing_tol_min,
-							  const double angular_sing_tol_max) {
-		_singularity_handler->setSingularityBounds(linear_sing_tol_min,
-												   linear_sing_tol_max,
-												   angular_sing_tol_min,
-												   angular_sing_tol_max);
+	void setSingularityBounds(const double& s_min, const double& s_max) {
+		_singularity_handler->setSingularityBounds(s_min, s_max);
 	}
 
 	MatrixXd getProjectedJacobian() {
@@ -599,7 +593,7 @@ public:
 		return _Lambda_ns_modified * _task_range_ns.transpose();
 	}
 
-	const std::shared_ptr<SingularityHandler>& getConstSingularityModel() const {
+	const std::unique_ptr<SingularityHandler>& getConstSingularityModel() const {
 		return _singularity_handler;
 	}
 
