@@ -14,9 +14,10 @@
 namespace Sai2Primitives {
 
 SingularityHandler::SingularityHandler(std::shared_ptr<Sai2Model::Sai2Model> robot,
+                                       const int& task_rank,
                                        const MatrixXd& J_posture,
                                        const double& type_1_tol,
-                                       const int& buffer_size) : _robot(robot), 
+                                       const int& buffer_size) : _robot(robot), _task_rank(task_rank),
                                        _J_posture(J_posture), _type_1_tol(type_1_tol)
 {
     // set type 2 torque value
@@ -52,7 +53,7 @@ SingularityOpSpaceMatrices SingularityHandler::updateTaskModel(const MatrixXd& p
     // compute Lambda inv
     MatrixXd Lambda_inv = projected_jacobian * _robot->MInv() * projected_jacobian.transpose();
 
-    // compute eigen-decomposition
+    // compute eigen-decomposition 
     Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double, 6, 6>> eigensolver(Lambda_inv);
 
     // compute singular and non-singular task ranges based on ratios
@@ -64,8 +65,8 @@ SingularityOpSpaceMatrices SingularityHandler::updateTaskModel(const MatrixXd& p
 
 	int n_cols = 0;
 	for (int i = 5; i >= 0; --i) {
-		// double e_ratio = e(i);
-		double e_ratio = e(i) / e.maxCoeff();
+		double e_ratio = e(i);
+		// double e_ratio = e(i) / e.maxCoeff();
         _alpha = std::clamp((e_ratio - _e_min) / (_e_max - _e_min), 0., 1.);
 		if (e_ratio < _e_max) {
 			n_cols = i + 1;
@@ -120,8 +121,10 @@ SingularityOpSpaceMatrices SingularityHandler::updateTaskModel(const MatrixXd& p
     // classify singularities 
     classifySingularity(_task_range_s);
 
-    // if task_range_s is empty, don't compute singularity-related terms 
-    if (_task_range_s.norm() != 0) {
+    // task updates 
+    if (_sing_type == NO_SINGULARITY && _task_range_s.norm() != 0) {
+        _N = _N_ns;
+    } else if (_sing_type != NO_SINGULARITY) {
         // update posture task 
         _posture_projected_jacobian = _J_posture * _N_ns * N_prec;
         _current_task_range = Sai2Model::matrixRangeBasis(_posture_projected_jacobian); 
@@ -148,7 +151,7 @@ void SingularityHandler::classifySingularity(const MatrixXd& singular_task_range
         _dq_prior = _robot->dq();
     }
 
-    if (singular_task_range.norm() == 0) {
+    if (singular_task_range.norm() == 0 || singular_task_range.cols() == _task_rank) {
         _sing_type = NO_SINGULARITY;
         // clear singularity direction queue 
         while (!_sing_direction_buffer.empty()) {
@@ -167,6 +170,7 @@ void SingularityHandler::classifySingularity(const MatrixXd& singular_task_range
         // _sing_type = TYPE_1_SINGULARITY;
         _sing_type = TYPE_2_SINGULARITY;
     }
+
 }
 
 VectorXd SingularityHandler::computeTorques(const VectorXd& unit_mass_force, const VectorXd& force_related_terms)
@@ -176,7 +180,7 @@ VectorXd SingularityHandler::computeTorques(const VectorXd& unit_mass_force, con
 
     // debug
     if (_sing_type != NO_SINGULARITY) {
-        std::cout << "Singularity: " << singularity_labels[_sing_type] << "\n";
+        std::cout << "Singularity: " << singularity_labels[_sing_type] << "\n---\n";
     }
 
     /*

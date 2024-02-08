@@ -48,6 +48,7 @@ using Vector6d = Eigen::Matrix<double, 6, 1>;
 class SingularityHandler {
 public:
     SingularityHandler(std::shared_ptr<Sai2Model::Sai2Model> robot,
+                       const int& task_rank,
                        const MatrixXd& J_posture,
                        const double& type_1_tol = 0.8,
                        const int& buffer_size = 50);
@@ -86,6 +87,7 @@ public:
 private:
     std::shared_ptr<Sai2Model::Sai2Model> _robot;
     SingularityType _sing_type;
+    int _task_rank;
     MatrixXd _J_posture;
 
     // type 1 specifications

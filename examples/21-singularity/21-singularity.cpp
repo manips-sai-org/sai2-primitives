@@ -104,12 +104,16 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 	string link_name = "end-effector";
 	Vector3d pos_in_link = Vector3d(0.0, 0.0, 0.07);
 	Affine3d compliant_frame = Affine3d(Translation3d(pos_in_link));
-	auto motion_force_task = make_unique<Sai2Primitives::MotionForceTask>(
-		robot, link_name, compliant_frame);
+	// auto motion_force_task = make_unique<Sai2Primitives::MotionForceTask>(
+	// 	robot, link_name, compliant_frame);
+	vector<Vector3d> controlled_directions_translation = {
+		Vector3d::UnitX(), Vector3d::UnitY(), Vector3d::UnitZ()};
+	vector<Vector3d> controlled_directions_rotation = {};
+	auto motion_force_task = make_shared<Sai2Primitives::MotionForceTask>(
+		robot, link_name, controlled_directions_translation,
+		controlled_directions_rotation);
     motion_force_task->disableInternalOtg();
     motion_force_task->enableVelocitySaturation();
-    motion_force_task->setPosControlGains(100, 20);
-    motion_force_task->setOriControlGains(100, 20);
 	VectorXd motion_force_task_torques = VectorXd::Zero(dof);
 
 	// no gains setting here, using the default task values
