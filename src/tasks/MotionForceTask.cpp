@@ -167,11 +167,9 @@ void MotionForceTask::initialSetup() {
 
 	// singularity handling
 	MatrixXd J_posture = getConstRobotModel()->linkDependency(_link_name);
-	_singularity_handler = std::make_shared<SingularityHandler>(getConstRobotModel(), _pos_range + _ori_range, J_posture);
-	// setSingularityBounds(1e-3, 1e-5);
-	setSingularityBounds(1e-2, 1e-3);
-	// setSingularityBounds(4e-3, 4e-1, 1e-6, 1e-5); 
-	// setSingularityBounds(1e2, 1e3, 1e2, 1e3); 
+	_singularity_handler = make_unique<SingularityHandler>(getConstRobotModel(), _pos_range + _ori_range, J_posture);
+	// setSingularityBounds(1e-3, 1e-5);  // eigenvalue ratios 
+	setSingularityBounds(1e-2, 1e-3);  // absolute eigenvalues
 
 	reInitializeTask();	
 }

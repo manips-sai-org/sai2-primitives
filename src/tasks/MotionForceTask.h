@@ -576,7 +576,7 @@ private:
 	void initialSetup();
 
 	// singularity handling
-	std::shared_ptr<SingularityHandler> _singularity_handler;
+	std::unique_ptr<SingularityHandler> _singularity_handler;
 	MatrixXd _Lambda_s, _Lambda_ns, _Lambda_s_modified, _Lambda_ns_modified;
 	MatrixXd _task_range_ns, _task_range_s;
 	MatrixXd _projected_jacobian_s, _projected_jacobian_ns;
