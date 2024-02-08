@@ -527,21 +527,21 @@ public:
 		return _partial_task_projection.block<3, 3>(3, 3);
 	}
 
-	/**
-	 * @brief	Change the bounds for singularity cut-off
-	 * 
-	 * @param e_max 
-	 * @param e_min 
-	 */
-	void setSingularityBounds(const double linear_sing_tol_min, 
-							  const double linear_sing_tol_max,
-							  const double angular_sing_tol_min,
-							  const double angular_sing_tol_max) {
-		_singularity_handler->setSingularityBounds(linear_sing_tol_min,
-												   linear_sing_tol_max,
-												   angular_sing_tol_min,
-												   angular_sing_tol_max);
-	}
+	// /**
+	//  * @brief	Change the bounds for singularity cut-off
+	//  * 
+	//  * @param e_max 
+	//  * @param e_min 
+	//  */
+	// void setSingularityBounds(const double linear_sing_tol_min, 
+	// 						  const double linear_sing_tol_max,
+	// 						  const double angular_sing_tol_min,
+	// 						  const double angular_sing_tol_max) {
+	// 	_singularity_handler->setSingularityBounds(linear_sing_tol_min,
+	// 											   linear_sing_tol_max,
+	// 											   angular_sing_tol_min,
+	// 											   angular_sing_tol_max);
+	// }
 
 	void setSingularityBounds(const double e_max, const double e_min) {
 		_singularity_handler->setSingularityBounds(e_max, e_min);
