@@ -95,8 +95,8 @@ MotionForceTask::MotionForceTask(
 }
 
 void MotionForceTask::initialSetup() {
-	// setDynamicDecouplingType(BOUNDED_INERTIA_ESTIMATES);
-	setDynamicDecouplingType(FULL_DYNAMIC_DECOUPLING);  // debug
+	setDynamicDecouplingType(BOUNDED_INERTIA_ESTIMATES);
+	// setDynamicDecouplingType(FULL_DYNAMIC_DECOUPLING);  // debug
 
 	int dof = getConstRobotModel()->dof();
 	_T_control_to_sensor = Affine3d::Identity();
@@ -168,8 +168,7 @@ void MotionForceTask::initialSetup() {
 	// singularity handling
 	MatrixXd J_posture = getConstRobotModel()->linkDependency(_link_name);
 	_singularity_handler = std::make_unique<SingularityHandler>(getConstRobotModel(), _pos_range + _ori_range, J_posture);
-	// setSingularityBounds(15, 100);
-	setSingularityBounds(1e-2, 1e-1);
+	setSingularityBounds(5e-3, 5e-2);  
 
 	reInitializeTask();	
 }
@@ -227,13 +226,6 @@ void MotionForceTask::updateTaskModel(const MatrixXd& N_prec) {
 				getConstRobotModel()->JWorldFrame(
 					_link_name, _compliant_frame.translation());
 	_projected_jacobian = _jacobian * _N_prec;
-
-	// // debug singularity 
-	// auto svd_data = Sai2Model::matrixSvd(_projected_jacobian.topRows(3));
-	// std::cout << getConstRobotModel()->q().transpose() << "\n";
-	// std::cout << svd_data.s.transpose() << "\n";
-	// std::cout << svd_data.U << "\n";
-	// throw runtime_error("");
 
 	// /*
 	// 	Original implementation 
