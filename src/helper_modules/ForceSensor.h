@@ -10,6 +10,7 @@
  */
 
 #include "Sai2Model.h"
+#include <memory>
 
 namespace Sai2Primitives {
 
