@@ -21,6 +21,7 @@
 #include <helper_modules/OTG_6dof_cartesian.h>
 #include <helper_modules/POPCExplicitForceControl.h>
 #include <helper_modules/Sai2PrimitivesCommonDefinitions.h>
+#include <helper_modules/ForceSensor.h>
 
 #include <Eigen/Dense>
 #include <memory>
@@ -531,6 +532,27 @@ public:
 		return _partial_task_projection.block<3, 3>(3, 3);
 	}
 
+	/**
+	 * @brief Add load (intended after the force sensor located at the last link)
+	 * 
+	 * @param link_name 
+	 * @param mass 
+	 * @param com 
+	 * @param inertia 
+	 * @param body_name
+	 */
+	void addLoad(const std::string link_name, 
+				 const double mass, 
+				 const Vector3d& com, 
+				 const Matrix3d& inertia,
+				 const std::string body_name = "");
+
+	void removeLoad(const std::string link_name, 
+		 		    const double mass, 
+					const Vector3d& com, 
+					const Matrix3d& inertia,
+					const std::string body_name= "");
+
 private:
 	/**
 	 * @brief Initial setup of the task, called in the constructor to avoid
@@ -599,6 +621,7 @@ private:
 	Vector3d _integrated_position_error;	 // robot world frame
 
 	// force quantities
+	std::unique_ptr<ForceSensor> _force_sensor;
 	Affine3d _T_control_to_sensor;
 
 	Vector3d _sensed_force;	  // robot world frame

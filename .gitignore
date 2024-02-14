@@ -36,3 +36,6 @@
 
 # DS Store files
 *.DS_Store
+
+# Externals
+.vscode

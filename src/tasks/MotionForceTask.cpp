@@ -164,6 +164,9 @@ void MotionForceTask::initialSetup() {
 		_current_position, _current_orientation, getLoopTimestep());
 	enableInternalOtgAccelerationLimited(0.3, 1.0, M_PI / 3, M_PI);
 
+	// force sensor
+	_force_sensor = std::make_unique<ForceSensor>(getConstRobotModel());
+
 	reInitializeTask();
 }
 
@@ -749,20 +752,28 @@ void MotionForceTask::setForceSensorFrame(
 			"MotionForceTask::setForceSensorFrame\n");
 	}
 	_T_control_to_sensor = _compliant_frame.inverse() * transformation_in_link;
+	_force_sensor->setForceSensorFrame(link_name, transformation_in_link);
 }
 
 void MotionForceTask::updateSensedForceAndMoment(
 	const Vector3d sensed_force_sensor_frame,
 	const Vector3d sensed_moment_sensor_frame) {
+	
+	// get calibrated force sensor data 
+	ForceMeasurement force_moment = \
+		_force_sensor->getCalibratedForceMoment(sensed_force_sensor_frame, sensed_moment_sensor_frame);
+	Vector3d calibrated_sensed_force_sensor_frame = force_moment.force;
+	Vector3d calibrated_sensed_moment_sensor_frame = force_moment.moment;
+
 	// find the transform from base frame to control frame
 	Affine3d T_world_link = getConstRobotModel()->transformInWorld(_link_name);
 	Affine3d T_world_compliant_frame = T_world_link * _compliant_frame;
 
 	// find the resolved sensed force and moment in control frame
-	_sensed_force = _T_control_to_sensor.rotation() * sensed_force_sensor_frame;
+	_sensed_force = _T_control_to_sensor.rotation() * calibrated_sensed_force_sensor_frame;
 	_sensed_moment =
 		_T_control_to_sensor.translation().cross(_sensed_force) +
-		_T_control_to_sensor.rotation() * sensed_moment_sensor_frame;
+		_T_control_to_sensor.rotation() * calibrated_sensed_moment_sensor_frame;
 
 	// rotate the quantities in base frame
 	_sensed_force = T_world_compliant_frame.rotation() * _sensed_force;
@@ -904,6 +915,24 @@ void MotionForceTask::resetIntegratorsLinear() {
 void MotionForceTask::resetIntegratorsAngular() {
 	_integrated_orientation_error.setZero();
 	_integrated_moment_error.setZero();
+}
+
+void MotionForceTask::addLoad(const std::string link_name,
+							  const double mass,
+							  const Vector3d& com,
+							  const Matrix3d& inertia,
+							  const std::string body_name) {
+	_force_sensor->setToolInertia(mass, com, inertia);
+	getConstRobotModel()->addLoad(link_name, mass, com, inertia, body_name);
+}
+
+void MotionForceTask::removeLoad(const std::string link_name,
+								 const double mass,
+								 const Vector3d& com,
+								 const Matrix3d& inertia,
+								 const std::string body_name) {
+	_force_sensor->clearToolInertia();
+	getConstRobotModel()->removeLoad(link_name, mass, com, inertia, body_name);
 }
 
 } /* namespace Sai2Primitives */
