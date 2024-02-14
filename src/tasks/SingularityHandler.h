@@ -1,12 +1,7 @@
 /**
  * @file SingularityHandler.h
  * @author William Chong (wmchong@stnaford.edu)
- * @brief This class handles type 1 and type 2 singularity.
- *          For type 1, the joint task is blended with the force task in the singular space.
- *          For type 2, an open-loop torque is applied proportional to the dot product between 
- *          the force task and the singular direction and blended. The torque direction can be either direction
- *          since the singular direction can move pi/2 either direction to be orthogonal to the force vector
- *          since the singular direction only needs to be in-line with the force vector.
+ * @brief This class handles near-singularity cases 
  * @version 0.1
  * @date 2024-01-13
  * 
@@ -48,10 +43,10 @@ public:
     SingularityHandler(std::shared_ptr<Sai2Model::Sai2Model> robot,
                        const int& task_rank,
                        const MatrixXd& J_posture,
-                       const double& s_tol = 1e-6,
+                       const double& s_tol = 1e-3,
                        const double& type_1_tol = 0.8,
                        const double& type_2_torque_ratio = 0.02,
-                       const int& buffer_size = 50);
+                       const int& buffer_size = 10);
     SingularityOpSpaceMatrices updateTaskModel(const MatrixXd& projected_jacobian, const MatrixXd& N_prec);
     void classifySingularity(const MatrixXd& singular_task_range);
     VectorXd computeTorques(const VectorXd& unit_mass_force, const VectorXd& force_related_terms);
@@ -85,16 +80,19 @@ public:
     }
 
 private:
+    // singularity setup
     std::shared_ptr<Sai2Model::Sai2Model> _robot;
     SingularityType _sing_type;
     int _task_rank;
     MatrixXd _J_posture;
     VectorXd _joint_midrange;
+    int _buffer_size;
+    std::queue<SingularityType> _sing_history;
+    std::queue<Eigen::Matrix<double, 6, 1>> _sing_direction_buffer;
 
     // type 1 specifications
     VectorXd _q_prior;
     VectorXd _dq_prior; 
-    std::queue<Vector6d> _sing_direction_buffer;
     double _kp, _kv;
     double _type_1_tol;
 
@@ -103,7 +101,7 @@ private:
     VectorXd _type_2_torque_vector;
 
     // singularity information
-    double _s_tol;  
+    double _s_abs_tol;  
     double _s_min, _s_max;
     double _alpha;
     MatrixXd _N;
@@ -117,6 +115,28 @@ private:
 
     // debug
     VectorXd _s_values;
+
+    template<typename T>
+    bool allElementsSame(const std::queue<T>& q) {
+        if (q.empty()) {
+            return true; // An empty queue has all elements the same (technically)
+        }
+
+        // Get the first element
+        T firstElement = q.front();
+
+        // Iterate through the queue
+        std::queue<T> tempQueue = q; // Create a copy of the original queue
+        while (!tempQueue.empty()) {
+            // If any element is different from the first element, return false
+            if (tempQueue.front() != firstElement) {
+                return false;
+            }
+            tempQueue.pop(); // Remove the front element
+        }
+
+        return true; // All elements are the same
+    }
 };
 
 }  // namespace
