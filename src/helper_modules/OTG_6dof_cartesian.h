@@ -52,6 +52,9 @@ public:
 	void reInitialize(const Vector3d& initial_position,
 					  const Matrix3d& initial_orientation);
 
+	void reInitializeLinear(const Vector3d& initial_position);
+	void reInitializeAngular(const Matrix3d& initial_orientation);
+
 	/**
 	 * @brief      Sets the maximum linear velocity for the trajectory generator
 	 *

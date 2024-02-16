@@ -159,24 +159,24 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 		Matrix3d R =
 			AngleAxisd(angle_ori_traj, Vector3d::UnitY()).toRotationMatrix();
 
-		motion_force_task->setDesiredOrientation(R.transpose() *
+		motion_force_task->setGoalOrientation(R.transpose() *
 												 initial_orientation);
-		motion_force_task->setDesiredAngularVelocity(ang_vel_traj *
+		motion_force_task->setGoalAngularVelocity(ang_vel_traj *
 													 Vector3d::UnitY());
-		motion_force_task->setDesiredAngularAcceleration(ang_accel_traj *
+		motion_force_task->setGoalAngularAcceleration(ang_accel_traj *
 														 Vector3d::UnitY());
 
 		// position: circle in the y-z plane
 		double radius_circle_pos = 0.05;
 		double w_circle_pos = 2 * M_PI * 0.33;
-		motion_force_task->setDesiredPosition(
+		motion_force_task->setGoalPosition(
 			initial_position +
 			radius_circle_pos * Vector3d(0.0, sin(w_circle_pos * time),
 										 1 - cos(w_circle_pos * time)));
-		motion_force_task->setDesiredVelocity(
+		motion_force_task->setGoalLinearVelocity(
 			radius_circle_pos * w_circle_pos *
 			Vector3d(0.0, cos(w_circle_pos * time), sin(w_circle_pos * time)));
-		motion_force_task->setDesiredAcceleration(
+		motion_force_task->setGoalLinearAcceleration(
 			radius_circle_pos * w_circle_pos * w_circle_pos *
 			Vector3d(0.0, -sin(w_circle_pos * time), cos(w_circle_pos * time)));
 
@@ -191,9 +191,9 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 		}
 		if (timer.elapsedCycles() == 5000) {
 			joint_task->reInitializeTask();
-			VectorXd desired_joint_pos = initial_q;
-			desired_joint_pos(0) += 1.5;
-			joint_task->setDesiredPosition(desired_joint_pos);
+			VectorXd goal_joint_pos = initial_q;
+			goal_joint_pos(0) += 1.5;
+			joint_task->setGoalPosition(goal_joint_pos);
 		}
 
 		//------ compute the final torques
@@ -206,7 +206,7 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 		if (timer.elapsedCycles() % 500 == 0) {
 			cout << "time: " << time << endl;
 			cout << "position error : "
-				 << (motion_force_task->getDesiredPosition() -
+				 << (motion_force_task->getGoalPosition() -
 					 motion_force_task->getCurrentPosition())
 						.norm()
 				 << endl;

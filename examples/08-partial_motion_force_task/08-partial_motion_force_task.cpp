@@ -128,8 +128,8 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 	// initial position and orientation
 	Matrix3d initial_orientation = robot->rotation(link_name);
 	Vector3d initial_position = robot->position(link_name, pos_in_link);
-	Vector3d desired_position = initial_position;
-	Matrix3d desired_orientation = initial_orientation;
+	Vector3d goal_position = initial_position;
+	Matrix3d goal_orientation = initial_orientation;
 
 	// joint task to control the nullspace
 	vector<shared_ptr<Sai2Primitives::TemplateTask>> task_list = {
@@ -159,21 +159,21 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 		// try to move in X, cannot do it because the partial task does not
 		// control X direction
 		if (timer.elapsedCycles() == 1000) {
-			desired_position += Vector3d(0.1, 0.0, 0.0);
+			goal_position += Vector3d(0.1, 0.0, 0.0);
 		}
 		// then move in Y and Z, this should be doable
 		if (timer.elapsedCycles() == 2000) {
-			desired_position += Vector3d(0.0, 0.1, 0.1);
+			goal_position += Vector3d(0.0, 0.1, 0.1);
 		}
 
 		// try to rotate around Z, should not be able to do it
 		if (timer.elapsedCycles() == 3000) {
-			desired_orientation =
+			goal_orientation =
 				AngleAxisd(M_PI / 6, Vector3d::UnitZ()) * initial_orientation;
 		}
 		// then rotate around X, this should be doable
 		if (timer.elapsedCycles() == 4000) {
-			desired_orientation =
+			goal_orientation =
 				AngleAxisd(M_PI / 6, Vector3d::UnitX()) * initial_orientation;
 		}
 
@@ -181,12 +181,12 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 		if (timer.elapsedCycles() == 8000) {
 			VectorXd q_des = robot->q();
 			q_des(0) += 0.5;
-			robot_controller->getRedundancyCompletionTask()->setDesiredPosition(
+			robot_controller->getRedundancyCompletionTask()->setGoalPosition(
 				q_des);
 		}
 
-		motion_force_task->setDesiredPosition(desired_position);
-		motion_force_task->setDesiredOrientation(desired_orientation);
+		motion_force_task->setGoalPosition(goal_position);
+		motion_force_task->setGoalOrientation(goal_orientation);
 
 		//------ Control torques
 		{
@@ -198,10 +198,10 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 		if (timer.elapsedCycles() % 500 == 0) {
 			cout << time << endl;
 			cout << "desired position : "
-				 << motion_force_task->getDesiredPosition().transpose() << endl;
+				 << motion_force_task->getGoalPosition().transpose() << endl;
 			cout << "desired position projected in controlled space: "
 				 << (motion_force_task->posSelectionProjector() *
-					 motion_force_task->getDesiredPosition())
+					 motion_force_task->getGoalPosition())
 						.transpose()
 				 << endl;
 			cout << "current position : "
@@ -213,12 +213,12 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 				 << endl;
 			cout << "position error in controlled space : "
 				 << (motion_force_task->posSelectionProjector() *
-					 (motion_force_task->getDesiredPosition() -
+					 (motion_force_task->getGoalPosition() -
 					  motion_force_task->getCurrentPosition()))
 						.norm()
 				 << endl;
 			cout << "position error in full space : "
-				 << (motion_force_task->getDesiredPosition() -
+				 << (motion_force_task->getGoalPosition() -
 					 motion_force_task->getCurrentPosition())
 						.norm()
 				 << endl;

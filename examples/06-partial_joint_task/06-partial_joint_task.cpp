@@ -106,7 +106,7 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 	joint_selection(1, 7) = 1;
 	auto partial_joint_task =
 		make_shared<Sai2Primitives::JointTask>(robot, joint_selection);
-	VectorXd joint_desired_pos = partial_joint_task->getCurrentPosition();
+	VectorXd joint_goal_pos = partial_joint_task->getCurrentPosition();
 
 	// Motion task for end effector
 	string link_name = "end-effector";
@@ -142,19 +142,19 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 		// -------- set task goals and compute control torques
 		// partial joint task
 		if (timer.elapsedCycles() % 4000 == 1000) {
-			joint_desired_pos(0) -= 1.0;
+			joint_goal_pos(0) -= 1.0;
 		} else if (timer.elapsedCycles() % 4000 == 3000) {
-			joint_desired_pos(0) += 1.0;
+			joint_goal_pos(0) += 1.0;
 		}
-		partial_joint_task->setDesiredPosition(joint_desired_pos);
+		partial_joint_task->setGoalPosition(joint_goal_pos);
 
 		// motion force task
 		double time = timer.elapsedSimTime();
-		Vector3d desired_position =
+		Vector3d goal_position =
 			initial_position + 0.1 * Vector3d(sin(2.0 * M_PI * 0.3 * time), 0.0,
 											  1 - cos(2.0 * M_PI * 0.3 * time));
-		desired_position(1) = partial_joint_task->getCurrentPosition()(0);
-		motion_force_task->setDesiredPosition(desired_position);
+		goal_position(1) = partial_joint_task->getCurrentPosition()(0);
+		motion_force_task->setGoalPosition(goal_position);
 
 		//------ compute the final torques
 		{

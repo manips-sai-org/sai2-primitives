@@ -96,7 +96,9 @@ public:
 	 *
 	 * @return const Vector3d& current velocity of the control point
 	 */
-	const Vector3d& getCurrentVelocity() const { return _current_velocity; }
+	const Vector3d& getCurrentLinearVelocity() const {
+		return _current_linear_velocity;
+	}
 
 	/**
 	 * @brief Get the Current Orientation
@@ -116,14 +118,14 @@ public:
 	}
 
 	/**
-	 * @brief Get the Sensed Force resolved at the control frame
+	 * @brief Get the Sensed Force used for control, in robot world frame
 	 *
 	 * @return const Vector3d& current sensed force in the control frame
 	 */
 	const Vector3d& getSensedForce() const { return _sensed_force; }
 
 	/**
-	 * @brief Get the Sensed Moment resolved at the control frame
+	 * @brief Get the Sensed Moment used for control, in robot world frame
 	 *
 	 * @return const Vector3d& current sensed moment in the control frame
 	 */
@@ -153,40 +155,42 @@ public:
 		return _N * _N_prec;
 	}
 
-	void setDesiredPosition(const Vector3d& desired_position) {
-		_desired_position = desired_position;
+	void setGoalPosition(const Vector3d& goal_position) {
+		_goal_position = goal_position;
 	}
-	const Vector3d& getDesiredPosition() const { return _desired_position; }
+	const Vector3d& getGoalPosition() const { return _goal_position; }
 
-	void setDesiredOrientation(const Matrix3d& desired_orientation) {
-		_desired_orientation = desired_orientation;
+	void setGoalOrientation(const Matrix3d& goal_orientation) {
+		_goal_orientation = goal_orientation;
 	}
-	Matrix3d getDesiredOrientation() const { return _desired_orientation; }
+	Matrix3d getGoalOrientation() const { return _goal_orientation; }
 
-	void setDesiredVelocity(const Vector3d& desired_velocity) {
-		_desired_velocity = desired_velocity;
+	void setGoalLinearVelocity(const Vector3d& goal_linvel) {
+		_goal_linear_velocity = goal_linvel;
 	}
-	const Vector3d& getDesiredVelocity() const { return _desired_velocity; }
-
-	void setDesiredAngularVelocity(const Vector3d& desired_angvel) {
-		_desired_angular_velocity = desired_angvel;
-	}
-	const Vector3d& getDesiredAngularVelocity() const {
-		return _desired_angular_velocity;
+	const Vector3d& getGoalLinearVelocity() const {
+		return _goal_linear_velocity;
 	}
 
-	void setDesiredAcceleration(const Vector3d& desired_acceleration) {
-		_desired_acceleration = desired_acceleration;
+	void setGoalAngularVelocity(const Vector3d& goal_angvel) {
+		_goal_angular_velocity = goal_angvel;
 	}
-	const Vector3d& getDesiredAcceleration() const {
-		return _desired_acceleration;
+	const Vector3d& getGoalAngularVelocity() const {
+		return _goal_angular_velocity;
 	}
 
-	void setDesiredAngularAcceleration(const Vector3d& desired_angaccel) {
-		_desired_angular_acceleration = desired_angaccel;
+	void setGoalLinearAcceleration(const Vector3d& goal_linaccel) {
+		_goal_linear_acceleration = goal_linaccel;
+	}
+	const Vector3d& getGoalLinearAcceleration() const {
+		return _goal_linear_acceleration;
+	}
+
+	void setGoalAngularAcceleration(const Vector3d& goal_angaccel) {
+		_goal_angular_acceleration = goal_angaccel;
 	}
 	const Vector3d& getDesiredAngularAcceleration() const {
-		return _desired_angular_acceleration;
+		return _goal_angular_acceleration;
 	}
 
 	const VectorXd& getUnitMassForce() const { return _unit_mass_force; }
@@ -321,9 +325,7 @@ public:
 
 	bool getInternalOtgEnabled() const { return _use_internal_otg_flag; }
 
-	const OTG_6dof_cartesian& getInternalOtg() const {
-		return *_otg;
-	}
+	const OTG_6dof_cartesian& getInternalOtg() const { return *_otg; }
 
 	// Velocity saturation flag and saturation values
 	void enableVelocitySaturation(const double linear_vel_sat = 0.3,
@@ -462,20 +464,23 @@ public:
 	 * argument is the axis defining the space of dimension one (unused if the
 	 * first parameter is 0 or 3, and representing the direction of the force
 	 * space is the first parameter is 1, or the direction of the motion space
-	 * if the first parameter is 2)
+	 * if the first parameter is 2).
+	 * Returns true if the parametrization was changed (dimension or axis) and
+	 * false otherwise (in which case, the goal position and integrators are
+	 * not reset)
 	 *
 	 * @param force_space_dimension  between 0 and 3
 	 * @param force_or_motion_single_axis non singular axis (unused if
 	 * force_space_dimension is 0 or 3)
+	 * @return true if the parametrization was changed (dimension or axis) and
+	 * false otherwise
 	 */
-	void parametrizeForceMotionSpaces(
+	bool parametrizeForceMotionSpaces(
 		const int force_space_dimension,
 		const Vector3d& force_or_motion_single_axis = Vector3d::Zero());
 
 	int getForceSpaceDimension() const { return _force_space_dimension; }
-	Vector3d getForceMotionSingleAxis() const {
-		return _force_or_motion_axis;
-	}
+	Vector3d getForceMotionSingleAxis() const { return _force_or_motion_axis; }
 
 	/**
 	 * @brief Parametrizes the moment space and rotational motion space.
@@ -486,12 +491,17 @@ public:
 	 * first parameter is 0 or 3, and representing the direction of the moment
 	 * space is the first parameter is 1, or the direction of the rotational
 	 * motion space if the first parameter is 2)
+	 * Returns true if the parametrization was changed (dimension or axis) and
+	 * false otherwise (in which case, the goal orientation and integrators are
+	 * not reset)
 	 *
 	 * @param moment_space_dimension betawwn 0 and 3
 	 * @param moment_or_rot_motion_single_axis non singular axis (unused if
 	 * moment_space_dimension is 0 or 3)
+	 * @return true if the parametrization was changed (dimension or axis) and
+	 * false otherwise
 	 */
-	void parametrizeMomentRotMotionSpaces(
+	bool parametrizeMomentRotMotionSpaces(
 		const int moment_space_dimension,
 		const Vector3d& moment_or_rot_motion_single_axis = Vector3d::Zero());
 
@@ -565,13 +575,17 @@ private:
 	 */
 	void initialSetup();
 
-	// desired pose defaults to the configuration when the task is created
-	Vector3d _desired_position;			 // in robot world frame
-	Matrix3d _desired_orientation;		 // in robot world frame
-	Vector3d _desired_velocity;			 // in robot world frame
-	Vector3d _desired_angular_velocity;	 // in robot world frame
-	Vector3d _desired_acceleration;
-	Vector3d _desired_angular_acceleration;
+	// the goal pose is the pose the controller tries to reach. If OTG is on,
+	// the actual desired pose at each timestep will be interpolated between the
+	// initial pose and the goal pose, while the goal pose might not change.
+	// It defaults to the configuration when the task is created
+	// expressed in world frame
+	Vector3d _goal_position;
+	Matrix3d _goal_orientation;
+	Vector3d _goal_linear_velocity;
+	Vector3d _goal_angular_velocity;
+	Vector3d _goal_linear_acceleration;
+	Vector3d _goal_angular_acceleration;
 
 	// gains for motion controller
 	// defaults to isptropic 50 for p gains, 14 for d gains and 0 for i gains
@@ -617,7 +631,7 @@ private:
 	Vector3d _current_position;		// robot world frame
 	Matrix3d _current_orientation;	// robot world frame
 
-	Vector3d _current_velocity;			 // robot world frame
+	Vector3d _current_linear_velocity;	 // robot world frame
 	Vector3d _current_angular_velocity;	 // robot world frame
 
 	Vector3d _orientation_error;			 // robot world frame

@@ -17,7 +17,7 @@ namespace Sai2Primitives {
 
 namespace {
 bool isValidRotation(const Matrix3d mat) {
-	if ((mat.transpose() * mat - Matrix3d::Identity()).norm() > 1e-6) {
+	if ((mat.transpose() * mat - Matrix3d::Identity()).norm() > 1e-3) {
 		return false;
 	}
 	if (abs(mat.determinant() - 1) > 1e-6) {
@@ -51,6 +51,30 @@ void OTG_6dof_cartesian::reInitialize(const Vector3d& initial_position,
 	_output.new_position = _input.target_position;
 	_output.new_velocity.setZero();
 	_output.new_acceleration.setZero();
+}
+
+void OTG_6dof_cartesian::reInitializeLinear(const Vector3d& initial_position) {
+	setGoalPosition(initial_position);
+
+	_input.current_position.head<3>() = _input.target_position.head<3>();
+	_input.current_velocity.head<3>().setZero();
+	_input.current_acceleration.head<3>().setZero();
+
+	_output.new_position.head<3>() = _input.target_position.head<3>();
+	_output.new_velocity.head<3>().setZero();
+	_output.new_acceleration.head<3>().setZero();
+}
+
+void OTG_6dof_cartesian::reInitializeAngular(const Matrix3d& initial_orientation) {
+	setGoalOrientation(initial_orientation);
+
+	_input.current_position.tail<3>() = _input.target_position.tail<3>();
+	_input.current_velocity.tail<3>().setZero();
+	_input.current_acceleration.tail<3>().setZero();
+
+	_output.new_position.tail<3>() = _input.target_position.tail<3>();
+	_output.new_velocity.tail<3>().setZero();
+	_output.new_acceleration.tail<3>().setZero();
 }
 
 void OTG_6dof_cartesian::setMaxLinearVelocity(

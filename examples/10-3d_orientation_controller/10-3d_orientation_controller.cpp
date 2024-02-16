@@ -112,7 +112,7 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 
 	// initial orientation
 	const Matrix3d initial_orientation = robot->rotation(link_name);
-	Matrix3d desired_orientation = initial_orientation;
+	Matrix3d goal_orientation = initial_orientation;
 
 	// robot controller
 	vector<shared_ptr<Sai2Primitives::TemplateTask>> task_list = {
@@ -140,19 +140,19 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 
 		// move in x and y plane back and forth
 		if (timer.elapsedCycles() % 6000 == 0) {
-			desired_orientation = initial_orientation;
+			goal_orientation = initial_orientation;
 		} else if (timer.elapsedCycles() % 6000 == 2000) {
-			desired_orientation =
+			goal_orientation =
 				AngleAxisd(M_PI / 3.0, Vector3d::UnitX()).toRotationMatrix() *
 				initial_orientation;
 		} else if (timer.elapsedCycles() % 6000 == 4000) {
-			desired_orientation =
+			goal_orientation =
 				AngleAxisd(M_PI / 4.0, Vector3d::UnitY()).toRotationMatrix() *
 				AngleAxisd(M_PI / 3.0, Vector3d::UnitX()).toRotationMatrix() *
 				initial_orientation;
 		}
 
-		motion_force_task->setDesiredOrientation(desired_orientation);
+		motion_force_task->setGoalOrientation(goal_orientation);
 
 		//------ Control torques
 		{

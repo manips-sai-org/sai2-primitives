@@ -87,7 +87,7 @@ Vector3d POPCBilateralTeleoperation::computePOPCForce() {
 
 	// power output on robot side
 	double power_output_robot_side =
-		_motion_force_task->getCurrentVelocity().dot(
+		_motion_force_task->getCurrentLinearVelocity().dot(
 			_motion_force_task->sigmaPosition() *
 			_motion_force_task->getUnitMassForce().head(3));
 
@@ -178,7 +178,7 @@ Vector3d POPCBilateralTeleoperation::computePOPCTorque() {
 
 	// power output on robot side
 	double power_output_robot_side =
-		_motion_force_task->getCurrentVelocity().dot(
+		_motion_force_task->getCurrentLinearVelocity().dot(
 			_motion_force_task->sigmaOrientation() *
 			_motion_force_task->getUnitMassForce().tail(3));
 

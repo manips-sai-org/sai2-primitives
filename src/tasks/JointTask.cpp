@@ -81,40 +81,40 @@ void JointTask::reInitializeTask() {
 	_current_position = _joint_selection * getConstRobotModel()->q();
 	_current_velocity.setZero(_task_dof);
 
-	_desired_position = _current_position;
-	_desired_velocity.setZero(_task_dof);
-	_desired_acceleration.setZero(_task_dof);
+	_goal_position = _current_position;
+	_goal_velocity.setZero(_task_dof);
+	_goal_acceleration.setZero(_task_dof);
 
 	_integrated_position_error.setZero(_task_dof);
 
 	_otg->reInitialize(_current_position);
 }
 
-void JointTask::setDesiredPosition(const VectorXd& desired_position) {
-	if (desired_position.size() != _task_dof) {
+void JointTask::setGoalPosition(const VectorXd& goal_position) {
+	if (goal_position.size() != _task_dof) {
 		throw std::invalid_argument(
-			"desired position vector size not consistent with task dof in "
-			"JointTask::setDesiredPosition\n");
+			"goal position vector size not consistent with task dof in "
+			"JointTask::setGoalPosition\n");
 	}
-	_desired_position = desired_position;
+	_goal_position = goal_position;
 }
 
-void JointTask::setDesiredVelocity(const VectorXd& desired_velocity) {
-	if (desired_velocity.size() != _task_dof) {
+void JointTask::setGoalVelocity(const VectorXd& goal_velocity) {
+	if (goal_velocity.size() != _task_dof) {
 		throw std::invalid_argument(
-			"desired velocity vector size not consistent with task dof in "
-			"JointTask::setDesiredvelocity\n");
+			"goal velocity vector size not consistent with task dof in "
+			"JointTask::setGoalVelocity\n");
 	}
-	_desired_velocity = desired_velocity;
+	_goal_velocity = goal_velocity;
 }
 
-void JointTask::setDesiredAcceleration(const VectorXd& desired_acceleration) {
-	if (desired_acceleration.size() != _task_dof) {
+void JointTask::setGoalAcceleration(const VectorXd& goal_acceleration) {
+	if (goal_acceleration.size() != _task_dof) {
 		throw std::invalid_argument(
-			"desired acceleration vector size not consistent with task dof in "
-			"JointTask::setDesiredAcceleration\n");
+			"goal acceleration vector size not consistent with task dof in "
+			"JointTask::setGoalAcceleration\n");
 	}
-	_desired_acceleration = desired_acceleration;
+	_goal_acceleration = goal_acceleration;
 }
 
 void JointTask::setGains(const VectorXd& kp, const VectorXd& kv,
@@ -266,13 +266,13 @@ VectorXd JointTask::computeTorques() {
 		return partial_joint_task_torques;
 	}
 
-	VectorXd tmp_desired_position = _desired_position;
-	VectorXd tmp_desired_velocity = _desired_velocity;
-	VectorXd tmp_desired_acceleration = _desired_acceleration;
+	VectorXd tmp_desired_position = _goal_position;
+	VectorXd tmp_desired_velocity = _goal_velocity;
+	VectorXd tmp_desired_acceleration = _goal_acceleration;
 
 	// compute next state from trajectory generation
 	if (_use_internal_otg_flag) {
-		_otg->setGoalPositionAndVelocity(_desired_position, _desired_velocity);
+		_otg->setGoalPositionAndVelocity(_goal_position, _goal_velocity);
 		_otg->update();
 
 		tmp_desired_position = _otg->getNextPosition();
@@ -330,11 +330,13 @@ void JointTask::enableInternalOtgAccelerationLimited(
 			"max velocity or max acceleration vector size not consistent with "
 			"task dof in JointTask::enableInternalOtgAccelerationLimited\n");
 	}
-	_use_internal_otg_flag = true;
-	_otg->reInitialize(_current_position);
 	_otg->setMaxVelocity(max_velocity);
 	_otg->setMaxAcceleration(max_acceleration);
 	_otg->disableJerkLimits();
+	if (!_use_internal_otg_flag) {
+		_otg->reInitialize(_current_position);
+	}
+	_use_internal_otg_flag = true;
 }
 
 void JointTask::enableInternalOtgJerkLimited(const VectorXd& max_velocity,
@@ -353,11 +355,13 @@ void JointTask::enableInternalOtgJerkLimited(const VectorXd& max_velocity,
 			"consistent with task dof in "
 			"JointTask::enableInternalOtgJerkLimited\n");
 	}
-	_use_internal_otg_flag = true;
-	_otg->reInitialize(_current_position);
 	_otg->setMaxVelocity(max_velocity);
 	_otg->setMaxAcceleration(max_acceleration);
 	_otg->setMaxJerk(max_jerk);
+	if (!_use_internal_otg_flag) {
+		_otg->reInitialize(_current_position);
+	}
+	_use_internal_otg_flag = true;
 }
 
 void JointTask::enableVelocitySaturation(const VectorXd& saturation_velocity) {

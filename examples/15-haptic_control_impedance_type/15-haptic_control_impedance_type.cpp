@@ -234,9 +234,9 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 		motion_force_task->updateSensedForceAndMoment(
 			sim->getSensedForce(robot_name, link_name),
 			sim->getSensedMoment(robot_name, link_name));
-		motion_force_task->setDesiredPosition(
+		motion_force_task->setGoalPosition(
 			haptic_output.robot_goal_position);
-		motion_force_task->setDesiredOrientation(
+		motion_force_task->setGoalOrientation(
 			haptic_output.robot_goal_orientation);
 
 		{

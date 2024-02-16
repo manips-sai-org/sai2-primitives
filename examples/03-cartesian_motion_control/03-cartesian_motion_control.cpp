@@ -129,8 +129,8 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 	// initial position and orientation
 	Matrix3d initial_orientation = robot->rotation(link_name);
 	Vector3d initial_position = robot->position(link_name, pos_in_link);
-	Vector3d desired_position = initial_position;
-	Matrix3d desired_orientation = initial_orientation;
+	Vector3d goal_position = initial_position;
+	Matrix3d goal_orientation = initial_orientation;
 
 	// create a loop timer
 	double control_freq = 1000;
@@ -156,15 +156,15 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 		double theta = M_PI / 4.0;
 		R << cos(theta), sin(theta), 0, -sin(theta), cos(theta), 0, 0, 0, 1;
 		if (timer.elapsedCycles() % 3000 == 2000) {
-			desired_position(2) += 0.1;
-			desired_orientation = R * desired_orientation;
+			goal_position(2) += 0.1;
+			goal_orientation = R * goal_orientation;
 
 		} else if (timer.elapsedCycles() % 3000 == 500) {
-			desired_position(2) -= 0.1;
-			desired_orientation = R.transpose() * desired_orientation;
+			goal_position(2) -= 0.1;
+			goal_orientation = R.transpose() * goal_orientation;
 		}
-		motion_force_task->setDesiredPosition(desired_position);
-		motion_force_task->setDesiredOrientation(desired_orientation);
+		motion_force_task->setGoalPosition(goal_position);
+		motion_force_task->setGoalOrientation(goal_orientation);
 
 		// disable otg after 6.5 seconds
 		if (timer.elapsedCycles() == 6500) {
@@ -190,11 +190,11 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 		if (timer.elapsedCycles() % 500 == 0) {
 			cout << time << endl;
 			cout << "desired position : "
-				 << motion_force_task->getDesiredPosition().transpose() << endl;
+				 << motion_force_task->getGoalPosition().transpose() << endl;
 			cout << "current position : "
 				 << motion_force_task->getCurrentPosition().transpose() << endl;
 			cout << "position error : "
-				 << (motion_force_task->getDesiredPosition() -
+				 << (motion_force_task->getGoalPosition() -
 					 motion_force_task->getCurrentPosition())
 						.norm()
 				 << endl;

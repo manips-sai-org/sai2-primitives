@@ -119,7 +119,7 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 
 	// initial position and orientation
 	const Vector3d initial_position = robot->position(link_name);
-	Vector3d desired_position = initial_position;
+	Vector3d goal_position = initial_position;
 
 	// joint task to control the nullspace
 	vector<shared_ptr<Sai2Primitives::TemplateTask>> task_list = {
@@ -154,16 +154,16 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 
 		// move in x and y plane back and forth
 		if (timer.elapsedCycles() % 2000 == 0) {
-			desired_position(0) -= 0.07;
-			desired_position(1) -= 0.07;
+			goal_position(0) -= 0.07;
+			goal_position(1) -= 0.07;
 		} else if (timer.elapsedCycles() % 2000 == 1000) {
-			desired_position(0) += 0.07;
-			desired_position(1) += 0.07;
+			goal_position(0) += 0.07;
+			goal_position(1) += 0.07;
 		}
 		if (timer.elapsedCycles() > 2000 && timer.elapsedCycles() < 3000) {
-			desired_position(2) -= 0.00015;
+			goal_position(2) -= 0.00015;
 		}
-		motion_force_task->setDesiredPosition(desired_position);
+		motion_force_task->setGoalPosition(goal_position);
 
 		if (!force_control && motion_force_task->getSensedForce()(2) <= -1.0) {
 			force_control = true;
@@ -176,7 +176,7 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 
 		if (timer.elapsedCycles() % 1000 == 999) {
 			cout << "desired position: "
-				 << motion_force_task->getDesiredPosition().transpose() << endl;
+				 << motion_force_task->getGoalPosition().transpose() << endl;
 			cout << "current position: "
 				 << motion_force_task->getCurrentPosition().transpose() << endl;
 			cout << "desired force: "
