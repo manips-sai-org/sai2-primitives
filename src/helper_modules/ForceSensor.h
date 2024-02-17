@@ -25,6 +25,7 @@ public:
                 const Vector3d& gravity = Vector3d(0, 0, -9.81)) {
         _robot = robot;
         _gravity = gravity;
+        setBias(Vector3d::Zero(), Vector3d::Zero());
     }
 
     void setForceSensorFrame(const string& link_name, 
@@ -45,6 +46,11 @@ public:
         _mass = 0;
         _com.setZero();
         _inertia.setZero();
+    }
+
+    void setBias(const Vector3d& force_bias, const Vector3d& moment_bias) {
+        _force_bias = force_bias;
+        _moment_bias = moment_bias;
     }
 
     ForceMeasurement getCalibratedForceMoment(const Vector3d& raw_force, const Vector3d& raw_moment);

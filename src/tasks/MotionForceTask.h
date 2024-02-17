@@ -553,6 +553,10 @@ public:
 					const Matrix3d& inertia,
 					const std::string body_name= "");
 
+	std::shared_ptr<ForceSensor> getConstForceSensorModel() {
+		return _force_sensor;
+	}
+
 private:
 	/**
 	 * @brief Initial setup of the task, called in the constructor to avoid
@@ -621,7 +625,7 @@ private:
 	Vector3d _integrated_position_error;	 // robot world frame
 
 	// force quantities
-	std::unique_ptr<ForceSensor> _force_sensor;
+	std::shared_ptr<ForceSensor> _force_sensor;
 	Affine3d _T_control_to_sensor;
 
 	Vector3d _sensed_force;	  // robot world frame

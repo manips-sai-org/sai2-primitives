@@ -165,7 +165,7 @@ void MotionForceTask::initialSetup() {
 	enableInternalOtgAccelerationLimited(0.3, 1.0, M_PI / 3, M_PI);
 
 	// force sensor
-	_force_sensor = std::make_unique<ForceSensor>(getConstRobotModel());
+	_force_sensor = std::make_shared<ForceSensor>(getConstRobotModel());
 
 	reInitializeTask();
 }

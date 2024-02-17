@@ -33,7 +33,9 @@ ForceMeasurement ForceSensor::getCalibratedForceMoment(const Vector3d& raw_force
 
     // inertial compensation
     Vector6d vel = _robot->velocity6dInWorld(_link_name, _T_link_to_sensor.translation());
+    _robot->updateKinematicsCustom(false, false, true, true);
     Vector6d accel = _robot->acceleration6dInWorld(_link_name, _T_link_to_sensor.translation());
+    _robot->updateModel();
     Vector3d linear_vel_local_frame = R_world_to_sensor.transpose() * vel.head(3);
     Vector3d angular_vel_sensor_frame = R_world_to_sensor.transpose() * vel.tail(3);
     Vector3d linear_accel_sensor_frame = R_world_to_sensor.transpose() * accel.head(3);
