@@ -144,7 +144,7 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 		joint_task->updateTaskModel(N_prec);
 
 		// -------- set task goals and compute control torques
-		// set the desired position (step every second)
+		// set the goal position (step every second)
 		if (timer.elapsedCycles() % 3000 == 500) {
 			goal_position(2) += 0.4;
 			goal_position(3) -= 0.6;
@@ -190,7 +190,7 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 		// display robot state every half second
 		if (timer.elapsedCycles() % 500 == 0) {
 			cout << timer.elapsedSimTime() << endl;
-			cout << "desired position : "
+			cout << "goal position : "
 				 << joint_task->getGoalPosition().transpose() << endl;
 			cout << "current position : "
 				 << joint_task->getCurrentPosition().transpose() << endl;
