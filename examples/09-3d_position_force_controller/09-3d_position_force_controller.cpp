@@ -175,11 +175,11 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 		}
 
 		if (timer.elapsedCycles() % 1000 == 999) {
-			cout << "desired position: "
+			cout << "goal position: "
 				 << motion_force_task->getGoalPosition().transpose() << endl;
 			cout << "current position: "
 				 << motion_force_task->getCurrentPosition().transpose() << endl;
-			cout << "desired force: "
+			cout << "goal force: "
 				 << motion_force_task->getGoalForce().transpose() << endl;
 			cout << "sensed force: "
 				 << motion_force_task->getSensedForce().transpose() << endl;

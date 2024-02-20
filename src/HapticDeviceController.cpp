@@ -18,13 +18,7 @@
 using namespace Eigen;
 
 namespace {
-// AngleAxisd orientationErrorAngleAxis(const Matrix3d& desired_orientation,
-// 									 const Matrix3d& current_orientation) {
-// 	// expressed in base frame common to desired and current orientation
-// 	return AngleAxisd(current_orientation * desired_orientation.transpose());
-// }
-
-AngleAxisd orientationDiffAngleAxis(const Matrix3d& desired_orientation,
+AngleAxisd orientationDiffAngleAxis(const Matrix3d& goal_orientation,
 									const Matrix3d& current_orientation,
 									const double scaling_factor = 1.0) {
 	if (scaling_factor < 0 || scaling_factor > 1) {
@@ -33,14 +27,14 @@ AngleAxisd orientationDiffAngleAxis(const Matrix3d& desired_orientation,
 			"scaledOrientationErrorFromAngleAxis");
 	}
 
-	// expressed in base frame common to desired and current orientation
-	AngleAxisd current_orientation_from_desired_orientation_aa(
-		current_orientation * desired_orientation.transpose());
+	// expressed in base frame common to goal and current orientation
+	AngleAxisd current_orientation_from_goal_orientation_aa(
+		current_orientation * goal_orientation.transpose());
 
 	return AngleAxisd(
 		scaling_factor *
-			current_orientation_from_desired_orientation_aa.angle(),
-		current_orientation_from_desired_orientation_aa.axis());
+			current_orientation_from_goal_orientation_aa.angle(),
+		current_orientation_from_goal_orientation_aa.axis());
 }
 
 Vector3d angleAxisToVector(const AngleAxisd& aa) {
@@ -480,10 +474,10 @@ HapticControllerOtuput HapticDeviceController::computeForceMotionControl(
 			_force_deadband * projected_device_force.normalized();
 	}
 
-	Vector3d robot_desired_position_increment =
+	Vector3d robot_goal_position_increment =
 		_device_force_to_robot_delta_position * _R_world_device *
 		projected_device_force;
-	output.robot_goal_position -= robot_desired_position_increment;
+	output.robot_goal_position -= robot_goal_position_increment;
 
 	applyLineGuidanceForce(device_force, input, true);
 	applyPlaneGuidanceForce(device_force, input, true);
@@ -509,9 +503,9 @@ HapticControllerOtuput HapticDeviceController::computeForceMotionControl(
 				_moment_deadband * device_moment_after_deadband.normalized();
 		}
 		// compute robot goal orientation
-		Matrix3d robot_desired_orientation_increment = Matrix3d::Identity();
+		Matrix3d robot_goal_orientation_increment = Matrix3d::Identity();
 		if (device_moment_after_deadband.norm() > 1e-3) {
-			robot_desired_orientation_increment =
+			robot_goal_orientation_increment =
 				AngleAxisd(
 					-_device_moment_to_robot_delta_orientation *
 						device_moment_after_deadband.norm(),
@@ -519,7 +513,7 @@ HapticControllerOtuput HapticDeviceController::computeForceMotionControl(
 					.toRotationMatrix();
 		}
 		output.robot_goal_orientation =
-			robot_desired_orientation_increment * output.robot_goal_orientation;
+			robot_goal_orientation_increment * output.robot_goal_orientation;
 	}
 
 	return output;

@@ -205,10 +205,10 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 				cout << "Current moment: "
 					 << motion_force_task->getSensedMoment().transpose()
 					 << endl;
-				cout << "Desired force: "
+				cout << "Goal force: "
 					 << motion_force_task->getGoalForce().transpose()
 					 << endl;
-				cout << "Desired moment: "
+				cout << "Goal moment: "
 					 << motion_force_task->getGoalMoment().transpose()
 					 << endl;
 				cout << endl;
