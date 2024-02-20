@@ -174,16 +174,22 @@ void MotionForceTask::reInitializeTask() {
 	_current_position = getConstRobotModel()->positionInWorld(
 		_link_name, _compliant_frame.translation());
 	_goal_position = _current_position;
+	_desired_position = _current_position;
 	_current_orientation = getConstRobotModel()->rotationInWorld(
 		_link_name, _compliant_frame.rotation());
 	_goal_orientation = _current_orientation;
+	_desired_orientation = _current_orientation;
 
 	_current_linear_velocity.setZero();
 	_goal_linear_velocity.setZero();
+	_desired_linear_velocity.setZero();
 	_current_angular_velocity.setZero();
 	_goal_angular_velocity.setZero();
+	_desired_angular_velocity.setZero();
 	_goal_linear_acceleration.setZero();
+	_desired_linear_acceleration.setZero();
 	_goal_angular_acceleration.setZero();
+	_desired_angular_acceleration.setZero();
 
 	_orientation_error.setZero();
 	_integrated_position_error.setZero();
@@ -411,12 +417,12 @@ VectorXd MotionForceTask::computeTorques() {
 
 	// motion related terms
 	// compute next state from trajectory generation
-	Vector3d tmp_desired_position = _goal_position;
-	Matrix3d tmp_desired_orientation = _goal_orientation;
-	Vector3d tmp_desired_linear_velocity = _goal_linear_velocity;
-	Vector3d tmp_desired_angular_velocity = _goal_angular_velocity;
-	Vector3d tmp_desired_acceleration = _goal_linear_acceleration;
-	Vector3d tmp_desired_angular_acceleration = _goal_angular_acceleration;
+	_desired_position = _goal_position;
+	_desired_orientation = _goal_orientation;
+	_desired_linear_velocity = _goal_linear_velocity;
+	_desired_angular_velocity = _goal_angular_velocity;
+	_desired_acceleration = _goal_linear_acceleration;
+	_desired_angular_acceleration = _goal_angular_acceleration;
 
 	if (_use_internal_otg_flag) {
 		_otg->setGoalPositionAndLinearVelocity(_goal_position,
@@ -425,47 +431,47 @@ VectorXd MotionForceTask::computeTorques() {
 												   _goal_angular_velocity);
 		_otg->update();
 
-		tmp_desired_position = _otg->getNextPosition();
-		tmp_desired_linear_velocity = _otg->getNextLinearVelocity();
-		tmp_desired_acceleration = _otg->getNextLinearAcceleration();
-		tmp_desired_orientation = _otg->getNextOrientation();
-		tmp_desired_angular_velocity = _otg->getNextAngularVelocity();
-		tmp_desired_angular_acceleration = _otg->getNextAngularAcceleration();
+		_desired_position = _otg->getNextPosition();
+		_desired_linear_velocity = _otg->getNextLinearVelocity();
+		_desired_acceleration = _otg->getNextLinearAcceleration();
+		_desired_orientation = _otg->getNextOrientation();
+		_desired_angular_velocity = _otg->getNextAngularVelocity();
+		_desired_angular_acceleration = _otg->getNextAngularAcceleration();
 	}
 
 	// linear motion
 	// update integrated error for I term
 	_integrated_position_error += sigma_position *
-								  (_current_position - tmp_desired_position) *
+								  (_current_position - _desired_position) *
 								  getLoopTimestep();
 
 	// final contribution
 	if (_use_velocity_saturation_flag) {
-		tmp_desired_linear_velocity =
+		_desired_linear_velocity =
 			-_kp_pos * _kv_pos.inverse() * sigma_position *
-				(_current_position - tmp_desired_position) -
+				(_current_position - _desired_position) -
 			_ki_pos * _kv_pos.inverse() * _integrated_position_error;
-		if (tmp_desired_linear_velocity.norm() > _linear_saturation_velocity) {
-			tmp_desired_linear_velocity *=
-				_linear_saturation_velocity / tmp_desired_linear_velocity.norm();
+		if (_desired_linear_velocity.norm() > _linear_saturation_velocity) {
+			_desired_linear_velocity *=
+				_linear_saturation_velocity / _desired_linear_velocity.norm();
 		}
 		position_related_force =
 			sigma_position *
-			(tmp_desired_acceleration -
-			 _kv_pos * (_current_linear_velocity - tmp_desired_linear_velocity));
+			(_desired_acceleration -
+			 _kv_pos * (_current_linear_velocity - _desired_linear_velocity));
 	} else {
 		position_related_force =
 			sigma_position *
-			(tmp_desired_acceleration -
-			 _kp_pos * (_current_position - tmp_desired_position) -
-			 _kv_pos * (_current_linear_velocity - tmp_desired_linear_velocity) -
+			(_desired_acceleration -
+			 _kp_pos * (_current_position - _desired_position) -
+			 _kv_pos * (_current_linear_velocity - _desired_linear_velocity) -
 			 _ki_pos * _integrated_position_error);
 	}
 
 	// angular motion
 	// orientation error
 	Vector3d step_orientation_error =
-		sigma_orientation * Sai2Model::orientationError(tmp_desired_orientation,
+		sigma_orientation * Sai2Model::orientationError(_desired_orientation,
 														_current_orientation);
 
 	// update integrated error for I term
@@ -473,24 +479,24 @@ VectorXd MotionForceTask::computeTorques() {
 
 	// final contribution
 	if (_use_velocity_saturation_flag) {
-		tmp_desired_angular_velocity =
+		_desired_angular_velocity =
 			-_kp_ori * _kv_ori.inverse() * step_orientation_error -
 			_ki_ori * _kv_ori.inverse() * _integrated_orientation_error;
-		if (tmp_desired_angular_velocity.norm() >
+		if (_desired_angular_velocity.norm() >
 			_angular_saturation_velocity) {
-			tmp_desired_angular_velocity *= _angular_saturation_velocity /
-											tmp_desired_angular_velocity.norm();
+			_desired_angular_velocity *= _angular_saturation_velocity /
+											_desired_angular_velocity.norm();
 		}
 		orientation_related_force =
-			sigma_orientation * (tmp_desired_angular_acceleration -
+			sigma_orientation * (_desired_angular_acceleration -
 								 _kv_ori * (_current_angular_velocity -
-											tmp_desired_angular_velocity));
+											_desired_angular_velocity));
 	} else {
 		orientation_related_force =
-			sigma_orientation * (tmp_desired_angular_acceleration -
+			sigma_orientation * (_desired_angular_acceleration -
 								 _kp_ori * step_orientation_error -
 								 _kv_ori * (_current_angular_velocity -
-											tmp_desired_angular_velocity) -
+											_desired_angular_velocity) -
 								 _ki_ori * _integrated_orientation_error);
 	}
 

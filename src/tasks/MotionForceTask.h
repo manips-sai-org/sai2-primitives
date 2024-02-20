@@ -193,6 +193,21 @@ public:
 		return _goal_angular_acceleration;
 	}
 
+	const Vector3d& getDesiredPosition() const { return _desired_position; }
+	const Matrix3d& getDesiredOrientation() const { return _desired_orientation; }
+	const Vector3d& getDesiredLinearVelocity() const {
+		return _desired_linear_velocity;
+	}
+	const Vector3d& getDesiredAngularVelocity() const {
+		return _desired_angular_velocity;
+	}
+	const Vector3d& getDesiredLinearAcceleration() const {
+		return _desired_linear_acceleration;
+	}
+	const Vector3d& getDesiredAngularAcceleration() const {
+		return _desired_angular_acceleration;
+	}
+
 	const VectorXd& getUnitMassForce() const { return _unit_mass_force; }
 
 	Vector3d getPositionError() const;
@@ -585,6 +600,13 @@ private:
 	Vector3d _goal_angular_velocity;
 	Vector3d _goal_linear_acceleration;
 	Vector3d _goal_angular_acceleration;
+
+	Vector3d _desired_position;
+	Matrix3d _desired_orientation;
+	Vector3d _desired_linear_velocity;
+	Vector3d _desired_angular_velocity;
+	Vector3d _desired_linear_acceleration;
+	Vector3d _desired_angular_acceleration;
 
 	// gains for motion controller
 	// defaults to isptropic 50 for p gains, 14 for d gains and 0 for i gains
