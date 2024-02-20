@@ -9,6 +9,9 @@
  * 
  */
 
+#ifndef SAI2_PRIMITIVES_FORCESENSOR_H_
+#define SAI2_PRIMITIVES_FORCESENSOR_H_
+
 #include "Sai2Model.h"
 #include <memory>
 
@@ -74,3 +77,5 @@ private:
 };
 
 }  // namespace 
+
+#endif

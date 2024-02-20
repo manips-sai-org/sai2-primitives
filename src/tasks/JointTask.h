@@ -297,6 +297,17 @@ public:
 		_dynamic_decoupling_type = type;
 	}
 
+	/**
+	 * @brief 		Test if goal position is reached
+	 * 
+	 * @param tol 
+	 * @return true 
+	 * @return false 
+	 */
+	bool goalPositionReached(const double tol = 1e-2) {
+		return ((_desired_position - _current_position).norm() < tol) ? true : false;
+	}
+
 	//-----------------------------------------------
 	//         Member variables
 	//-----------------------------------------------
