@@ -189,7 +189,7 @@ public:
 	void setGoalAngularAcceleration(const Vector3d& goal_angaccel) {
 		_goal_angular_acceleration = goal_angaccel;
 	}
-	const Vector3d& getDesiredAngularAcceleration() const {
+	const Vector3d& getGoalAngularAcceleration() const {
 		return _goal_angular_acceleration;
 	}
 
@@ -254,36 +254,36 @@ public:
 	}
 
 	/**
-	 * @brief Set the Desired Force in robot world frame
+	 * @brief Set the Goal Force in robot world frame
 	 *
-	 * @param desired_force
+	 * @param goal_force
 	 */
-	void setDesiredForce(const Vector3d& desired_force) {
-		_desired_force = desired_force;
+	void setGoalForce(const Vector3d& goal_force) {
+		_goal_force = goal_force;
 	}
 
 	/**
-	 * @brief Get the Desired Force in robot world frame
+	 * @brief Get the goal Force in robot world frame
 	 *
-	 * @return const Vector3d& desired force in robot world frame
+	 * @return const Vector3d& goal force in robot world frame
 	 */
-	Vector3d getDesiredForce() const;
+	Vector3d getGoalForce() const;
 
 	/**
-	 * @brief Set the Desired Moment in robot world frame
+	 * @brief Set the goal Moment in robot world frame
 	 *
-	 * @param desired_moment
+	 * @param goal_moment
 	 */
-	void setDesiredMoment(const Vector3d& desired_moment) {
-		_desired_moment = desired_moment;
+	void setGoalMoment(const Vector3d& goal_moment) {
+		_goal_moment = goal_moment;
 	}
 
 	/**
-	 * @brief Get the Desired Moment in robot world frame
+	 * @brief Get the goal Moment in robot world frame
 	 *
-	 * @return const Vector3d& desired moment in robot world frame
+	 * @return const Vector3d& goal moment in robot world frame
 	 */
-	Vector3d getDesiredMoment() const;
+	Vector3d getGoalMoment() const;
 
 	// internal otg functions
 	/**
@@ -375,20 +375,19 @@ public:
 	 * @brief      Computes the torques associated with this task.
 	 * @details    Computes the torques taking into account the last model
 	 *             update and updated values for the robot joint
-	 *             positions/velocities assumes the desired orientation and
-	 *             angular velocity has been updated
+	 *             positions/velocities
 	 *
 	 */
 	VectorXd computeTorques() override;
 
 	/**
-	 * @brief      reinitializes the desired state to the current robot
+	 * @brief      reinitializes the desired and goal states to the current robot
 	 *             configuration as well as the integrator terms
 	 */
 	void reInitializeTask() override;
 
 	/**
-	 * @brief      Checks if the desired position is reached op to a certain
+	 * @brief      Checks if the goal position is reached op to a certain
 	 * tolerance
 	 *
 	 * @param[in]  tolerance  The tolerance
@@ -400,7 +399,7 @@ public:
 							 const bool verbose = false);
 
 	/**
-	 * @brief      Checks if the desired orientation has reched the goal up to a
+	 * @brief      Checks if the goal orientation has reched the goal up to a
 	 * tolerance
 	 *
 	 * @param[in]  tolerance  The tolerance
@@ -604,10 +603,10 @@ private:
 	Matrix3d _kv_force, _kv_moment;
 	Matrix3d _ki_force, _ki_moment;
 
-	// desired force and moment for the force part of the controller
+	// goal force and moment for the force part of the controller
 	// defaults to Zero
-	Vector3d _desired_force;   // robot world frame
-	Vector3d _desired_moment;  // robot world frame
+	Vector3d _goal_force;   // robot world frame
+	Vector3d _goal_moment;  // robot world frame
 
 	// velocity saturation is off by default
 	bool _use_velocity_saturation_flag;

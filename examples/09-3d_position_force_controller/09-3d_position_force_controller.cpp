@@ -169,7 +169,7 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 			force_control = true;
 			motion_force_task->parametrizeForceMotionSpaces(1,
 															Vector3d::UnitZ());
-			motion_force_task->setDesiredForce(Vector3d(0, 0, -5.0));
+			motion_force_task->setGoalForce(Vector3d(0, 0, -5.0));
 			motion_force_task->setClosedLoopForceControl();
 			motion_force_task->enablePassivity();
 		}
@@ -180,7 +180,7 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 			cout << "current position: "
 				 << motion_force_task->getCurrentPosition().transpose() << endl;
 			cout << "desired force: "
-				 << motion_force_task->getDesiredForce().transpose() << endl;
+				 << motion_force_task->getGoalForce().transpose() << endl;
 			cout << "sensed force: "
 				 << motion_force_task->getSensedForce().transpose() << endl;
 			cout << endl;

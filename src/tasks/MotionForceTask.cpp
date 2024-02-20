@@ -189,9 +189,9 @@ void MotionForceTask::reInitializeTask() {
 	_integrated_position_error.setZero();
 	_integrated_orientation_error.setZero();
 
-	_desired_force.setZero();
+	_goal_force.setZero();
 	_sensed_force.setZero();
-	_desired_moment.setZero();
+	_goal_moment.setZero();
 	_sensed_moment.setZero();
 
 	resetIntegrators();
@@ -338,8 +338,8 @@ VectorXd MotionForceTask::computeTorques() {
 	Matrix3d sigma_position = sigmaPosition();
 	Matrix3d sigma_orientation = sigmaOrientation();
 
-	Vector3d desired_force = getDesiredForce();
-	Vector3d desired_moment = getDesiredMoment();
+	Vector3d goal_force = getGoalForce();
+	Vector3d goal_moment = getGoalMoment();
 
 	Vector3d force_feedback_related_force = Vector3d::Zero();
 	Vector3d position_related_force = Vector3d::Zero();
@@ -357,11 +357,11 @@ VectorXd MotionForceTask::computeTorques() {
 	if (_closed_loop_force_control) {
 		// update the integrated error
 		_integrated_force_error +=
-			sigma_force * (_sensed_force - desired_force) * getLoopTimestep();
+			sigma_force * (_sensed_force - goal_force) * getLoopTimestep();
 
 		// compute the feedback term and saturate it
 		Vector3d force_feedback_term =
-			sigma_force * (-_kp_force * (_sensed_force - desired_force) -
+			sigma_force * (-_kp_force * (_sensed_force - goal_force) -
 						   _ki_force * _integrated_force_error);
 		if (force_feedback_term.norm() > MAX_FEEDBACK_FORCE_FORCE_CONTROLLER) {
 			force_feedback_term *= MAX_FEEDBACK_FORCE_FORCE_CONTROLLER /
@@ -371,7 +371,7 @@ VectorXd MotionForceTask::computeTorques() {
 		// compute the final contribution
 		force_feedback_related_force =
 			_POPC_force->computePassivitySaturatedForce(
-				sigma_force * desired_force, sigma_force * _sensed_force,
+				sigma_force * goal_force, sigma_force * _sensed_force,
 				sigma_force * force_feedback_term,
 				sigma_force * _current_linear_velocity, _kv_force, _k_ff);
 	} else	// open loop force control
@@ -384,12 +384,12 @@ VectorXd MotionForceTask::computeTorques() {
 	if (_closed_loop_moment_control) {
 		// update the integrated error
 		_integrated_moment_error += sigma_moment *
-									(_sensed_moment - desired_moment) *
+									(_sensed_moment - goal_moment) *
 									getLoopTimestep();
 
 		// compute the feedback term
 		Vector3d moment_feedback_term =
-			sigma_moment * (-_kp_moment * (_sensed_moment - desired_moment) -
+			sigma_moment * (-_kp_moment * (_sensed_moment - goal_moment) -
 							_ki_moment * _integrated_moment_error);
 
 		// saturate the feedback term
@@ -505,8 +505,8 @@ VectorXd MotionForceTask::computeTorques() {
 	_unit_mass_force = position_orientation_contribution;
 
 	VectorXd feedforward_force_moment = VectorXd::Zero(6);
-	feedforward_force_moment.head(3) = sigma_force * desired_force;
-	feedforward_force_moment.tail(3) = sigma_moment * desired_moment;
+	feedforward_force_moment.head(3) = sigma_force * goal_force;
+	feedforward_force_moment.tail(3) = sigma_moment * goal_moment;
 
 	if (_closed_loop_force_control) {
 		feedforward_force_moment *= _k_ff;
@@ -740,20 +740,20 @@ vector<PIDGains> MotionForceTask::getOriControlGains() const {
 				 aniso_ki_robot_base(2))};
 }
 
-Vector3d MotionForceTask::getDesiredForce() const {
+Vector3d MotionForceTask::getGoalForce() const {
 	Matrix3d rotation = _is_force_motion_parametrization_in_compliant_frame
 							? getConstRobotModel()->rotationInWorld(
 								  _link_name, _compliant_frame.rotation())
 							: Matrix3d::Identity();
-	return rotation * _desired_force;
+	return rotation * _goal_force;
 }
 
-Vector3d MotionForceTask::getDesiredMoment() const {
+Vector3d MotionForceTask::getGoalMoment() const {
 	Matrix3d rotation = _is_force_motion_parametrization_in_compliant_frame
 							? getConstRobotModel()->rotationInWorld(
 								  _link_name, _compliant_frame.rotation())
 							: Matrix3d::Identity();
-	return rotation * _desired_moment;
+	return rotation * _goal_moment;
 }
 
 void MotionForceTask::enableVelocitySaturation(const double linear_vel_sat,

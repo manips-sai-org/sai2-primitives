@@ -80,8 +80,7 @@ public:
 	 * @brief      Computes the torques associated with this task.
 	 * @details    Computes the torques taking into account the last model
 	 *             update and updated values for the robot joint
-	 *             positions/velocities assumes the desired position and
-	 *             velocity has been updated
+	 *             positions/velocities
 	 *
 	 * @param      task_joint_torques  the vector to be filled with the new
 	 *                                 joint torques to apply for the task
@@ -89,7 +88,7 @@ public:
 	VectorXd computeTorques() override;
 
 	/**
-	 * @brief      reinitializes the desired state to the current robot
+	 * @brief      reinitializes the desired and goal states to the current robot
 	 *             configuration as well as the integrator terms
 	 */
 	void reInitializeTask() override;
@@ -271,7 +270,7 @@ public:
 
 	/**
 	 * @brief      Disables the internal trajectory generation and uses the
-	 * desired position, velocity and acceleration directly
+	 * goal position, velocity and acceleration directly
 	 */
 	void disableInternalOtg() { _use_internal_otg_flag = false; }
 
@@ -330,7 +329,7 @@ private:
 	 */
 	void initialSetup();
 
-	// desired controller state
+	// goal controller state
 	VectorXd _goal_position;
 	VectorXd _goal_velocity;
 	VectorXd _goal_acceleration;

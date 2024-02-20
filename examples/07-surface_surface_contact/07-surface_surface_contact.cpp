@@ -189,8 +189,8 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 				motion_force_task->setClosedLoopMomentControl();
 
 				// set the force and moment control set points and gains
-				motion_force_task->setDesiredForce(10.0 * Vector3d::UnitZ());
-				motion_force_task->setDesiredMoment(Vector3d::Zero());
+				motion_force_task->setGoalForce(10.0 * Vector3d::UnitZ());
+				motion_force_task->setGoalMoment(Vector3d::Zero());
 
 				motion_force_task->setForceControlGains(0.7, 5.0, 1.5);
 				motion_force_task->setMomentControlGains(0.7, 4.0, 1.5);
@@ -199,9 +199,6 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 				state = CONTACT_CONTROL;
 			}
 		} else if (state == CONTACT_CONTROL) {
-			// Vector3d local_z =
-			// motion_force_task->getCurrentOrientation().col(2);
-			// motion_force_task->setDesiredForce(10.0*local_z);
 			if (timer.elapsedCycles() % 1000 == 0) {
 				cout << "Current force: "
 					 << motion_force_task->getSensedForce().transpose() << endl;
@@ -209,10 +206,10 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 					 << motion_force_task->getSensedMoment().transpose()
 					 << endl;
 				cout << "Desired force: "
-					 << motion_force_task->getDesiredForce().transpose()
+					 << motion_force_task->getGoalForce().transpose()
 					 << endl;
 				cout << "Desired moment: "
-					 << motion_force_task->getDesiredMoment().transpose()
+					 << motion_force_task->getGoalMoment().transpose()
 					 << endl;
 				cout << endl;
 			}
