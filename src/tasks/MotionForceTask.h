@@ -29,7 +29,6 @@
 #include "Sai2Model.h"
 #include "TemplateTask.h"
 #include "SingularityHandler.h"
-#include "SingularityHandler.h"
 
 using namespace Eigen;
 using namespace std;
@@ -38,16 +37,6 @@ namespace Sai2Primitives {
 
 class MotionForceTask : public TemplateTask {
 public:
-	enum DynamicDecouplingType {
-		FULL_DYNAMIC_DECOUPLING,	 // use the real Lambda matrix
-		PARTIAL_DYNAMIC_DECOUPLING,	 // Use Lambda for position part, Identity
-									 // for orientation and Zero for cross
-									 // coupling
-		IMPEDANCE,					 // use Identity for the mass matrix
-		BOUNDED_INERTIA_ESTIMATES,	 // Use a Lambda computed from a saturated
-									 // joint space mass matrix
-	};
-
 	//------------------------------------------------
 	// Constructor
 	//------------------------------------------------
@@ -421,7 +410,16 @@ public:
 	 * @param type
 	 */
 	void setDynamicDecouplingType(const DynamicDecouplingType type) {
-		_dynamic_decoupling_type = type;
+		_singularity_handler->setDynamicDecouplingType(type);
+	}
+
+	/**
+	 * @brief Get the Sigma Values object
+	 * 
+	 * @return VectorXd 
+	 */
+	VectorXd getSigmaValues() {
+		return _singularity_handler->getSigmaValues();
 	}
 
 	// -------- force control related methods --------
@@ -569,33 +567,14 @@ public:
 	}
 
 	/**
-	 * @brief	Change the bounds for singularity cut-off
+	 * @brief	   Changes the bounds for the singularity blending.
+	 * 			   The 
 	 * 
-	 * @param e_max 
-	 * @param e_min 
+	 * @param s_min		Upper bound to start blending  
+	 * @param s_max 	Lower bound to remove all singular task torque 
 	 */
 	void setSingularityBounds(const double& s_min, const double& s_max) {
 		_singularity_handler->setSingularityBounds(s_min, s_max);
-	}
-
-	MatrixXd getProjectedJacobian() {
-		return _projected_jacobian_ns;
-	}
-
-	VectorXd getUnitControlForces() {
-		return _unit_mass_force;
-	}
-
-	VectorXd getControlForces() {
-		return _Lambda_ns_modified * _task_range_ns.transpose() * _unit_mass_force;
-	}
-
-	MatrixXd getLambdaMatrix() {
-		return _Lambda_ns_modified * _task_range_ns.transpose();
-	}
-
-	const std::unique_ptr<SingularityHandler>& getConstSingularityModel() const {
-		return _singularity_handler;
 	}
 
 private:
@@ -712,6 +691,9 @@ private:
 	Matrix<double, 6, 6> _partial_task_projection;
 
 	VectorXd _unit_mass_force;
+
+	// singularity handler
+	std::unique_ptr<SingularityHandler> _singularity_handler;
 };
 
 } /* namespace Sai2Primitives */

@@ -95,8 +95,6 @@ MotionForceTask::MotionForceTask(
 }
 
 void MotionForceTask::initialSetup() {
-	setDynamicDecouplingType(BOUNDED_INERTIA_ESTIMATES);
-	// setDynamicDecouplingType(FULL_DYNAMIC_DECOUPLING);  // debug
 
 	int dof = getConstRobotModel()->dof();
 	_T_control_to_sensor = Affine3d::Identity();
@@ -169,6 +167,7 @@ void MotionForceTask::initialSetup() {
 	MatrixXd J_posture = getConstRobotModel()->linkDependency(_link_name);
 	_singularity_handler = std::make_unique<SingularityHandler>(getConstRobotModel(), _pos_range + _ori_range, J_posture);
 	setSingularityBounds(5e-3, 5e-2);  
+	setDynamicDecouplingType(BOUNDED_INERTIA_ESTIMATES);
 
 	reInitializeTask();	
 }
@@ -227,145 +226,7 @@ void MotionForceTask::updateTaskModel(const MatrixXd& N_prec) {
 					_link_name, _compliant_frame.translation());
 	_projected_jacobian = _jacobian * _N_prec;
 
-	// /*
-	// 	Original implementation 
-	// */
-	// MatrixXd range_pos =
-	// 	Sai2Model::matrixRangeBasis(_projected_jacobian.topRows(3), 1e-6);
-	// MatrixXd range_ori =
-	// 	Sai2Model::matrixRangeBasis(_projected_jacobian.bottomRows(3), 1e-6);
-
-	// _pos_range = range_pos.norm() == 0 ? 0 : range_pos.cols();
-	// _ori_range = range_ori.norm() == 0 ? 0 : range_ori.cols();
-
-	// if (_pos_range + _ori_range == 0) {
-	// 	// there is no controllable degree of freedom for the task, just return
-	// 	// should maybe print a warning here
-	// 	_N.setIdentity(robot_dof, robot_dof);
-	// 	return;
-	// }
-
-	// _current_task_range.setZero(6, _pos_range + _ori_range);
-	// if (_pos_range > 0) {
-	// 	_current_task_range.block(0, 0, 3, _pos_range) = range_pos;
-	// }
-	// if (_ori_range > 0) {
-	// 	_current_task_range.block(3, _pos_range, 3, _ori_range) = range_ori;
-	// }
-
-	// Sai2Model::OpSpaceMatrices op_space_matrices =
-	// 	getConstRobotModel()->operationalSpaceMatrices(
-	// 		_current_task_range.transpose() * _projected_jacobian);
-	// _Lambda = op_space_matrices.Lambda;
-	// _Jbar = op_space_matrices.Jbar;
-	// _N = op_space_matrices.N;
-
-	/*
-		Singularity handler implementation 
-	*/
-	SingularityOpSpaceMatrices singularity_op_space_matrices = _singularity_handler->updateTaskModel(_projected_jacobian, _N_prec);
-	_projected_jacobian_ns = singularity_op_space_matrices.projected_jacobian_ns;
-	_Lambda_ns = singularity_op_space_matrices.Lambda_ns;
-	_task_range_ns = singularity_op_space_matrices.task_range_ns;
-	_projected_jacobian_s = singularity_op_space_matrices.projected_jacobian_s;
-	_Lambda_s = singularity_op_space_matrices.Lambda_s;
-	_task_range_s = singularity_op_space_matrices.task_range_s;
-
-	switch (_dynamic_decoupling_type) {
-		case FULL_DYNAMIC_DECOUPLING: {
-			_Lambda_modified = _Lambda;
-			_Lambda_ns_modified = _Lambda_ns;
-			_Lambda_s_modified = _Lambda_s;
-			break;
-		}
-
-		case PARTIAL_DYNAMIC_DECOUPLING: {
-			_Lambda_modified = _Lambda;
-			if (_ori_range > 0) {
-				_Lambda_modified.block(_pos_range, _pos_range, _ori_range,
-									   _ori_range) =
-					MatrixXd::Identity(_ori_range, _ori_range);
-				if (_pos_range > 0) {
-					_Lambda_modified.block(0, _pos_range, _pos_range,
-										   _ori_range) =
-						MatrixXd::Zero(_pos_range, _ori_range);
-					_Lambda_modified.block(_pos_range, 0, _ori_range,
-										   _pos_range) =
-						MatrixXd::Zero(_ori_range, _pos_range);
-				}
-			}
-
-			break;
-		}
-
-		case IMPEDANCE: {
-			_Lambda_modified = MatrixXd::Identity(_pos_range + _ori_range,
-												  _pos_range + _ori_range);
-			_Lambda_ns_modified.setIdentity();
-			_Lambda_s_modified.setIdentity();
-			break;
-		}
-
-		case BOUNDED_INERTIA_ESTIMATES: {
-			MatrixXd M_BIE = getConstRobotModel()->M();
-			for (int i = 0; i < getConstRobotModel()->dof(); i++) {
-				if (M_BIE(i, i) < 0.1) {
-					M_BIE(i, i) = 0.1;
-				}
-			}
-			MatrixXd M_inv_BIE = M_BIE.inverse();
-			MatrixXd Lambda_inv_BIE =
-				_current_task_range.transpose() * _projected_jacobian *
-				(M_inv_BIE * _projected_jacobian.transpose()) *
-				_current_task_range;
-			_Lambda_modified = Lambda_inv_BIE.inverse();
-
-			// nonsingular lambda
-			Lambda_inv_BIE =
-				_projected_jacobian_ns *
-				M_inv_BIE * 
-				_projected_jacobian_ns.transpose();
-			_Lambda_ns_modified = Lambda_inv_BIE.inverse();
-
-			// singular lambda
-			if (_task_range_s.norm() != 0) {
-				Lambda_inv_BIE =
-					_projected_jacobian_s *
-					M_inv_BIE * 
-					_projected_jacobian_s.transpose();
-				_Lambda_s_modified = Lambda_inv_BIE.completeOrthogonalDecomposition().pseudoInverse();
-			} else {
-				_Lambda_s_modified = _Lambda_s;
-			}
-			break;
-		}
-
-		default: {
-			_Lambda_modified = _Lambda;
-			_Lambda_s_modified = _Lambda_s;
-			_Lambda_ns_modified = _Lambda_ns;
-			break;
-		}
-	}
-
-	// std::cout << "Lambda ns \n" << _Lambda_ns_modified << "\n";
-	// std::cout << "Lambda s \n" << _Lambda_s_modified << "\n";
-
-	// saturate lambda diagonal
-	// double max_sat = 20;
-	// for (int i = 0; i < _Lambda_ns_modified.rows(); ++i) {
-	// 	if (_Lambda_ns_modified(i, i) > max_sat) {
-	// 		_Lambda_ns_modified(i, i) = max_sat;
-	// 	}
-	// }
-	// for (int i = 0; i < _Lambda_s_modified.rows(); ++i) {
-	// 	if (_Lambda_s_modified(i, i) > max_sat) {
-	// 		_Lambda_s_modified(i, i) = max_sat;
-	// 	}
-	// }
-
-	// update singularity handler with modified Lambda
-	_singularity_handler->setLambda(_Lambda_ns_modified, _Lambda_s_modified);
+	_singularity_handler->updateTaskModel(_projected_jacobian, _N_prec);
 	_N = _singularity_handler->getNullspace();  // N_posture * N_ns or N_ns 
 
 }
@@ -580,15 +441,6 @@ VectorXd MotionForceTask::computeTorques() {
 	_linear_force_control =
 		force_feedback_related_force + feedforward_force_moment.head(3);
 	_linear_motion_control = position_related_force;
-
-	// _task_force = _Lambda_modified * _current_task_range.transpose() *
-	// 				(position_orientation_contribution) +
-	// 			_current_task_range.transpose() *
-	// 				(force_moment_contribution + feedforward_force_moment);
-
-	// // compute task torques
-	// task_joint_torques =
-	// 	_projected_jacobian.transpose() * _current_task_range * _task_force;
 
 	// compute torque through singularity handler 
 	task_joint_torques = _singularity_handler->computeTorques(_unit_mass_force, (force_moment_contribution + feedforward_force_moment));

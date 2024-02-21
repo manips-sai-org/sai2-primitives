@@ -32,6 +32,7 @@
 *.app
 
 # folders
-**/build/
-
 **.DS_Store
+**/build/
+.vscode/
+

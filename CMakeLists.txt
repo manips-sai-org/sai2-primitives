@@ -37,8 +37,8 @@ set(CONTROLLERS_SOURCE
     ${PROJECT_SOURCE_DIR}/src/RobotController.cpp
     ${PROJECT_SOURCE_DIR}/src/tasks/MotionForceTask.cpp
     ${PROJECT_SOURCE_DIR}/src/tasks/JointTask.cpp
+    ${PROJECT_SOURCE_DIR}/src/tasks/SingularityHandler.cpp
     ${PROJECT_SOURCE_DIR}/src/HapticDeviceController.cpp
-    ${PROJECT_SOURCE_DIR}/src/SingularityHandler.cpp
     ${PROJECT_SOURCE_DIR}/src/POPCBilateralTeleoperation.cpp)
 
 # add helper modules

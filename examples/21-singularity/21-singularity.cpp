@@ -106,9 +106,11 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 	Vector3d pos_in_link = Vector3d(0.0, 0.0, 0.07);
 	Affine3d compliant_frame = Affine3d(Translation3d(pos_in_link));
 
+	// Full motion force task
 	auto motion_force_task = make_unique<Sai2Primitives::MotionForceTask>(
 		robot, link_name, compliant_frame);
 
+	// Partial motion force task
 	// vector<Vector3d> controlled_directions_translation = {
 	// 	Vector3d::UnitX(), Vector3d::UnitY(), Vector3d::UnitZ()};
 	// vector<Vector3d> controlled_directions_rotation = {};
@@ -131,7 +133,7 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 	VectorXd joint_task_torques = VectorXd::Zero(dof);
 
 	VectorXd initial_q = robot->q();
-    joint_task->setDesiredPosition(initial_q);
+    joint_task->setGoalPosition(initial_q);
 
     // desired position offsets 
     vector<Vector3d> desired_offsets {Vector3d(2, 0, 0), Vector3d(0, 0, 0), 
@@ -180,13 +182,13 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 		// -------- set task goals and compute control torques
 		// position: move to workspace extents 
         if (time - prev_time > t_wait[cnt % 2]) {
-            motion_force_task->setDesiredPosition(initial_position + desired_offsets[cnt]);
+            motion_force_task->setGoalPosition(initial_position + desired_offsets[cnt]);
             cnt++;
             prev_time = time;
             if (cnt == max_cnt) cnt = max_cnt - 1;
         }
-        motion_force_task->setDesiredVelocity(Vector3d::Zero());
-        motion_force_task->setDesiredAcceleration(Vector3d::Zero());
+        motion_force_task->setGoalLinearVelocity(Vector3d::Zero());
+        motion_force_task->setGoalLinearAcceleration(Vector3d::Zero());
 
 		// compute torques for the different tasks
 		motion_force_task_torques = motion_force_task->computeTorques();
@@ -199,13 +201,13 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 		}
 
 		//------ logging data
-		svalues = motion_force_task->getConstSingularityModel()->getSigmaValues();
+		svalues = motion_force_task->getSigmaValues();
 
 		// -------------------------------------------
 		if (timer.elapsedCycles() % 500 == 0) {
 			cout << "time: " << time << endl;
 			cout << "position error : "
-				 << (motion_force_task->getDesiredPosition() -
+				 << (motion_force_task->getGoalPosition() -
 					 motion_force_task->getCurrentPosition())
 						.norm()
 				 << endl;
