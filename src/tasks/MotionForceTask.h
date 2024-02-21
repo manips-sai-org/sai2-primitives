@@ -568,7 +568,6 @@ public:
 
 	/**
 	 * @brief	   Changes the bounds for the singularity blending.
-	 * 			   The 
 	 * 
 	 * @param s_min		Upper bound to start blending  
 	 * @param s_max 	Lower bound to remove all singular task torque 

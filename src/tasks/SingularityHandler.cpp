@@ -272,12 +272,12 @@ VectorXd SingularityHandler::computeTorques(const VectorXd& unit_mass_force, con
     }
 
     // Combine non-singular torques and blended singular torques with joint strategy torques 
-    VectorXd tau_ns = _projected_jacobian_ns.transpose() * (_Lambda_ns * _task_range_ns.transpose() * unit_mass_force + \
+    VectorXd tau_ns = _projected_jacobian_ns.transpose() * (_Lambda_ns_modified * _task_range_ns.transpose() * unit_mass_force + \
                             _task_range_ns.transpose() * force_related_terms);
     if (_sing_type == NO_SINGULARITY) {
         return tau_ns;
     } else {
-        VectorXd singular_task_force = _Lambda_s * _task_range_s.transpose() * unit_mass_force + \
+        VectorXd singular_task_force = _Lambda_s_modified * _task_range_s.transpose() * unit_mass_force + \
                                             _task_range_s.transpose() * force_related_terms;
         VectorXd tau_s = _alpha * _projected_jacobian_s.transpose() * singular_task_force + \
                             (1 - _alpha) * joint_strategy_torques;
