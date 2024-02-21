@@ -118,18 +118,43 @@ public:
 	}
 
 	/**
-	 * @brief Get the Sensed Force used for control, in robot world frame
+	 * @brief Get the Sensed Force used for control (resolved at the origin of
+	 * the compliant frame), in robot world frame
 	 *
-	 * @return const Vector3d& current sensed force in the control frame
+	 * @return const Vector3d& sensed force used for control
 	 */
-	const Vector3d& getSensedForce() const { return _sensed_force; }
+	const Vector3d& getSensedForceControlWorldFrame() const {
+		return _sensed_force_control_world_frame;
+	}
 
 	/**
 	 * @brief Get the Sensed Moment used for control, in robot world frame
 	 *
-	 * @return const Vector3d& current sensed moment in the control frame
+	 * @return const Vector3d& sensed moment used for control
 	 */
-	const Vector3d& getSensedMoment() const { return _sensed_moment; }
+	const Vector3d& getSensedMomentControlWorldFrame() const {
+		return _sensed_moment_control_world_frame;
+	}
+
+	/**
+	 * @brief Get the Sensed Force used for control as given directly by the
+	 * sensor, in sensor frame
+	 *
+	 * @return const Vector3d& sensed force from sensor
+	 */
+	const Vector3d& getSensedForceSensor() const {
+		return _sensed_force_sensor_frame;
+	}
+
+	/**
+	 * @brief Get the Sensed Moment used for control as given directly by the
+	 * sensor, in sensor frame
+	 *
+	 * @return const Vector3d& sensed moment from sensor
+	 */
+	const Vector3d& getSensedMomentSensor() const {
+		return _sensed_moment_sensor_frame;
+	}
 
 	/**
 	 * @brief Get the nullspace of this task associated with the constrained,
@@ -194,7 +219,9 @@ public:
 	}
 
 	const Vector3d& getDesiredPosition() const { return _desired_position; }
-	const Matrix3d& getDesiredOrientation() const { return _desired_orientation; }
+	const Matrix3d& getDesiredOrientation() const {
+		return _desired_orientation;
+	}
 	const Vector3d& getDesiredLinearVelocity() const {
 		return _desired_linear_velocity;
 	}
@@ -273,9 +300,7 @@ public:
 	 *
 	 * @param goal_force
 	 */
-	void setGoalForce(const Vector3d& goal_force) {
-		_goal_force = goal_force;
-	}
+	void setGoalForce(const Vector3d& goal_force) { _goal_force = goal_force; }
 
 	/**
 	 * @brief Get the goal Force in robot world frame
@@ -396,8 +421,8 @@ public:
 	VectorXd computeTorques() override;
 
 	/**
-	 * @brief      reinitializes the desired and goal states to the current robot
-	 *             configuration as well as the integrator terms
+	 * @brief      reinitializes the desired and goal states to the current
+	 * robot configuration as well as the integrator terms
 	 */
 	void reInitializeTask() override;
 
@@ -590,9 +615,9 @@ private:
 	void initialSetup();
 
 	// the goal state is the state the controller tries to reach. If OTG is on,
-	// the actual desired state at each timestep will be interpolated between the
-	// initial state and the goal state, while the goal state might not change.
-	// It defaults to the configuration when the task is created
+	// the actual desired state at each timestep will be interpolated between
+	// the initial state and the goal state, while the goal state might not
+	// change. It defaults to the configuration when the task is created
 	// expressed in world frame
 	Vector3d _goal_position;
 	Matrix3d _goal_orientation;
@@ -630,8 +655,8 @@ private:
 
 	// goal force and moment for the force part of the controller
 	// defaults to Zero
-	Vector3d _goal_force;   // robot world frame
-	Vector3d _goal_moment;  // robot world frame
+	Vector3d _goal_force;	// robot world frame
+	Vector3d _goal_moment;	// robot world frame
 
 	// velocity saturation is off by default
 	bool _use_velocity_saturation_flag;
@@ -665,8 +690,11 @@ private:
 	// force quantities
 	Affine3d _T_control_to_sensor;
 
-	Vector3d _sensed_force;	  // robot world frame
-	Vector3d _sensed_moment;  // robot world frame
+	Vector3d _sensed_force_control_world_frame;
+	Vector3d _sensed_moment_control_world_frame;
+
+	Vector3d _sensed_force_sensor_frame;
+	Vector3d _sensed_moment_sensor_frame;
 
 	Vector3d _integrated_force_error;	// robot world frame
 	Vector3d _integrated_moment_error;	// robot world frame

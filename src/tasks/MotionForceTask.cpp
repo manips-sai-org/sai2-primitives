@@ -196,9 +196,11 @@ void MotionForceTask::reInitializeTask() {
 	_integrated_orientation_error.setZero();
 
 	_goal_force.setZero();
-	_sensed_force.setZero();
+	_sensed_force_control_world_frame.setZero();
+	_sensed_force_sensor_frame.setZero();
 	_goal_moment.setZero();
-	_sensed_moment.setZero();
+	_sensed_moment_control_world_frame.setZero();
+	_sensed_moment_sensor_frame.setZero();
 
 	resetIntegrators();
 
@@ -363,12 +365,14 @@ VectorXd MotionForceTask::computeTorques() {
 	if (_closed_loop_force_control) {
 		// update the integrated error
 		_integrated_force_error +=
-			sigma_force * (_sensed_force - goal_force) * getLoopTimestep();
+			sigma_force * (_sensed_force_control_world_frame - goal_force) *
+			getLoopTimestep();
 
 		// compute the feedback term and saturate it
 		Vector3d force_feedback_term =
-			sigma_force * (-_kp_force * (_sensed_force - goal_force) -
-						   _ki_force * _integrated_force_error);
+			sigma_force *
+			(-_kp_force * (_sensed_force_control_world_frame - goal_force) -
+			 _ki_force * _integrated_force_error);
 		if (force_feedback_term.norm() > MAX_FEEDBACK_FORCE_FORCE_CONTROLLER) {
 			force_feedback_term *= MAX_FEEDBACK_FORCE_FORCE_CONTROLLER /
 								   force_feedback_term.norm();
@@ -377,7 +381,8 @@ VectorXd MotionForceTask::computeTorques() {
 		// compute the final contribution
 		force_feedback_related_force =
 			_POPC_force->computePassivitySaturatedForce(
-				sigma_force * goal_force, sigma_force * _sensed_force,
+				sigma_force * goal_force,
+				sigma_force * _sensed_force_control_world_frame,
 				sigma_force * force_feedback_term,
 				sigma_force * _current_linear_velocity, _kv_force, _k_ff);
 	} else	// open loop force control
@@ -389,14 +394,15 @@ VectorXd MotionForceTask::computeTorques() {
 	// moment related terms
 	if (_closed_loop_moment_control) {
 		// update the integrated error
-		_integrated_moment_error += sigma_moment *
-									(_sensed_moment - goal_moment) *
-									getLoopTimestep();
+		_integrated_moment_error +=
+			sigma_moment * (_sensed_moment_control_world_frame - goal_moment) *
+			getLoopTimestep();
 
 		// compute the feedback term
 		Vector3d moment_feedback_term =
-			sigma_moment * (-_kp_moment * (_sensed_moment - goal_moment) -
-							_ki_moment * _integrated_moment_error);
+			sigma_moment *
+			(-_kp_moment * (_sensed_moment_control_world_frame - goal_moment) -
+			 _ki_moment * _integrated_moment_error);
 
 		// saturate the feedback term
 		if (moment_feedback_term.norm() >
@@ -471,8 +477,8 @@ VectorXd MotionForceTask::computeTorques() {
 	// angular motion
 	// orientation error
 	Vector3d step_orientation_error =
-		sigma_orientation * Sai2Model::orientationError(_desired_orientation,
-														_current_orientation);
+		sigma_orientation *
+		Sai2Model::orientationError(_desired_orientation, _current_orientation);
 
 	// update integrated error for I term
 	_integrated_orientation_error += step_orientation_error * getLoopTimestep();
@@ -482,22 +488,20 @@ VectorXd MotionForceTask::computeTorques() {
 		_desired_angular_velocity =
 			-_kp_ori * _kv_ori.inverse() * step_orientation_error -
 			_ki_ori * _kv_ori.inverse() * _integrated_orientation_error;
-		if (_desired_angular_velocity.norm() >
-			_angular_saturation_velocity) {
-			_desired_angular_velocity *= _angular_saturation_velocity /
-											_desired_angular_velocity.norm();
+		if (_desired_angular_velocity.norm() > _angular_saturation_velocity) {
+			_desired_angular_velocity *=
+				_angular_saturation_velocity / _desired_angular_velocity.norm();
 		}
 		orientation_related_force =
-			sigma_orientation * (_desired_angular_acceleration -
-								 _kv_ori * (_current_angular_velocity -
-											_desired_angular_velocity));
+			sigma_orientation *
+			(_desired_angular_acceleration -
+			 _kv_ori * (_current_angular_velocity - _desired_angular_velocity));
 	} else {
 		orientation_related_force =
-			sigma_orientation * (_desired_angular_acceleration -
-								 _kp_ori * step_orientation_error -
-								 _kv_ori * (_current_angular_velocity -
-											_desired_angular_velocity) -
-								 _ki_ori * _integrated_orientation_error);
+			sigma_orientation *
+			(_desired_angular_acceleration - _kp_ori * step_orientation_error -
+			 _kv_ori * (_current_angular_velocity - _desired_angular_velocity) -
+			 _ki_ori * _integrated_orientation_error);
 	}
 
 	// compute task force
@@ -573,9 +577,9 @@ Vector3d MotionForceTask::getOrientationError() const {
 
 bool MotionForceTask::goalPositionReached(const double tolerance,
 										  const bool verbose) {
-	double position_error =
-		(_goal_position - _current_position).transpose() * sigmaPosition() *
-		(_goal_position - _current_position);
+	double position_error = (_goal_position - _current_position).transpose() *
+							sigmaPosition() *
+							(_goal_position - _current_position);
 	position_error = sqrt(position_error);
 	bool goal_reached = position_error < tolerance;
 	if (verbose) {
@@ -798,19 +802,26 @@ void MotionForceTask::setForceSensorFrame(
 void MotionForceTask::updateSensedForceAndMoment(
 	const Vector3d sensed_force_sensor_frame,
 	const Vector3d sensed_moment_sensor_frame) {
+	_sensed_force_sensor_frame = sensed_force_sensor_frame;
+	_sensed_moment_sensor_frame = sensed_moment_sensor_frame;
+
 	// find the transform from base frame to control frame
 	Affine3d T_world_link = getConstRobotModel()->transformInWorld(_link_name);
 	Affine3d T_world_compliant_frame = T_world_link * _compliant_frame;
 
 	// find the resolved sensed force and moment in control frame
-	_sensed_force = _T_control_to_sensor.rotation() * sensed_force_sensor_frame;
-	_sensed_moment =
-		_T_control_to_sensor.translation().cross(_sensed_force) +
+	_sensed_force_control_world_frame =
+		_T_control_to_sensor.rotation() * sensed_force_sensor_frame;
+	_sensed_moment_control_world_frame =
+		_T_control_to_sensor.translation().cross(
+			_sensed_force_control_world_frame) +
 		_T_control_to_sensor.rotation() * sensed_moment_sensor_frame;
 
 	// rotate the quantities in base frame
-	_sensed_force = T_world_compliant_frame.rotation() * _sensed_force;
-	_sensed_moment = T_world_compliant_frame.rotation() * _sensed_moment;
+	_sensed_force_control_world_frame =
+		T_world_compliant_frame.rotation() * _sensed_force_control_world_frame;
+	_sensed_moment_control_world_frame =
+		T_world_compliant_frame.rotation() * _sensed_moment_control_world_frame;
 }
 
 bool MotionForceTask::parametrizeForceMotionSpaces(
