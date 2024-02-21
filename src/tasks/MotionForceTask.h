@@ -655,8 +655,8 @@ private:
 
 	// goal force and moment for the force part of the controller
 	// defaults to Zero
-	Vector3d _goal_force;	// robot world frame
-	Vector3d _goal_moment;	// robot world frame
+	Vector3d _goal_force;
+	Vector3d _goal_moment;
 
 	// velocity saturation is off by default
 	bool _use_velocity_saturation_flag;
