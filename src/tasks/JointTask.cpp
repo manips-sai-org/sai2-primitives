@@ -82,8 +82,11 @@ void JointTask::reInitializeTask() {
 	_current_velocity.setZero(_task_dof);
 
 	_goal_position = _current_position;
+	_desired_position = _current_position;
 	_goal_velocity.setZero(_task_dof);
 	_goal_acceleration.setZero(_task_dof);
+	_desired_velocity.setZero(_task_dof);
+	_desired_acceleration.setZero(_task_dof);
 
 	_integrated_position_error.setZero(_task_dof);
 
@@ -266,48 +269,48 @@ VectorXd JointTask::computeTorques() {
 		return partial_joint_task_torques;
 	}
 
-	VectorXd tmp_desired_position = _goal_position;
-	VectorXd tmp_desired_velocity = _goal_velocity;
-	VectorXd tmp_desired_acceleration = _goal_acceleration;
+	_desired_position = _goal_position;
+	_desired_velocity = _goal_velocity;
+	_desired_acceleration = _goal_acceleration;
 
 	// compute next state from trajectory generation
 	if (_use_internal_otg_flag) {
 		_otg->setGoalPositionAndVelocity(_goal_position, _goal_velocity);
 		_otg->update();
 
-		tmp_desired_position = _otg->getNextPosition();
-		tmp_desired_velocity = _otg->getNextVelocity();
-		tmp_desired_acceleration = _otg->getNextAcceleration();
+		_desired_position = _otg->getNextPosition();
+		_desired_velocity = _otg->getNextVelocity();
+		_desired_acceleration = _otg->getNextAcceleration();
 	}
 
 	// compute error for I term
 	_integrated_position_error +=
-		(_current_position - tmp_desired_position) * getLoopTimestep();
+		(_current_position - _desired_position) * getLoopTimestep();
 
 	// compute task force (with velocity saturation if asked)
 	if (_use_velocity_saturation_flag) {
-		tmp_desired_velocity =
-			-_kp * _kv.inverse() * (_current_position - tmp_desired_position) -
+		_desired_velocity =
+			-_kp * _kv.inverse() * (_current_position - _desired_position) -
 			_ki * _kv.inverse() * _integrated_position_error;
 		for (int i = 0; i < getConstRobotModel()->dof(); i++) {
-			if (tmp_desired_velocity(i) > _saturation_velocity(i)) {
-				tmp_desired_velocity(i) = _saturation_velocity(i);
-			} else if (tmp_desired_velocity(i) < -_saturation_velocity(i)) {
-				tmp_desired_velocity(i) = -_saturation_velocity(i);
+			if (_desired_velocity(i) > _saturation_velocity(i)) {
+				_desired_velocity(i) = _saturation_velocity(i);
+			} else if (_desired_velocity(i) < -_saturation_velocity(i)) {
+				_desired_velocity(i) = -_saturation_velocity(i);
 			}
 		}
 		partial_joint_task_torques =
-			-_kv * (_current_velocity - tmp_desired_velocity);
+			-_kv * (_current_velocity - _desired_velocity);
 	} else {
 		partial_joint_task_torques =
-			-_kp * (_current_position - tmp_desired_position) -
-			_kv * (_current_velocity - tmp_desired_velocity) -
+			-_kp * (_current_position - _desired_position) -
+			_kv * (_current_velocity - _desired_velocity) -
 			_ki * _integrated_position_error;
 	}
 
 	VectorXd partial_joint_task_torques_in_range_space =
 		_M_partial * _current_task_range.transpose() *
-			tmp_desired_acceleration +
+			_desired_acceleration +
 		_M_partial_modified * _current_task_range.transpose() *
 			partial_joint_task_torques;
 

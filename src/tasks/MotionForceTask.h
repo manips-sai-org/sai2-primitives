@@ -589,9 +589,9 @@ private:
 	 */
 	void initialSetup();
 
-	// the goal pose is the pose the controller tries to reach. If OTG is on,
-	// the actual desired pose at each timestep will be interpolated between the
-	// initial pose and the goal pose, while the goal pose might not change.
+	// the goal state is the state the controller tries to reach. If OTG is on,
+	// the actual desired state at each timestep will be interpolated between the
+	// initial state and the goal state, while the goal state might not change.
 	// It defaults to the configuration when the task is created
 	// expressed in world frame
 	Vector3d _goal_position;
@@ -601,6 +601,9 @@ private:
 	Vector3d _goal_linear_acceleration;
 	Vector3d _goal_angular_acceleration;
 
+	// the desired state is the state used in the control law. It is the output
+	// of the OTG if enabled, and the same as the goal state otherwise
+	// expressed in world frame
 	Vector3d _desired_position;
 	Matrix3d _desired_orientation;
 	Vector3d _desired_linear_velocity;
