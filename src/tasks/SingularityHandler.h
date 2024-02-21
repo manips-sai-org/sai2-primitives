@@ -134,6 +134,18 @@ public:
         return Sai2Model::OpSpaceMatrices(_projected_jacobian_s, _Lambda_s, _Jbar_s, _N_s);
     }
 
+    MatrixXd getNonSingularTaskRange() {
+        return _task_range_ns;
+    }
+
+    MatrixXd getSingularTaskRange() {
+        return _task_range_s;
+    }
+
+    VectorXd getSingularTorques() {
+        return _tau_s;
+    }
+
     /**
      * @brief Set the singularity bounds for torque blending based on the condition number
      * The linear blending coefficient \alpha is computed as \alpha = (s - _s_min) / (_s_max - _s_min),
@@ -210,6 +222,7 @@ private:
     MatrixXd _Lambda_ns, _N_ns, _Jbar_ns;
     MatrixXd _Lambda_s, _N_s, _Jbar_s;
     MatrixXd _Lambda_ns_modified, _Lambda_s_modified;
+    VectorXd _tau_s;
 
     // joint task quantities 
     MatrixXd _posture_projected_jacobian, _current_task_range, _M_partial;

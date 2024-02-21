@@ -567,14 +567,37 @@ public:
 	}
 
 	/**
-	 * @brief	   Changes the bounds for the singularity blending.
-	 * 			   The 
+	 * @brief Changes the bounds for the singularity blending. 			   
 	 * 
 	 * @param s_min		Upper bound to start blending  
 	 * @param s_max 	Lower bound to remove all singular task torque 
 	 */
 	void setSingularityBounds(const double& s_min, const double& s_max) {
 		_singularity_handler->setSingularityBounds(s_min, s_max);
+	}
+
+	VectorXd getUnitControlForces() {
+		return _unit_mass_force;
+	}
+
+	MatrixXd getProjectedJacobian() {
+		return _singularity_handler->getNonSingularOpSpaceMatrices().J;
+	}
+
+	MatrixXd getLambdaMatrix() {
+		return _singularity_handler->getNonSingularOpSpaceMatrices().Lambda;
+	}
+
+	MatrixXd getNonSingularTaskRange() {
+		return _singularity_handler->getNonSingularTaskRange();
+	}
+
+	MatrixXd getSingularTaskRange() {
+		return _singularity_handler->getSingularTaskRange();
+	}
+
+	VectorXd getSingularTorque() {
+		return _singularity_handler->getSingularTorques();
 	}
 
 private:

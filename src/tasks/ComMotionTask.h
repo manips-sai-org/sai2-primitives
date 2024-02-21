@@ -532,29 +532,41 @@ public:
 		return _partial_task_projection.block<3, 3>(3, 3);
 	}
 
-	/**
-	 * @brief Add load (intended after the force sensor located at the last link)
-	 * 
-	 * @param link_name 
-	 * @param mass 
-	 * @param com 
-	 * @param inertia 
-	 * @param body_name
-	 */
-	void addLoad(const std::string link_name, 
-				 const double mass, 
-				 const Vector3d& com, 
-				 const Matrix3d& inertia,
-				 const std::string body_name = "");
+	// /**
+	//  * @brief Add load (intended after the force sensor located at the last link)
+	//  * 
+	//  * @param link_name 
+	//  * @param mass 
+	//  * @param com 
+	//  * @param inertia 
+	//  * @param body_name
+	//  */
+	// void addLoad(const std::string link_name, 
+	// 			 const double mass, 
+	// 			 const Vector3d& com, 
+	// 			 const Matrix3d& inertia,
+	// 			 const std::string body_name = "");
 
-	void removeLoad(const std::string link_name, 
-		 		    const double mass, 
-					const Vector3d& com, 
-					const Matrix3d& inertia,
-					const std::string body_name= "");
+	// void removeLoad(const std::string link_name, 
+	// 	 		    const double mass, 
+	// 				const Vector3d& com, 
+	// 				const Matrix3d& inertia,
+	// 				const std::string body_name= "");
 
-	std::shared_ptr<ForceSensor> getConstForceSensorModel() {
-		return _force_sensor;
+	// std::shared_ptr<ForceSensor> getConstForceSensorModel() {
+	// 	return _force_sensor;
+	// }
+
+	VectorXd getUnitControlForces() {
+		return _unit_mass_force;
+	}
+
+	MatrixXd getProjectedJacobian() {
+		return _projected_jacobian;
+	}
+
+	MatrixXd getLambdaMatrix() {
+		return _Lambda_modified;
 	}
 
 private:

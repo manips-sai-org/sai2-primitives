@@ -820,22 +820,22 @@ void ComMotionTask::resetIntegratorsAngular() {
 	_integrated_moment_error.setZero();
 }
 
-void ComMotionTask::addLoad(const std::string link_name,
-							  const double mass,
-							  const Vector3d& com,
-							  const Matrix3d& inertia,
-							  const std::string body_name) {
-	_force_sensor->setToolInertia(mass, com, inertia);
-	getConstRobotModel()->addLoad(link_name, mass, com, inertia, body_name);
-}
+// void ComMotionTask::addLoad(const std::string link_name,
+// 							  const double mass,
+// 							  const Vector3d& com,
+// 							  const Matrix3d& inertia,
+// 							  const std::string body_name) {
+// 	_force_sensor->setToolInertia(mass, com, inertia);
+// 	getConstRobotModel()->addLoad(link_name, mass, com, inertia, body_name);
+// }
 
-void ComMotionTask::removeLoad(const std::string link_name,
-								 const double mass,
-								 const Vector3d& com,
-								 const Matrix3d& inertia,
-								 const std::string body_name) {
-	_force_sensor->clearToolInertia();
-	getConstRobotModel()->removeLoad(link_name, mass, com, inertia, body_name);
-}
+// void ComMotionTask::removeLoad(const std::string link_name,
+// 								 const double mass,
+// 								 const Vector3d& com,
+// 								 const Matrix3d& inertia,
+// 								 const std::string body_name) {
+// 	_force_sensor->clearToolInertia();
+// 	getConstRobotModel()->removeLoad(link_name, mass, com, inertia, body_name);
+// }
 
 } /* namespace Sai2Primitives */
