@@ -127,6 +127,13 @@ public:
 	const VectorXd& getGoalPosition() const { return _goal_position; }
 
 	/**
+	 * @brief Get the Current Velocity
+	 *
+	 * @return const VectorXd&
+	 */
+	const VectorXd& getCurrentVelocity() { return _current_velocity; }
+
+	/**
 	 * @brief Set the Goal Velocity
 	 *
 	 * @param goal_velocity
