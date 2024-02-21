@@ -919,20 +919,16 @@ void MotionForceTask::resetIntegratorsAngular() {
 
 void MotionForceTask::addLoad(const std::string link_name,
 							  const double mass,
-							  const Vector3d& com,
+							  const Vector3d& com_pos,
 							  const Matrix3d& inertia,
 							  const std::string body_name) {
-	_force_sensor->setToolInertia(mass, com, inertia);
-	getConstRobotModel()->addLoad(link_name, mass, com, inertia, body_name);
+	_force_sensor->setToolInertia(mass, com_pos, inertia);
+	getConstRobotModel()->addLoad(link_name, mass, com_pos, inertia, body_name);
 }
 
-void MotionForceTask::removeLoad(const std::string link_name,
-								 const double mass,
-								 const Vector3d& com,
-								 const Matrix3d& inertia,
-								 const std::string body_name) {
+void MotionForceTask::removeLoad(const std::string body_name) {
 	_force_sensor->clearToolInertia();
-	getConstRobotModel()->removeLoad(link_name, mass, com, inertia, body_name);
+	getConstRobotModel()->removeLoad(body_name);
 }
 
 } /* namespace Sai2Primitives */

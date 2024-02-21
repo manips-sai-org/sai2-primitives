@@ -535,23 +535,24 @@ public:
 	/**
 	 * @brief Add load (intended after the force sensor located at the last link)
 	 * 
-	 * @param link_name 
-	 * @param mass 
-	 * @param com 
-	 * @param inertia 
-	 * @param body_name
+	 * @param link_name Link to add load (uses the samed parent joint fraame)
+	 * @param mass Load mass (kg)
+	 * @param com Load com position (m)
+	 * @param inertia Load inertia (kg/mm^2)
+	 * @param body_name Unique name for added load
 	 */
 	void addLoad(const std::string link_name, 
 				 const double mass, 
-				 const Vector3d& com, 
+				 const Vector3d& com_pos, 
 				 const Matrix3d& inertia,
-				 const std::string body_name = "");
+				 const std::string body_name);
 
-	void removeLoad(const std::string link_name, 
-		 		    const double mass, 
-					const Vector3d& com, 
-					const Matrix3d& inertia,
-					const std::string body_name= "");
+	/**
+	 * @brief Removes load given by unique body name identifier
+	 * 
+	 * @param body_name Name of added load 
+	 */
+	void removeLoad(const std::string body_name);
 
 	std::shared_ptr<ForceSensor> getConstForceSensorModel() {
 		return _force_sensor;
