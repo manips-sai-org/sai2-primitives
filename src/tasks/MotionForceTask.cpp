@@ -1,10 +1,10 @@
 /*
- * ComMotionTask.cpp
+ * MotionForceTask.cpp
  *
  *      Author: Mikael Jorda
  */
 
-#include "ComMotionTask.h"
+#include "MotionForceTask.h"
 
 #include <stdexcept>
 
@@ -18,7 +18,7 @@ const double MAX_FEEDBACK_FORCE_FORCE_CONTROLLER = 20.0;
 const double MAX_FEEDBACK_MOMENT_FORCE_CONTROLLER = 10.0;
 }  // namespace
 
-ComMotionTask::ComMotionTask(
+MotionForceTask::MotionForceTask(
 	std::shared_ptr<Sai2Model::Sai2Model>& robot, const string& link_name,
 	const Affine3d& compliant_frame, const std::string& task_name,
 	const bool is_force_motion_parametrization_in_compliant_frame,
@@ -35,7 +35,7 @@ ComMotionTask::ComMotionTask(
 	initialSetup();
 }
 
-ComMotionTask::ComMotionTask(
+MotionForceTask::MotionForceTask(
 	std::shared_ptr<Sai2Model::Sai2Model>& robot, const string& link_name,
 	std::vector<Vector3d> controlled_directions_translation,
 	std::vector<Vector3d> controlled_directions_rotation,
@@ -54,7 +54,7 @@ ComMotionTask::ComMotionTask(
 		throw invalid_argument(
 			"controlled_directions_translation and "
 			"controlled_directions_rotation cannot both be empty in "
-			"ComMotionTask::ComMotionTask\n");
+			"MotionForceTask::MotionForceTask\n");
 	}
 
 	MatrixXd controlled_translation_range_basis = MatrixXd::Zero(3, 1);
@@ -94,26 +94,37 @@ ComMotionTask::ComMotionTask(
 	initialSetup();
 }
 
-void ComMotionTask::initialSetup() {
+void MotionForceTask::initialSetup() {
 	setDynamicDecouplingType(BOUNDED_INERTIA_ESTIMATES);
 
 	int dof = getConstRobotModel()->dof();
 	_T_control_to_sensor = Affine3d::Identity();
 
+	// POPC force
+	_POPC_force.reset(new POPCExplicitForceControl(getLoopTimestep()));
+
 	// motion
-	_current_position = getConstRobotModel()->comPosition();
+	_current_position = getConstRobotModel()->positionInWorld(
+		_link_name, _compliant_frame.translation());
 	_current_orientation = getConstRobotModel()->rotationInWorld(
 		_link_name, _compliant_frame.rotation());
 
 	// default values for gains and velocity saturation
 	setPosControlGains(50.0, 14.0, 0.0);
 	setOriControlGains(50.0, 14.0, 0.0);
+	setForceControlGains(0.7, 10.0, 1.3);
+	setMomentControlGains(0.7, 10.0, 1.3);
 
 	disableVelocitySaturation();
 	_linear_saturation_velocity = 0;
 	_angular_saturation_velocity = 0;
 
 	_k_ff = 0.95;
+
+	parametrizeForceMotionSpaces(0);
+	parametrizeMomentRotMotionSpaces(0);
+	setClosedLoopForceControl(false);
+	setClosedLoopMomentControl(false);
 
 	// initialize matrices sizes
 	_jacobian.setZero(6, dof);
@@ -137,7 +148,7 @@ void ComMotionTask::initialSetup() {
 		throw invalid_argument(
 			"controlled_directions_translation and "
 			"controlled_directions_rotation cannot both be empty in "
-			"ComMotionTask::ComMotionTask\n");
+			"MotionForceTask::MotionForceTask\n");
 	}
 
 	_current_task_range.setZero(6, _pos_range + _ori_range);
@@ -153,14 +164,18 @@ void ComMotionTask::initialSetup() {
 		_current_position, _current_orientation, getLoopTimestep());
 	enableInternalOtgAccelerationLimited(0.3, 1.0, M_PI / 3, M_PI);
 
+	// force sensor
+	_force_sensor = std::make_shared<ForceSensor>(getConstRobotModel());
+
 	reInitializeTask();
 }
 
-void ComMotionTask::reInitializeTask() {
+void MotionForceTask::reInitializeTask() {
 	int dof = getConstRobotModel()->dof();
 
 	// motion
-	_current_position = getConstRobotModel()->comPosition();
+	_current_position = getConstRobotModel()->positionInWorld(
+		_link_name, _compliant_frame.translation());
 	_desired_position = _current_position;
 	_current_orientation = getConstRobotModel()->rotationInWorld(
 		_link_name, _compliant_frame.rotation());
@@ -177,31 +192,36 @@ void ComMotionTask::reInitializeTask() {
 	_integrated_position_error.setZero();
 	_integrated_orientation_error.setZero();
 
+	_desired_force.setZero();
+	_sensed_force.setZero();
+	_desired_moment.setZero();
+	_sensed_moment.setZero();
+
 	resetIntegrators();
 
+	_task_force.setZero(6);
 	_unit_mass_force.setZero(6);
 
 	_otg->reInitialize(_current_position, _current_orientation);
 }
 
-void ComMotionTask::updateTaskModel(const MatrixXd& N_prec) {
+void MotionForceTask::updateTaskModel(const MatrixXd& N_prec) {
 	const int robot_dof = getConstRobotModel()->dof();
 	if (N_prec.rows() != N_prec.cols()) {
 		throw invalid_argument(
-			"N_prec matrix not square in ComMotionTask::updateTaskModel\n");
+			"N_prec matrix not square in MotionForceTask::updateTaskModel\n");
 	}
 	if (N_prec.rows() != robot_dof) {
 		throw invalid_argument(
 			"N_prec matrix size not consistent with robot dof in "
-			"ComMotionTask::updateTaskModel\n");
+			"MotionForceTask::updateTaskModel\n");
 	}
 
 	_N_prec = N_prec;
 
-    MatrixXd J = getConstRobotModel()->JWorldFrame(
-                    _link_name, _compliant_frame.translation());
-    J.topRows(3) = getConstRobotModel()->comJacobian();
-	_jacobian = _partial_task_projection * J;
+	_jacobian = _partial_task_projection *
+				getConstRobotModel()->JWorldFrame(
+					_link_name, _compliant_frame.translation());
 	_projected_jacobian = _jacobian * _N_prec;
 
 	MatrixXd range_pos =
@@ -288,16 +308,16 @@ void ComMotionTask::updateTaskModel(const MatrixXd& N_prec) {
 	}
 }
 
-VectorXd ComMotionTask::computeTorques() {
+VectorXd MotionForceTask::computeTorques() {
 	VectorXd task_joint_torques = VectorXd::Zero(getConstRobotModel()->dof());
-    MatrixXd J = getConstRobotModel()->JWorldFrame(
-                    _link_name, _compliant_frame.translation());
-    J.topRows(3) = getConstRobotModel()->comJacobian();
-	_jacobian = _partial_task_projection * J;
+	_jacobian = _partial_task_projection *
+				getConstRobotModel()->JWorldFrame(
+					_link_name, _compliant_frame.translation());
 	_projected_jacobian = _jacobian * _N_prec;
 
 	// update controller state
-	_current_position = getConstRobotModel()->comPosition();
+	_current_position = getConstRobotModel()->positionInWorld(
+		_link_name, _compliant_frame.translation());
 	_current_orientation = getConstRobotModel()->rotationInWorld(
 		_link_name, _compliant_frame.rotation());
 
@@ -316,10 +336,17 @@ VectorXd ComMotionTask::computeTorques() {
 		return task_joint_torques;
 	}
 
-	Matrix3d sigma_position = Matrix3d::Identity();
-	Matrix3d sigma_orientation = Matrix3d::Identity();
+	Matrix3d sigma_force = sigmaForce();
+	Matrix3d sigma_moment = sigmaMoment();
+	Matrix3d sigma_position = sigmaPosition();
+	Matrix3d sigma_orientation = sigmaOrientation();
 
+	Vector3d desired_force = getDesiredForce();
+	Vector3d desired_moment = getDesiredMoment();
+
+	Vector3d force_feedback_related_force = Vector3d::Zero();
 	Vector3d position_related_force = Vector3d::Zero();
+	Vector3d moment_feedback_related_force = Vector3d::Zero();
 	Vector3d orientation_related_force = Vector3d::Zero();
 
 	Matrix3d kp_pos =
@@ -328,6 +355,62 @@ VectorXd ComMotionTask::computeTorques() {
 		_current_orientation * _kv_pos * _current_orientation.transpose();
 	Matrix3d ki_pos =
 		_current_orientation * _ki_pos * _current_orientation.transpose();
+
+	// force related terms
+	if (_closed_loop_force_control) {
+		// update the integrated error
+		_integrated_force_error +=
+			sigma_force * (_sensed_force - desired_force) * getLoopTimestep();
+
+		// compute the feedback term and saturate it
+		Vector3d force_feedback_term =
+			sigma_force * (-_kp_force * (_sensed_force - desired_force) -
+						   _ki_force * _integrated_force_error);
+		if (force_feedback_term.norm() > MAX_FEEDBACK_FORCE_FORCE_CONTROLLER) {
+			force_feedback_term *= MAX_FEEDBACK_FORCE_FORCE_CONTROLLER /
+								   force_feedback_term.norm();
+		}
+
+		// compute the final contribution
+		force_feedback_related_force =
+			_POPC_force->computePassivitySaturatedForce(
+				sigma_force * desired_force, sigma_force * _sensed_force,
+				sigma_force * force_feedback_term,
+				sigma_force * _current_velocity, _kv_force, _k_ff);
+	} else	// open loop force control
+	{
+		force_feedback_related_force =
+			sigma_force * (-_kv_force * _current_velocity);
+	}
+
+	// moment related terms
+	if (_closed_loop_moment_control) {
+		// update the integrated error
+		_integrated_moment_error += sigma_moment *
+									(_sensed_moment - desired_moment) *
+									getLoopTimestep();
+
+		// compute the feedback term
+		Vector3d moment_feedback_term =
+			sigma_moment * (-_kp_moment * (_sensed_moment - desired_moment) -
+							_ki_moment * _integrated_moment_error);
+
+		// saturate the feedback term
+		if (moment_feedback_term.norm() >
+			MAX_FEEDBACK_MOMENT_FORCE_CONTROLLER) {
+			moment_feedback_term *= MAX_FEEDBACK_MOMENT_FORCE_CONTROLLER /
+									moment_feedback_term.norm();
+		}
+
+		// compute the final contribution
+		moment_feedback_related_force =
+			sigma_moment *
+			(moment_feedback_term - _kv_moment * _current_angular_velocity);
+	} else	// open loop moment control
+	{
+		moment_feedback_related_force =
+			sigma_moment * (-_kv_moment * _current_angular_velocity);
+	}
 
 	// motion related terms
 	// compute next state from trajectory generation
@@ -415,15 +498,31 @@ VectorXd ComMotionTask::computeTorques() {
 	}
 
 	// compute task force
-	VectorXd position_orientation_contribution(6);
+	VectorXd force_moment_contribution(6), position_orientation_contribution(6);
+	force_moment_contribution.head(3) = force_feedback_related_force;
+	force_moment_contribution.tail(3) = moment_feedback_related_force;
+
 	position_orientation_contribution.head(3) = position_related_force;
 	position_orientation_contribution.tail(3) = orientation_related_force;
 
 	_unit_mass_force = position_orientation_contribution;
+
+	VectorXd feedforward_force_moment = VectorXd::Zero(6);
+	feedforward_force_moment.head(3) = sigma_force * desired_force;
+	feedforward_force_moment.tail(3) = sigma_moment * desired_moment;
+
+	if (_closed_loop_force_control) {
+		feedforward_force_moment *= _k_ff;
+	}
+
+	_linear_force_control =
+		force_feedback_related_force + feedforward_force_moment.head(3);
 	_linear_motion_control = position_related_force;
 
 	_task_force = _Lambda_modified * _current_task_range.transpose() *
-					  (position_orientation_contribution);
+					  (position_orientation_contribution) +
+				  _current_task_range.transpose() *
+					  (force_moment_contribution + feedforward_force_moment);
 
 	// compute task torques
 	task_joint_torques =
@@ -432,7 +531,7 @@ VectorXd ComMotionTask::computeTorques() {
 	return task_joint_torques;
 }
 
-void ComMotionTask::enableInternalOtgAccelerationLimited(
+void MotionForceTask::enableInternalOtgAccelerationLimited(
 	const double max_linear_velelocity, const double max_linear_acceleration,
 	const double max_angular_velocity, const double max_angular_acceleration) {
 	_otg->setMaxLinearVelocity(max_linear_velelocity);
@@ -443,7 +542,7 @@ void ComMotionTask::enableInternalOtgAccelerationLimited(
 	_use_internal_otg_flag = true;
 }
 
-void ComMotionTask::enableInternalOtgJerkLimited(
+void MotionForceTask::enableInternalOtgJerkLimited(
 	const double max_linear_velelocity, const double max_linear_acceleration,
 	const double max_linear_jerk, const double max_angular_velocity,
 	const double max_angular_acceleration, const double max_angular_jerk) {
@@ -455,15 +554,15 @@ void ComMotionTask::enableInternalOtgJerkLimited(
 	_use_internal_otg_flag = true;
 }
 
-Vector3d ComMotionTask::getPositionError() const {
+Vector3d MotionForceTask::getPositionError() const {
 	return sigmaPosition() * (_desired_position - _current_position);
 }
 
-Vector3d ComMotionTask::getOrientationError() const {
+Vector3d MotionForceTask::getOrientationError() const {
 	return sigmaOrientation() * _orientation_error;
 }
 
-bool ComMotionTask::goalPositionReached(const double tolerance,
+bool MotionForceTask::goalPositionReached(const double tolerance,
 										  const bool verbose) {
 	double position_error =
 		(_desired_position - _current_position).transpose() * sigmaPosition() *
@@ -471,7 +570,7 @@ bool ComMotionTask::goalPositionReached(const double tolerance,
 	position_error = sqrt(position_error);
 	bool goal_reached = position_error < tolerance;
 	if (verbose) {
-		cout << "position error in ComMotionTask : " << position_error
+		cout << "position error in MotionForceTask : " << position_error
 			 << endl;
 		cout << "Tolerance : " << tolerance << endl;
 		cout << "Goal reached : " << goal_reached << endl << endl;
@@ -480,14 +579,14 @@ bool ComMotionTask::goalPositionReached(const double tolerance,
 	return goal_reached;
 }
 
-bool ComMotionTask::goalOrientationReached(const double tolerance,
+bool MotionForceTask::goalOrientationReached(const double tolerance,
 											 const bool verbose) {
 	double orientation_error = _orientation_error.transpose() *
 							   sigmaOrientation() * _orientation_error;
 	orientation_error = sqrt(orientation_error);
 	bool goal_reached = orientation_error < tolerance;
 	if (verbose) {
-		cout << "orientation error in ComMotionTask : " << orientation_error
+		cout << "orientation error in MotionForceTask : " << orientation_error
 			 << endl;
 		cout << "Tolerance : " << tolerance << endl;
 		cout << "Goal reached : " << goal_reached << endl << endl;
@@ -496,17 +595,17 @@ bool ComMotionTask::goalOrientationReached(const double tolerance,
 	return goal_reached;
 }
 
-void ComMotionTask::setPosControlGains(double kp_pos, double kv_pos,
+void MotionForceTask::setPosControlGains(double kp_pos, double kv_pos,
 										 double ki_pos) {
 	if (kp_pos < 0 || kv_pos < 0 || ki_pos < 0) {
 		throw invalid_argument(
 			"all gains should be positive or zero in "
-			"ComMotionTask::setPosControlGains\n");
+			"MotionForceTask::setPosControlGains\n");
 	}
 	if (kv_pos < 1e-2 && _use_velocity_saturation_flag) {
 		throw invalid_argument(
 			"cannot have kv_pos = 0 if using velocity saturation in "
-			"ComMotionTask::setPosControlGains\n");
+			"MotionForceTask::setPosControlGains\n");
 	}
 	_are_pos_gains_isotropic = true;
 	_kp_pos = kp_pos * Matrix3d::Identity();
@@ -514,19 +613,19 @@ void ComMotionTask::setPosControlGains(double kp_pos, double kv_pos,
 	_ki_pos = ki_pos * Matrix3d::Identity();
 }
 
-void ComMotionTask::setPosControlGains(const Vector3d& kp_pos,
+void MotionForceTask::setPosControlGains(const Vector3d& kp_pos,
 										 const Vector3d& kv_pos,
 										 const Vector3d& ki_pos) {
 	if (kp_pos.minCoeff() < 0 || kv_pos.minCoeff() < 0 ||
 		ki_pos.minCoeff() < 0) {
 		throw invalid_argument(
 			"all gains should be positive or zero in "
-			"ComMotionTask::setPosControlGains\n");
+			"MotionForceTask::setPosControlGains\n");
 	}
 	if (kv_pos.minCoeff() < 1e-2 && _use_velocity_saturation_flag) {
 		throw invalid_argument(
 			"cannot have kv_pos = 0 if using velocity saturation in "
-			"ComMotionTask::setPosControlGains\n");
+			"MotionForceTask::setPosControlGains\n");
 	}
 	_are_pos_gains_isotropic = false;
 	_kp_pos = kp_pos.asDiagonal();
@@ -534,7 +633,7 @@ void ComMotionTask::setPosControlGains(const Vector3d& kp_pos,
 	_ki_pos = ki_pos.asDiagonal();
 }
 
-vector<PIDGains> ComMotionTask::getPosControlGains() const {
+vector<PIDGains> MotionForceTask::getPosControlGains() const {
 	if (_are_pos_gains_isotropic) {
 		return vector<PIDGains>(
 			1, PIDGains(_kp_pos(0, 0), _kv_pos(0, 0), _ki_pos(0, 0)));
@@ -551,17 +650,17 @@ vector<PIDGains> ComMotionTask::getPosControlGains() const {
 				 aniso_ki_robot_base(2))};
 }
 
-void ComMotionTask::setOriControlGains(double kp_ori, double kv_ori,
+void MotionForceTask::setOriControlGains(double kp_ori, double kv_ori,
 										 double ki_ori) {
 	if (kp_ori < 0 || kv_ori < 0 || ki_ori < 0) {
 		throw invalid_argument(
 			"all gains should be positive or zero in "
-			"ComMotionTask::setOriControlGains\n");
+			"MotionForceTask::setOriControlGains\n");
 	}
 	if (kv_ori < 1e-2 && _use_velocity_saturation_flag) {
 		throw invalid_argument(
 			"cannot have kv_ori = 0 if using velocity saturation in "
-			"ComMotionTask::setOriControlGains\n");
+			"MotionForceTask::setOriControlGains\n");
 	}
 	_are_ori_gains_isotropic = true;
 	_kp_ori = kp_ori * Matrix3d::Identity();
@@ -569,19 +668,19 @@ void ComMotionTask::setOriControlGains(double kp_ori, double kv_ori,
 	_ki_ori = ki_ori * Matrix3d::Identity();
 }
 
-void ComMotionTask::setOriControlGains(const Vector3d& kp_ori,
+void MotionForceTask::setOriControlGains(const Vector3d& kp_ori,
 										 const Vector3d& kv_ori,
 										 const Vector3d& ki_ori) {
 	if (kp_ori.minCoeff() < 0 || kv_ori.minCoeff() < 0 ||
 		ki_ori.minCoeff() < 0) {
 		throw invalid_argument(
 			"all gains should be positive or zero in "
-			"ComMotionTask::setOriControlGains\n");
+			"MotionForceTask::setOriControlGains\n");
 	}
 	if (kv_ori.minCoeff() < 1e-2 && _use_velocity_saturation_flag) {
 		throw invalid_argument(
 			"cannot have kv_ori = 0 if using velocity saturation in "
-			"ComMotionTask::setOriControlGains\n");
+			"MotionForceTask::setOriControlGains\n");
 	}
 	_are_ori_gains_isotropic = false;
 	_kp_ori = kp_ori.asDiagonal();
@@ -589,7 +688,7 @@ void ComMotionTask::setOriControlGains(const Vector3d& kp_ori,
 	_ki_ori = ki_ori.asDiagonal();
 }
 
-vector<PIDGains> ComMotionTask::getOriControlGains() const {
+vector<PIDGains> MotionForceTask::getOriControlGains() const {
 	if (_are_ori_gains_isotropic) {
 		return vector<PIDGains>(
 			1, PIDGains(_kp_ori(0, 0), _kv_ori(0, 0), _ki_ori(0, 0)));
@@ -606,221 +705,219 @@ vector<PIDGains> ComMotionTask::getOriControlGains() const {
 				 aniso_ki_robot_base(2))};
 }
 
-// Vector3d ComMotionTask::getDesiredForce() const {
-// 	Matrix3d rotation = _is_force_motion_parametrization_in_compliant_frame
-// 							? getConstRobotModel()->rotationInWorld(
-// 								  _link_name, _compliant_frame.rotation())
-// 							: Matrix3d::Identity();
-// 	return rotation * _desired_force;
-// }
+Vector3d MotionForceTask::getDesiredForce() const {
+	Matrix3d rotation = _is_force_motion_parametrization_in_compliant_frame
+							? getConstRobotModel()->rotationInWorld(
+								  _link_name, _compliant_frame.rotation())
+							: Matrix3d::Identity();
+	return rotation * _desired_force;
+}
 
-// Vector3d ComMotionTask::getDesiredMoment() const {
-// 	Matrix3d rotation = _is_force_motion_parametrization_in_compliant_frame
-// 							? getConstRobotModel()->rotationInWorld(
-// 								  _link_name, _compliant_frame.rotation())
-// 							: Matrix3d::Identity();
-// 	return rotation * _desired_moment;
-// }
+Vector3d MotionForceTask::getDesiredMoment() const {
+	Matrix3d rotation = _is_force_motion_parametrization_in_compliant_frame
+							? getConstRobotModel()->rotationInWorld(
+								  _link_name, _compliant_frame.rotation())
+							: Matrix3d::Identity();
+	return rotation * _desired_moment;
+}
 
-void ComMotionTask::enableVelocitySaturation(const double linear_vel_sat,
+void MotionForceTask::enableVelocitySaturation(const double linear_vel_sat,
 											   const double angular_vel_sat) {
 	if (linear_vel_sat <= 0 || angular_vel_sat <= 0) {
 		throw invalid_argument(
 			"Velocity saturation values should be strictly positive or zero in "
-			"ComMotionTask::enableVelocitySaturation\n");
+			"MotionForceTask::enableVelocitySaturation\n");
 	}
 	if (_kv_pos.determinant() < 1e-3) {
 		throw invalid_argument(
 			"Cannot enable velocity saturation if kv_pos is singular in "
-			"ComMotionTask::enableVelocitySaturation\n");
+			"MotionForceTask::enableVelocitySaturation\n");
 	}
 	if (_kv_ori.determinant() < 1e-3) {
 		throw invalid_argument(
 			"Cannot enable velocity saturation if kv_ori is singular in "
-			"ComMotionTask::enableVelocitySaturation\n");
+			"MotionForceTask::enableVelocitySaturation\n");
 	}
 	_use_velocity_saturation_flag = true;
 	_linear_saturation_velocity = linear_vel_sat;
 	_angular_saturation_velocity = angular_vel_sat;
 }
 
-// void ComMotionTask::setForceSensorFrame(
-// 	const string link_name, const Affine3d transformation_in_link) {
-// 	if (link_name != _link_name) {
-// 		throw invalid_argument(
-// 			"The link to which is attached the sensor should be the same as "
-// 			"the link to which is attached the control frame in "
-// 			"ComMotionTask::setForceSensorFrame\n");
-// 	}
-// 	_T_control_to_sensor = _compliant_frame.inverse() * transformation_in_link;
-// 	_force_sensor->setForceSensorFrame(link_name, transformation_in_link);
-// }
+void MotionForceTask::setForceSensorFrame(
+	const string link_name, const Affine3d transformation_in_link) {
+	if (link_name != _link_name) {
+		throw invalid_argument(
+			"The link to which is attached the sensor should be the same as "
+			"the link to which is attached the control frame in "
+			"MotionForceTask::setForceSensorFrame\n");
+	}
+	_T_control_to_sensor = _compliant_frame.inverse() * transformation_in_link;
+	_force_sensor->setForceSensorFrame(link_name, transformation_in_link);
+}
 
-// void ComMotionTask::updateSensedForceAndMoment(
-// 	const Vector3d sensed_force_sensor_frame,
-// 	const Vector3d sensed_moment_sensor_frame) {
+void MotionForceTask::updateSensedForceAndMoment(
+	const Vector3d sensed_force_sensor_frame,
+	const Vector3d sensed_moment_sensor_frame) {
 	
-// 	// get calibrated force sensor data 
-// 	ForceMeasurement force_moment = \
-// 		_force_sensor->getCalibratedForceMoment(sensed_force_sensor_frame, sensed_moment_sensor_frame);
-// 	Vector3d calibrated_sensed_force_sensor_frame = force_moment.force;
-// 	Vector3d calibrated_sensed_moment_sensor_frame = force_moment.moment;
+	// get calibrated force sensor data 
+	ForceMeasurement force_moment = \
+		_force_sensor->getCalibratedForceMoment(sensed_force_sensor_frame, sensed_moment_sensor_frame);
+	Vector3d calibrated_sensed_force_sensor_frame = force_moment.force;
+	Vector3d calibrated_sensed_moment_sensor_frame = force_moment.moment;
 
-// 	// find the transform from base frame to control frame
-// 	Affine3d T_world_link = getConstRobotModel()->transformInWorld(_link_name);
-// 	Affine3d T_world_compliant_frame = T_world_link * _compliant_frame;
+	// find the transform from base frame to control frame
+	Affine3d T_world_link = getConstRobotModel()->transformInWorld(_link_name);
+	Affine3d T_world_compliant_frame = T_world_link * _compliant_frame;
 
-// 	// find the resolved sensed force and moment in control frame
-// 	_sensed_force = _T_control_to_sensor.rotation() * calibrated_sensed_force_sensor_frame;
-// 	_sensed_moment =
-// 		_T_control_to_sensor.translation().cross(_sensed_force) +
-// 		_T_control_to_sensor.rotation() * calibrated_sensed_moment_sensor_frame;
+	// find the resolved sensed force and moment in control frame
+	_sensed_force = _T_control_to_sensor.rotation() * calibrated_sensed_force_sensor_frame;
+	_sensed_moment =
+		_T_control_to_sensor.translation().cross(_sensed_force) +
+		_T_control_to_sensor.rotation() * calibrated_sensed_moment_sensor_frame;
 
-// 	// rotate the quantities in base frame
-// 	_sensed_force = T_world_compliant_frame.rotation() * _sensed_force;
-// 	_sensed_moment = T_world_compliant_frame.rotation() * _sensed_moment;
-// }
-
-// void ComMotionTask::parametrizeForceMotionSpaces(
-// 	const int force_space_dimension,
-// 	const Vector3d& force_or_motion_single_axis) {
-// 	if (force_space_dimension < 0 || force_space_dimension > 3) {
-// 		throw invalid_argument(
-// 			"Force space dimension should be between 0 and 3 in "
-// 			"ComMotionTask::parametrizeForceMotionSpaces\n");
-// 	}
-// 	_force_space_dimension = force_space_dimension;
-// 	if (force_space_dimension == 1 || force_space_dimension == 2) {
-// 		if (force_or_motion_single_axis.norm() < 1e-2) {
-// 			throw invalid_argument(
-// 				"Force or motion axis should be a non singular vector in "
-// 				"ComMotionTask::parametrizeForceMotionSpaces\n");
-// 		}
-// 		_force_or_motion_axis = force_or_motion_single_axis.normalized();
-// 	}
-// 	resetIntegratorsLinear();
-// }
-
-// void ComMotionTask::parametrizeMomentRotMotionSpaces(
-// 	const int moment_space_dimension,
-// 	const Vector3d& moment_or_rot_motion_single_axis) {
-// 	if (moment_space_dimension < 0 || moment_space_dimension > 3) {
-// 		throw invalid_argument(
-// 			"Moment space dimension should be between 0 and 3 in "
-// 			"ComMotionTask::parametrizeMomentRotMotionSpaces\n");
-// 	}
-// 	_moment_space_dimension = moment_space_dimension;
-// 	if (moment_space_dimension == 1 || moment_space_dimension == 2) {
-// 		if (moment_or_rot_motion_single_axis.norm() < 1e-2) {
-// 			throw invalid_argument(
-// 				"Moment or rot motion axis should be a non singular vector in "
-// 				"ComMotionTask::parametrizeMomentRotMotionSpaces\n");
-// 		}
-// 		_moment_or_rotmotion_axis =
-// 			moment_or_rot_motion_single_axis.normalized();
-// 	}
-// 	resetIntegratorsAngular();
-// }
-
-// Matrix3d ComMotionTask::sigmaForce() const {
-// 	Matrix3d rotation = _is_force_motion_parametrization_in_compliant_frame
-// 							? getConstRobotModel()->rotationInWorld(
-// 								  _link_name, _compliant_frame.rotation())
-// 							: Matrix3d::Identity();
-// 	switch (_force_space_dimension) {
-// 		case 0:
-// 			return Matrix3d::Zero();
-// 			break;
-// 		case 1:
-// 			return posSelectionProjector() * rotation * _force_or_motion_axis *
-// 				   _force_or_motion_axis.transpose() * rotation.transpose() *
-// 				   posSelectionProjector().transpose();
-// 			break;
-// 		case 2:
-// 			return posSelectionProjector() *
-// 				   (Matrix3d::Identity() -
-// 					rotation * _force_or_motion_axis *
-// 						_force_or_motion_axis.transpose() *
-// 						rotation.transpose()) *
-// 				   posSelectionProjector().transpose();
-// 			break;
-// 		case 3:
-// 			return posSelectionProjector();
-// 			break;
-
-// 		default:
-// 			// should never happen
-// 			throw invalid_argument(
-// 				"Force space dimension should be between 0 and 3 in "
-// 				"ComMotionTask::sigmaForce\n");
-// 			break;
-// 	}
-// }
-
-Matrix3d ComMotionTask::sigmaPosition() const {
-    return Matrix3d::Identity();
-	// return posSelectionProjector() * (Matrix3d::Identity() - sigmaForce()) *
-	// 	   posSelectionProjector().transpose();
+	// rotate the quantities in base frame
+	_sensed_force = T_world_compliant_frame.rotation() * _sensed_force;
+	_sensed_moment = T_world_compliant_frame.rotation() * _sensed_moment;
 }
 
-// Matrix3d ComMotionTask::sigmaMoment() const {
-// 	Matrix3d rotation = _is_force_motion_parametrization_in_compliant_frame
-// 							? getConstRobotModel()->rotationInWorld(
-// 								  _link_name, _compliant_frame.rotation())
-// 							: Matrix3d::Identity();
-// 	switch (_moment_space_dimension) {
-// 		case 0:
-// 			return Matrix3d::Zero();
-// 			break;
-// 		case 1:
-// 			return oriSelectionProjector() * rotation *
-// 				   _moment_or_rotmotion_axis *
-// 				   _moment_or_rotmotion_axis.transpose() *
-// 				   rotation.transpose() * oriSelectionProjector().transpose();
-// 			break;
-// 		case 2:
-// 			return oriSelectionProjector() *
-// 				   (Matrix3d::Identity() -
-// 					rotation * _moment_or_rotmotion_axis *
-// 						_moment_or_rotmotion_axis.transpose() *
-// 						rotation.transpose()) *
-// 				   oriSelectionProjector().transpose();
-// 			break;
-// 		case 3:
-// 			return oriSelectionProjector();
-// 			break;
-
-// 		default:
-// 			// should never happen
-// 			throw invalid_argument(
-// 				"Moment space dimension should be between 0 and 3 in "
-// 				"ComMotionTask::sigmaMoment\n");
-// 			break;
-// 	}
-// }
-
-Matrix3d ComMotionTask::sigmaOrientation() const {
-    return Matrix3d::Identity();
-	// return oriSelectionProjector() * (Matrix3d::Identity() - sigmaMoment()) *
-	// 	   oriSelectionProjector().transpose();
+void MotionForceTask::parametrizeForceMotionSpaces(
+	const int force_space_dimension,
+	const Vector3d& force_or_motion_single_axis) {
+	if (force_space_dimension < 0 || force_space_dimension > 3) {
+		throw invalid_argument(
+			"Force space dimension should be between 0 and 3 in "
+			"MotionForceTask::parametrizeForceMotionSpaces\n");
+	}
+	_force_space_dimension = force_space_dimension;
+	if (force_space_dimension == 1 || force_space_dimension == 2) {
+		if (force_or_motion_single_axis.norm() < 1e-2) {
+			throw invalid_argument(
+				"Force or motion axis should be a non singular vector in "
+				"MotionForceTask::parametrizeForceMotionSpaces\n");
+		}
+		_force_or_motion_axis = force_or_motion_single_axis.normalized();
+	}
+	resetIntegratorsLinear();
 }
 
-void ComMotionTask::resetIntegrators() {
+void MotionForceTask::parametrizeMomentRotMotionSpaces(
+	const int moment_space_dimension,
+	const Vector3d& moment_or_rot_motion_single_axis) {
+	if (moment_space_dimension < 0 || moment_space_dimension > 3) {
+		throw invalid_argument(
+			"Moment space dimension should be between 0 and 3 in "
+			"MotionForceTask::parametrizeMomentRotMotionSpaces\n");
+	}
+	_moment_space_dimension = moment_space_dimension;
+	if (moment_space_dimension == 1 || moment_space_dimension == 2) {
+		if (moment_or_rot_motion_single_axis.norm() < 1e-2) {
+			throw invalid_argument(
+				"Moment or rot motion axis should be a non singular vector in "
+				"MotionForceTask::parametrizeMomentRotMotionSpaces\n");
+		}
+		_moment_or_rotmotion_axis =
+			moment_or_rot_motion_single_axis.normalized();
+	}
+	resetIntegratorsAngular();
+}
+
+Matrix3d MotionForceTask::sigmaForce() const {
+	Matrix3d rotation = _is_force_motion_parametrization_in_compliant_frame
+							? getConstRobotModel()->rotationInWorld(
+								  _link_name, _compliant_frame.rotation())
+							: Matrix3d::Identity();
+	switch (_force_space_dimension) {
+		case 0:
+			return Matrix3d::Zero();
+			break;
+		case 1:
+			return posSelectionProjector() * rotation * _force_or_motion_axis *
+				   _force_or_motion_axis.transpose() * rotation.transpose() *
+				   posSelectionProjector().transpose();
+			break;
+		case 2:
+			return posSelectionProjector() *
+				   (Matrix3d::Identity() -
+					rotation * _force_or_motion_axis *
+						_force_or_motion_axis.transpose() *
+						rotation.transpose()) *
+				   posSelectionProjector().transpose();
+			break;
+		case 3:
+			return posSelectionProjector();
+			break;
+
+		default:
+			// should never happen
+			throw invalid_argument(
+				"Force space dimension should be between 0 and 3 in "
+				"MotionForceTask::sigmaForce\n");
+			break;
+	}
+}
+
+Matrix3d MotionForceTask::sigmaPosition() const {
+	return posSelectionProjector() * (Matrix3d::Identity() - sigmaForce()) *
+		   posSelectionProjector().transpose();
+}
+
+Matrix3d MotionForceTask::sigmaMoment() const {
+	Matrix3d rotation = _is_force_motion_parametrization_in_compliant_frame
+							? getConstRobotModel()->rotationInWorld(
+								  _link_name, _compliant_frame.rotation())
+							: Matrix3d::Identity();
+	switch (_moment_space_dimension) {
+		case 0:
+			return Matrix3d::Zero();
+			break;
+		case 1:
+			return oriSelectionProjector() * rotation *
+				   _moment_or_rotmotion_axis *
+				   _moment_or_rotmotion_axis.transpose() *
+				   rotation.transpose() * oriSelectionProjector().transpose();
+			break;
+		case 2:
+			return oriSelectionProjector() *
+				   (Matrix3d::Identity() -
+					rotation * _moment_or_rotmotion_axis *
+						_moment_or_rotmotion_axis.transpose() *
+						rotation.transpose()) *
+				   oriSelectionProjector().transpose();
+			break;
+		case 3:
+			return oriSelectionProjector();
+			break;
+
+		default:
+			// should never happen
+			throw invalid_argument(
+				"Moment space dimension should be between 0 and 3 in "
+				"MotionForceTask::sigmaMoment\n");
+			break;
+	}
+}
+
+Matrix3d MotionForceTask::sigmaOrientation() const {
+	return oriSelectionProjector() * (Matrix3d::Identity() - sigmaMoment()) *
+		   oriSelectionProjector().transpose();
+}
+
+void MotionForceTask::resetIntegrators() {
 	resetIntegratorsLinear();
 	resetIntegratorsAngular();
 }
 
-void ComMotionTask::resetIntegratorsLinear() {
+void MotionForceTask::resetIntegratorsLinear() {
 	_integrated_position_error.setZero();
 	_integrated_force_error.setZero();
 }
 
-void ComMotionTask::resetIntegratorsAngular() {
+void MotionForceTask::resetIntegratorsAngular() {
 	_integrated_orientation_error.setZero();
 	_integrated_moment_error.setZero();
 }
 
-void ComMotionTask::addLoad(const std::string link_name,
+void MotionForceTask::addLoad(const std::string link_name,
 							  const double mass,
 							  const Vector3d& com,
 							  const Matrix3d& inertia,
@@ -829,7 +926,7 @@ void ComMotionTask::addLoad(const std::string link_name,
 	getConstRobotModel()->addLoad(link_name, mass, com, inertia, body_name);
 }
 
-void ComMotionTask::removeLoad(const std::string link_name,
+void MotionForceTask::removeLoad(const std::string link_name,
 								 const double mass,
 								 const Vector3d& com,
 								 const Matrix3d& inertia,

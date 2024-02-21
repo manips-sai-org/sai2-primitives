@@ -15,8 +15,8 @@
  *      Author: Mikael Jorda
  */
 
-#ifndef SAI2_PRIMITIVES_COMMOTIONTASK_TASK_H_
-#define SAI2_PRIMITIVES_COMMOTIONTASK_TASK_H_
+#ifndef SAI2_PRIMITIVES_MOTIONFORCETASK_TASK_H_
+#define SAI2_PRIMITIVES_MOTIONFORCETASK_TASK_H_
 
 #include <helper_modules/OTG_6dof_cartesian.h>
 #include <helper_modules/POPCExplicitForceControl.h>
@@ -35,7 +35,7 @@ using namespace std;
 
 namespace Sai2Primitives {
 
-class ComMotionTask : public TemplateTask {
+class MotionForceTask : public TemplateTask {
 public:
 	enum DynamicDecouplingType {
 		FULL_DYNAMIC_DECOUPLING,	 // use the real Lambda matrix
@@ -57,7 +57,7 @@ public:
 	 * @param robot A pointer to a Sai2Model object for the robot that is to be
 	 * controlled
 	 * @param link_name The name of the link in the robot at which to attach the
-	 * compliant frame. This is used only for the orientation control
+	 * compliant frame
 	 * @param compliant_frame Compliant frame with respect to link frame
 	 * @param task_name Name of the task
 	 * @param is_force_motion_parametrization_in_compliant_frame Whether the
@@ -66,20 +66,20 @@ public:
 	 * @param loop_timestep Time taken by a control loop. Used in trajectory
 	 * generation and integral control.
 	 */
-	ComMotionTask(
+	MotionForceTask(
 		std::shared_ptr<Sai2Model::Sai2Model>& robot, const string& link_name,
 		const Affine3d& compliant_frame = Affine3d::Identity(),
-		const std::string& task_name = "com_motion_task",
-        const bool is_force_motion_parametrization_in_compliant_frame = false,
+		const std::string& task_name = "motion_force_task",
+		const bool is_force_motion_parametrization_in_compliant_frame = false,
 		const double loop_timestep = 0.001);
 
-	ComMotionTask(
+	MotionForceTask(
 		std::shared_ptr<Sai2Model::Sai2Model>& robot, const string& link_name,
 		std::vector<Vector3d> controlled_directions_translation,
 		std::vector<Vector3d> controlled_directions_rotation,
 		const Affine3d& compliant_frame = Affine3d::Identity(),
-		const std::string& task_name = "com_motion_task",
-        const bool is_force_motion_parametrization_in_compliant_frame = false,
+		const std::string& task_name = "partial_motion_force_task",
+		const bool is_force_motion_parametrization_in_compliant_frame = false,
 		const double loop_timestep = 0.001);
 
 	//------------------------------------------------
@@ -672,5 +672,5 @@ private:
 
 } /* namespace Sai2Primitives */
 
-/* SAI2_PRIMITIVES_COMMOTIONTASK_TASK_H_ */
+/* SAI2_PRIMITIVES_MOTIONFORCETASK_TASK_H_ */
 #endif
