@@ -165,7 +165,8 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 		}
 		motion_force_task->setGoalPosition(goal_position);
 
-		if (!force_control && motion_force_task->getSensedForce()(2) <= -1.0) {
+		if (!force_control &&
+			motion_force_task->getSensedForceControlWorldFrame()(2) <= -1.0) {
 			force_control = true;
 			motion_force_task->parametrizeForceMotionSpaces(1,
 															Vector3d::UnitZ());
@@ -182,7 +183,9 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 			cout << "goal force: "
 				 << motion_force_task->getGoalForce().transpose() << endl;
 			cout << "sensed force: "
-				 << motion_force_task->getSensedForce().transpose() << endl;
+				 << motion_force_task->getSensedForceControlWorldFrame()
+						.transpose()
+				 << endl;
 			cout << endl;
 		}
 
