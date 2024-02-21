@@ -421,7 +421,7 @@ VectorXd MotionForceTask::computeTorques() {
 	_desired_orientation = _goal_orientation;
 	_desired_linear_velocity = _goal_linear_velocity;
 	_desired_angular_velocity = _goal_angular_velocity;
-	_desired_acceleration = _goal_linear_acceleration;
+	_desired_linear_acceleration = _goal_linear_acceleration;
 	_desired_angular_acceleration = _goal_angular_acceleration;
 
 	if (_use_internal_otg_flag) {
@@ -433,7 +433,7 @@ VectorXd MotionForceTask::computeTorques() {
 
 		_desired_position = _otg->getNextPosition();
 		_desired_linear_velocity = _otg->getNextLinearVelocity();
-		_desired_acceleration = _otg->getNextLinearAcceleration();
+		_desired_linear_acceleration = _otg->getNextLinearAcceleration();
 		_desired_orientation = _otg->getNextOrientation();
 		_desired_angular_velocity = _otg->getNextAngularVelocity();
 		_desired_angular_acceleration = _otg->getNextAngularAcceleration();
@@ -457,12 +457,12 @@ VectorXd MotionForceTask::computeTorques() {
 		}
 		position_related_force =
 			sigma_position *
-			(_desired_acceleration -
+			(_desired_linear_acceleration -
 			 _kv_pos * (_current_linear_velocity - _desired_linear_velocity));
 	} else {
 		position_related_force =
 			sigma_position *
-			(_desired_acceleration -
+			(_desired_linear_acceleration -
 			 _kp_pos * (_current_position - _desired_position) -
 			 _kv_pos * (_current_linear_velocity - _desired_linear_velocity) -
 			 _ki_pos * _integrated_position_error);
