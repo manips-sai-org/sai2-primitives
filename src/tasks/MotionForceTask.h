@@ -29,6 +29,7 @@
 #include "Sai2Model.h"
 #include "TemplateTask.h"
 #include "SingularityHandler.h"
+#include "SingularityHandler.h"
 
 using namespace Eigen;
 using namespace std;
