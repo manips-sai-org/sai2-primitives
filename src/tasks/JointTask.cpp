@@ -18,9 +18,6 @@ JointTask::JointTask(std::shared_ptr<Sai2Model::Sai2Model>& robot,
 	_joint_selection = MatrixXd::Identity(getConstRobotModel()->dof(),
 										  getConstRobotModel()->dof());
 	_is_partial_joint_task = false;
-	_joint_selection = MatrixXd::Identity(getConstRobotModel()->dof(),
-										  getConstRobotModel()->dof());
-	_is_partial_joint_task = false;
 
 	initialSetup();
 }
@@ -43,7 +40,6 @@ JointTask::JointTask(std::shared_ptr<Sai2Model::Sai2Model>& robot,
 			"constructor\n");
 	}
 	_joint_selection = joint_selection_matrix;
-	_is_partial_joint_task = true;
 	_is_partial_joint_task = true;
 
 	initialSetup();
