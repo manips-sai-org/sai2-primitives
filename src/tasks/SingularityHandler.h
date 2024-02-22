@@ -58,7 +58,7 @@ public:
                        const double& type_1_tol = 0.8,
                        const double& type_2_torque_ratio = 0.01,
                        const int& queue_size = 10,
-                       const bool& verbose = false);
+                       const bool& verbose = true);
 
     /**
      * @brief Updates the model quantities for the singularity handling task, and performs singularity classification

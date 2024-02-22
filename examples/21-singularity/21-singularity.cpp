@@ -118,9 +118,21 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 	// 	robot, link_name, controlled_directions_translation,
 	// 	controlled_directions_rotation);
 
-    motion_force_task->disableInternalOtg();
-    motion_force_task->enableVelocitySaturation();
+    // motion_force_task->disableInternalOtg();
+    // motion_force_task->enableVelocitySaturation();
+	motion_force_task->setSingularityBounds(5e-3, 5e-2);
 	VectorXd motion_force_task_torques = VectorXd::Zero(dof);
+
+	// test 
+	vector<std::shared_ptr<Sai2Primitives::MotionForceTask>> test_vector;
+	test_vector.push_back(make_shared<Sai2Primitives::MotionForceTask>(
+		robot, link_name, compliant_frame));
+	test_vector.push_back(make_shared<Sai2Primitives::MotionForceTask>(
+		robot, link_name, compliant_frame));
+	test_vector.push_back(make_shared<Sai2Primitives::MotionForceTask>(
+		robot, link_name, compliant_frame));
+
+	test_vector[0]->setSingularityBounds(5e-3, 5e-2);
 
 	// no gains setting here, using the default task values
 	const Matrix3d initial_orientation = robot->rotation(link_name);

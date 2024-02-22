@@ -569,6 +569,10 @@ public:
 		return _Lambda_modified;
 	}
 
+	MatrixXd getTaskRange() {
+		return _current_task_range;
+	}
+
 private:
 	/**
 	 * @brief Initial setup of the task, called in the constructor to avoid

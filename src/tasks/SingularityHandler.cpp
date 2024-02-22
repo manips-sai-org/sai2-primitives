@@ -47,7 +47,6 @@ SingularityHandler::SingularityHandler(std::shared_ptr<Sai2Model::Sai2Model> rob
         setGains(kp, 2 * std::sqrt(kp));
     }
     setSingularity(NO_SINGULARITY);
-    setDynamicDecouplingType(BOUNDED_INERTIA_ESTIMATES);
 
     // initialize singularity history
     // the entire buffer history must be classified as type 2 to classify type 2 singularity, 
@@ -64,6 +63,10 @@ void SingularityHandler::updateTaskModel(const MatrixXd& projected_jacobian, con
     int dof = _robot->dof();
     Sai2Model::SvdData J_svd = Sai2Model::matrixSvd(projected_jacobian);
     _s_values = J_svd.s;
+
+    // if (_verbose) {
+    //     std::cout << "Singular values: " << _s_values.transpose() << "\n";
+    // }
     
     if (J_svd.s(0) < _s_abs_tol) {
         // fully singular task
