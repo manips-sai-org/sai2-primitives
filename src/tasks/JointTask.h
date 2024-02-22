@@ -88,8 +88,8 @@ public:
 	VectorXd computeTorques() override;
 
 	/**
-	 * @brief      reinitializes the desired and goal states to the current robot
-	 *             configuration as well as the integrator terms
+	 * @brief      reinitializes the desired and goal states to the current
+	 * robot configuration as well as the integrator terms
 	 */
 	void reInitializeTask() override;
 
@@ -127,6 +127,13 @@ public:
 	const VectorXd& getGoalPosition() const { return _goal_position; }
 
 	/**
+	 * @brief Get the Current Velocity
+	 *
+	 * @return const VectorXd&
+	 */
+	const VectorXd& getCurrentVelocity() { return _current_velocity; }
+
+	/**
 	 * @brief Set the Goal Velocity
 	 *
 	 * @param goal_velocity
@@ -152,8 +159,26 @@ public:
 	 *
 	 * @return goal acceleration as a VectorXd
 	 */
-	const VectorXd& getGoalAcceleration() const {
-		return _goal_acceleration;
+	const VectorXd& getGoalAcceleration() const { return _goal_acceleration; }
+
+	/**
+	 * @brief Get the desired position which is the output of OTG if enabled, or
+	 * otherwise equal to the goal position
+	 */
+	const VectorXd& getDesiredPosition() const { return _desired_position; }
+
+	/**
+	 * @brief Get the desired velocity which is the output of OTG if enabled, or
+	 * otherwise equal to the goal velocity
+	 */
+	const VectorXd& getDesiredVelocity() const { return _desired_velocity; }
+
+	/**
+	 * @brief Get the desired acceleration which is the output of OTG if
+	 * enabled, or otherwise equal to the goal acceleration
+	 */
+	const VectorXd& getDesiredAcceleration() const {
+		return _desired_acceleration;
 	}
 
 	/**
@@ -329,10 +354,17 @@ private:
 	 */
 	void initialSetup();
 
-	// goal controller state
+	// The goal state of the task is set by the user
 	VectorXd _goal_position;
 	VectorXd _goal_velocity;
 	VectorXd _goal_acceleration;
+
+	// the desired state is the one used in the control equations. It is equal
+	// to the output of the OTG interpolation if enabled, and otherwise equal to
+	// the goal state
+	VectorXd _desired_position;
+	VectorXd _desired_velocity;
+	VectorXd _desired_acceleration;
 
 	// current state from robot model
 	VectorXd _current_position;

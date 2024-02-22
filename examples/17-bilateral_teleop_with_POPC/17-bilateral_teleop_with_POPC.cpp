@@ -230,8 +230,10 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 			robot->linearVelocityInWorld(link_name);
 		haptic_input.robot_angular_velocity =
 			robot->angularVelocityInWorld(link_name);
-		haptic_input.robot_sensed_force = motion_force_task->getSensedForce();
-		haptic_input.robot_sensed_moment = motion_force_task->getSensedMoment();
+		haptic_input.robot_sensed_force =
+			motion_force_task->getSensedForceControlWorldFrame();
+		haptic_input.robot_sensed_moment =
+			motion_force_task->getSensedMomentControlWorldFrame();
 
 		haptic_output = haptic_controller->computeHapticControl(haptic_input);
 
@@ -239,8 +241,7 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 		motion_force_task->updateSensedForceAndMoment(
 			sim->getSensedForce(robot_name, link_name),
 			sim->getSensedMoment(robot_name, link_name));
-		motion_force_task->setGoalPosition(
-			haptic_output.robot_goal_position);
+		motion_force_task->setGoalPosition(haptic_output.robot_goal_position);
 		motion_force_task->setGoalOrientation(
 			haptic_output.robot_goal_orientation);
 
