@@ -24,8 +24,8 @@ using namespace std;
 using namespace Eigen;
 
 const string world_file = "resources/world.urdf";
-const string robot_file = "resources/panda_arm.urdf";
-const string robot_name = "PANDA";
+const string robot_file = "resources/puma.urdf";
+const string robot_name = "PUMA";
 
 // ui torques and control torques
 VectorXd ui_torques;
@@ -56,6 +56,9 @@ int main(int argc, char** argv) {
 
 	// load simulation world
 	auto sim = make_shared<Sai2Simulation::Sai2Simulation>(world_file);
+	VectorXd init_q = sim->getJointPositions(robot_name);
+	init_q(4) = 0;  // wrist lock 
+	sim->setJointPositions(robot_name, init_q);
 
 	// load robots
 	auto robot = make_shared<Sai2Model::Sai2Model>(robot_file, false);
@@ -109,6 +112,7 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 	// Full motion force task
 	auto motion_force_task = make_unique<Sai2Primitives::MotionForceTask>(
 		robot, link_name, compliant_frame);
+	// motion_force_task->setSingularityBounds(1e-3, 1e-2);
 
 	// // Partial motion force task
 	// vector<Vector3d> controlled_directions_translation = {
@@ -147,7 +151,7 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
     // double t_wait = 10;  // wait between switching desired positions 
 	// double t_reset_wait = 5;  // wait when resetting position 
     double prev_time = 0;
-    int cnt = 6 * 1;
+    int cnt = 6 * 0;
     int max_cnt = desired_offsets.size();
 
 	// create logger

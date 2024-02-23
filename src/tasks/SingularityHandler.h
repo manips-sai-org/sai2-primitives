@@ -56,8 +56,8 @@ public:
                        const MatrixXd& J_posture,
                        const double& s_abs_tol = 1e-3,
                        const double& type_1_tol = 0.8,
-                       const double& type_2_torque_ratio = 0.01,
-                       const int& queue_size = 10,
+                       const double& type_2_torque_ratio = 1e-6,
+                       const int& queue_size = 500,
                        const bool& verbose = false);
 
     /**
@@ -123,15 +123,6 @@ public:
      */
     Sai2Model::OpSpaceMatrices getNonSingularOpSpaceMatrices() {
         return Sai2Model::OpSpaceMatrices(_projected_jacobian_ns, _Lambda_ns, _Jbar_ns, _N_ns);
-    }
-
-    /**
-     * @brief Get the singular op-space matrices
-     * 
-     * @return Sai2Model::OpSpaceMatrices singular op-space matrices
-     */
-    Sai2Model::OpSpaceMatrices getSingularOpSpaceMatrices() {
-        return Sai2Model::OpSpaceMatrices(_projected_jacobian_s, _Lambda_s, _Jbar_s, _N_s);
     }
 
     /**
@@ -205,10 +196,10 @@ private:
     double _s_min, _s_max;
     double _alpha;
     MatrixXd _N;
-    MatrixXd _task_range_ns, _task_range_s;
+    MatrixXd _task_range_ns, _task_range_s, _joint_task_range_s;
     MatrixXd _projected_jacobian_ns, _projected_jacobian_s;
-    MatrixXd _Lambda_ns, _N_ns, _Jbar_ns;
-    MatrixXd _Lambda_s, _N_s, _Jbar_s;
+    MatrixXd _Lambda_ns, _Jbar_ns, _N_ns;
+    MatrixXd _Lambda_s;
     MatrixXd _Lambda_ns_modified, _Lambda_s_modified;
 
     // joint task quantities 
@@ -240,6 +231,23 @@ private:
         }
 
         return true; // All elements are the same
+    }
+
+    /**
+     * @brief Prints queue elements
+     */
+    template<typename T>
+    void printQueue(const std::queue<T>& q) {   
+        // Create a copy of the queue since we'll be modifying it
+        std::queue<T> tempQueue = q;
+
+        // Print the contents of the queue
+        std::cout << "Queue: ";
+        while (!tempQueue.empty()) {
+            std::cout << tempQueue.front() << " ";
+            tempQueue.pop();
+        }
+        std::cout << std::endl;
     }
 };
 
