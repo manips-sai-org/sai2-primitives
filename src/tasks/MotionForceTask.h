@@ -21,6 +21,7 @@
 #include <helper_modules/OTG_6dof_cartesian.h>
 #include <helper_modules/POPCExplicitForceControl.h>
 #include <helper_modules/Sai2PrimitivesCommonDefinitions.h>
+#include <helper_modules/ForceSensor.h>
 
 #include <Eigen/Dense>
 #include <memory>
@@ -188,6 +189,8 @@ public:
 
 	Vector3d getPositionError() const;
 	Vector3d getOrientationError() const;
+	Vector3d getLinearVelocityError() const;
+	Vector3d getAngularVelocityError() const;
 
 	// Gains for motion controller
 	void setPosControlGains(const PIDGains& gains) {
@@ -600,6 +603,10 @@ public:
 		return _singularity_handler->getSingularTorques();
 	}
 
+	std::shared_ptr<ForceSensor> getForceSensorModel() {
+		return _force_sensor;
+	}
+
 private:
 	/**
 	 * @brief Initial setup of the task, called in the constructor to avoid
@@ -672,6 +679,7 @@ private:
 	Vector3d _integrated_position_error;	 // robot world frame
 
 	// force quantities
+	std::shared_ptr<ForceSensor> _force_sensor;
 	Affine3d _T_control_to_sensor;
 
 	Vector3d _sensed_force;	  // robot world frame

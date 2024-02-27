@@ -319,6 +319,13 @@ public:
 		_dynamic_decoupling_type = type;
 	}
 
+	bool goalPositionReached(const double tol = 1e-2) {
+		if ((_goal_position - _current_position).norm() < tol) {
+			return true;
+		}
+		return false;
+	}
+
 	//-----------------------------------------------
 	//         Member variables
 	//-----------------------------------------------

@@ -98,6 +98,7 @@ void MotionForceTask::initialSetup() {
 
 	int dof = getConstRobotModel()->dof();
 	_T_control_to_sensor = Affine3d::Identity();
+	_force_sensor = std::make_shared<ForceSensor>(getConstRobotModel());
 
 	// POPC force
 	_POPC_force.reset(new POPCExplicitForceControl(getLoopTimestep()));
@@ -485,6 +486,14 @@ Vector3d MotionForceTask::getOrientationError() const {
 	return sigmaOrientation() * _orientation_error;
 }
 
+Vector3d MotionForceTask::getLinearVelocityError() const {
+	return sigmaPosition() * (_goal_linear_velocity - _current_linear_velocity);
+}
+
+Vector3d MotionForceTask::getAngularVelocityError() const {
+	return sigmaOrientation() * (_goal_angular_velocity - _current_angular_velocity);
+}
+
 bool MotionForceTask::goalPositionReached(const double tolerance,
 										  const bool verbose) {
 	double position_error =
@@ -707,6 +716,7 @@ void MotionForceTask::setForceSensorFrame(
 			"MotionForceTask::setForceSensorFrame\n");
 	}
 	_T_control_to_sensor = _compliant_frame.inverse() * transformation_in_link;
+	_force_sensor->setForceSensorFrame(link_name, _compliant_frame);
 }
 
 void MotionForceTask::updateSensedForceAndMoment(
@@ -715,6 +725,9 @@ void MotionForceTask::updateSensedForceAndMoment(
 	// find the transform from base frame to control frame
 	Affine3d T_world_link = getConstRobotModel()->transformInWorld(_link_name);
 	Affine3d T_world_compliant_frame = T_world_link * _compliant_frame;
+
+	// compensate force sensor 
+	// _force_sensor->getCalibratedForceMoment(sensed_force_sensor_frame, sensed_moment_sensor_frame)
 
 	// find the resolved sensed force and moment in control frame
 	_sensed_force = _T_control_to_sensor.rotation() * sensed_force_sensor_frame;
