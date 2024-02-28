@@ -245,8 +245,6 @@ public:
 		setPosControlGains(gains.kp, gains.kv, gains.ki);
 	}
 	void setPosControlGains(double kp_pos, double kv_pos, double ki_pos = 0);
-	void setPosControlGains(const Vector3d& kp_pos, const Vector3d& kv_pos,
-							const Vector3d& ki_pos = Vector3d::Zero());
 	void setPosControlGains(const VectorXd& kp_pos, const VectorXd& kv_pos,
 							const VectorXd& ki_pos);
 	void setPosControlGains(const VectorXd& kp_pos, const VectorXd& kv_pos) {
@@ -258,8 +256,6 @@ public:
 		setOriControlGains(gains.kp, gains.kv, gains.ki);
 	}
 	void setOriControlGains(double kp_ori, double kv_ori, double ki_ori = 0);
-	void setOriControlGains(const Vector3d& kp_ori, const Vector3d& kv_ori,
-							const Vector3d& ki_ori = Vector3d::Zero());
 	void setOriControlGains(const VectorXd& kp_ori, const VectorXd& kv_ori,
 							const VectorXd& ki_ori);
 	void setOriControlGains(const VectorXd& kp_ori, const VectorXd& kv_ori) {

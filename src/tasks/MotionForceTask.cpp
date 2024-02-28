@@ -626,9 +626,18 @@ void MotionForceTask::setPosControlGains(double kp_pos, double kv_pos,
 	_ki_pos = ki_pos * Matrix3d::Identity();
 }
 
-void MotionForceTask::setPosControlGains(const Vector3d& kp_pos,
-										 const Vector3d& kv_pos,
-										 const Vector3d& ki_pos) {
+void MotionForceTask::setPosControlGains(const VectorXd& kp_pos,
+										 const VectorXd& kv_pos,
+										 const VectorXd& ki_pos) {
+	if (kp_pos.size() == 1 && kv_pos.size() == 1 && ki_pos.size() == 1) {
+		setPosControlGains(kp_pos(0), kv_pos(0), ki_pos(0));
+		return;
+	}
+	if(kp_pos.size() != 3 || kv_pos.size() != 3 || ki_pos.size() != 3) {
+		throw invalid_argument(
+			"kp_pos, kv_pos and ki_pos should be of size 1 or 3 in "
+			"MotionForceTask::setPosControlGains\n");
+	}
 	if (kp_pos.minCoeff() < 0 || kv_pos.minCoeff() < 0 ||
 		ki_pos.minCoeff() < 0) {
 		throw invalid_argument(
@@ -643,23 +652,7 @@ void MotionForceTask::setPosControlGains(const Vector3d& kp_pos,
 	_are_pos_gains_isotropic = false;
 	_kp_pos = kp_pos.asDiagonal();
 	_kv_pos = kv_pos.asDiagonal();
-	_ki_pos = ki_pos.asDiagonal();
-}
-
-void MotionForceTask::setPosControlGains(const VectorXd& kp_pos,
-										 const VectorXd& kv_pos,
-										 const VectorXd& ki_pos) {
-	if (kp_pos.size() == 1 && kv_pos.size() == 1 && ki_pos.size() == 1) {
-		setPosControlGains(kp_pos(0), kv_pos(0), ki_pos(0));
-		return;
-	}
-	if (kp_pos.size() == 3 && kv_pos.size() == 3 && ki_pos.size() == 3) {
-		setPosControlGains(kp_pos, kv_pos, ki_pos);
-		return;
-	}
-	throw invalid_argument(
-		"kp_pos, kv_pos and ki_pos should be of size 1 or 3 in "
-		"MotionForceTask::setPosControlGains\n");
+	_ki_pos = ki_pos.asDiagonal();	
 }
 
 vector<PIDGains> MotionForceTask::getPosControlGains() const {
@@ -697,9 +690,18 @@ void MotionForceTask::setOriControlGains(double kp_ori, double kv_ori,
 	_ki_ori = ki_ori * Matrix3d::Identity();
 }
 
-void MotionForceTask::setOriControlGains(const Vector3d& kp_ori,
-										 const Vector3d& kv_ori,
-										 const Vector3d& ki_ori) {
+void MotionForceTask::setOriControlGains(const VectorXd& kp_ori,
+										 const VectorXd& kv_ori,
+										 const VectorXd& ki_ori) {
+	if (kp_ori.size() == 1 && kv_ori.size() == 1 && ki_ori.size() == 1) {
+		setOriControlGains(kp_ori(0), kv_ori(0), ki_ori(0));
+		return;
+	}
+	if (kp_ori.size() != 3 || kv_ori.size() != 3 || ki_ori.size() != 3) {
+		throw invalid_argument(
+			"kp_ori, kv_ori and ki_ori should be of size 1 or 3 in "
+			"MotionForceTask::setOriControlGains\n");
+	}
 	if (kp_ori.minCoeff() < 0 || kv_ori.minCoeff() < 0 ||
 		ki_ori.minCoeff() < 0) {
 		throw invalid_argument(
@@ -715,22 +717,6 @@ void MotionForceTask::setOriControlGains(const Vector3d& kp_ori,
 	_kp_ori = kp_ori.asDiagonal();
 	_kv_ori = kv_ori.asDiagonal();
 	_ki_ori = ki_ori.asDiagonal();
-}
-
-void MotionForceTask::setOriControlGains(const VectorXd& kp_ori,
-										 const VectorXd& kv_ori,
-										 const VectorXd& ki_ori) {
-	if (kp_ori.size() == 1 && kv_ori.size() == 1 && ki_ori.size() == 1) {
-		setOriControlGains(kp_ori(0), kv_ori(0), ki_ori(0));
-		return;
-	}
-	if (kp_ori.size() == 3 && kv_ori.size() == 3 && ki_ori.size() == 3) {
-		setOriControlGains(kp_ori, kv_ori, ki_ori);
-		return;
-	}
-	throw invalid_argument(
-		"kp_ori, kv_ori and ki_ori should be of size 1 or 3 in "
-		"MotionForceTask::setOriControlGains\n");
 }
 
 vector<PIDGains> MotionForceTask::getOriControlGains() const {
