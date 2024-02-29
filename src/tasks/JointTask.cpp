@@ -54,7 +54,7 @@ void JointTask::initialSetup() {
 	// default values for gains and velocity saturation
 	setGains(DefaultParameters::kp, DefaultParameters::kv, DefaultParameters::ki);
 
-	if(DefaultParameters::use_velocity_saturation_flag) {
+	if(DefaultParameters::use_velocity_saturation) {
 		enableVelocitySaturation(DefaultParameters::saturation_velocity);
 	} else {
 		disableVelocitySaturation();
@@ -71,7 +71,7 @@ void JointTask::initialSetup() {
 	// initialize internal otg
 	_otg = make_shared<OTG_joints>(_joint_selection * getConstRobotModel()->q(),
 								   getLoopTimestep());
-	if(DefaultParameters::use_internal_otg_flag) {
+	if(DefaultParameters::use_internal_otg) {
 		if(DefaultParameters::internal_otg_jerk_limited) {
 			enableInternalOtgJerkLimited(DefaultParameters::otg_max_velocity,
 										 DefaultParameters::otg_max_acceleration,

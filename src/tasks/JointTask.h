@@ -41,12 +41,12 @@ public:
 		static constexpr double kv = 14.0;
 		static constexpr double ki = 0.0;
 		static constexpr DynamicDecouplingType dynamic_decoupling_type = BOUNDED_INERTIA_ESTIMATES;
-		static constexpr bool use_internal_otg_flag = true;
+		static constexpr bool use_internal_otg = true;
 		static constexpr bool internal_otg_jerk_limited = false;
 		static constexpr double otg_max_velocity = M_PI/3.0;
 		static constexpr double otg_max_acceleration = M_PI;
 		static constexpr double otg_max_jerk = 5.0*M_PI;
-		static constexpr bool use_velocity_saturation_flag = false;
+		static constexpr bool use_velocity_saturation = false;
 		static constexpr double saturation_velocity = M_PI/3.0;
 	};
 
