@@ -48,14 +48,17 @@ JointTask::JointTask(std::shared_ptr<Sai2Model::Sai2Model>& robot,
 void JointTask::initialSetup() {
 	const int robot_dof = getConstRobotModel()->dof();
 	_task_dof = _joint_selection.rows();
-	setDynamicDecouplingType(BOUNDED_INERTIA_ESTIMATES);
+	setDynamicDecouplingType(DefaultParameters::dynamic_decoupling_type);
+	_current_position = _joint_selection * getConstRobotModel()->q();
 
 	// default values for gains and velocity saturation
-	_are_gains_isotropic = true;
-	setGains(50.0, 14.0, 0.0);
+	setGains(DefaultParameters::kp, DefaultParameters::kv, DefaultParameters::ki);
 
-	_use_velocity_saturation_flag = false;
-	_saturation_velocity = VectorXd::Zero(_task_dof);
+	if(DefaultParameters::use_velocity_saturation_flag) {
+		enableVelocitySaturation(DefaultParameters::saturation_velocity);
+	} else {
+		disableVelocitySaturation();
+	}
 
 	// initialize matrices sizes
 	_N_prec = MatrixXd::Identity(robot_dof, robot_dof);
@@ -65,12 +68,21 @@ void JointTask::initialSetup() {
 	_N = MatrixXd::Zero(robot_dof, robot_dof);
 	_current_task_range = MatrixXd::Identity(_task_dof, _task_dof);
 
-	_use_internal_otg_flag = true;
+	// initialize internal otg
 	_otg = make_shared<OTG_joints>(_joint_selection * getConstRobotModel()->q(),
 								   getLoopTimestep());
-	_otg->setMaxVelocity(M_PI / 3);
-	_otg->setMaxAcceleration(M_PI);
-	_otg->disableJerkLimits();
+	if(DefaultParameters::use_internal_otg_flag) {
+		if(DefaultParameters::internal_otg_jerk_limited) {
+			enableInternalOtgJerkLimited(DefaultParameters::otg_max_velocity,
+										 DefaultParameters::otg_max_acceleration,
+										 DefaultParameters::otg_max_jerk);
+		} else {
+			enableInternalOtgAccelerationLimited(DefaultParameters::otg_max_velocity,
+												 DefaultParameters::otg_max_acceleration);
+		}
+	} else {
+		disableInternalOtg();
+	}
 
 	reInitializeTask();
 }
@@ -333,12 +345,12 @@ void JointTask::enableInternalOtgAccelerationLimited(
 			"max velocity or max acceleration vector size not consistent with "
 			"task dof in JointTask::enableInternalOtgAccelerationLimited\n");
 	}
+	if (!_use_internal_otg_flag || _otg->getJerkLimitEnabled()) {
+		_otg->reInitialize(_current_position);
+	}
 	_otg->setMaxVelocity(max_velocity);
 	_otg->setMaxAcceleration(max_acceleration);
 	_otg->disableJerkLimits();
-	if (!_use_internal_otg_flag) {
-		_otg->reInitialize(_current_position);
-	}
 	_use_internal_otg_flag = true;
 }
 
@@ -358,12 +370,13 @@ void JointTask::enableInternalOtgJerkLimited(const VectorXd& max_velocity,
 			"consistent with task dof in "
 			"JointTask::enableInternalOtgJerkLimited\n");
 	}
+	if (!_use_internal_otg_flag || !_otg->getJerkLimitEnabled()) {
+		std::cout << "reinitializing otg" << std::endl;
+		_otg->reInitialize(_current_position);
+	}
 	_otg->setMaxVelocity(max_velocity);
 	_otg->setMaxAcceleration(max_acceleration);
 	_otg->setMaxJerk(max_jerk);
-	if (!_use_internal_otg_flag) {
-		_otg->reInitialize(_current_position);
-	}
 	_use_internal_otg_flag = true;
 }
 

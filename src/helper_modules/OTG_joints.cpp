@@ -32,12 +32,12 @@ void OTG_joints::reInitialize(const VectorXd& initial_position) {
 			"OTG_joints object in OTG_joints::reInitialize\n");
 	}
 
+	setGoalPosition(initial_position);
+
 	_output.new_position = initial_position;
 	_output.new_velocity.setZero();
 	_output.new_acceleration.setZero();
 	_output.pass_to_input(_input);
-
-	setGoalPosition(initial_position);
 }
 
 void OTG_joints::setMaxVelocity(const VectorXd& max_velocity) {

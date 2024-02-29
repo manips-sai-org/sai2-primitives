@@ -121,9 +121,9 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 	// set the gains to get a PD controller with critical damping
 	joint_task->setGains(100, 20);
 	Eigen::VectorXd goal_position = joint_task->getGoalPosition();
-	// internal otg is on by default with acceleration limited trajectory
+	// internal otg is on with acceleration limited trajectory
 	// generation with max velocity PI/3 and max acceleration PI
-	// joint_task->enableInternalOtgAccelerationLimited(PI/3, PI);
+	joint_task->enableInternalOtgAccelerationLimited(M_PI / 3, M_PI);
 
 	// create a loop timer
 	double control_freq = 1000;	 // 1 KHz
