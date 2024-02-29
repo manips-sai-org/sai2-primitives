@@ -53,16 +53,6 @@ int main() {
 	signal(SIGTERM, &sighandler);
 	signal(SIGINT, &sighandler);
 
-	cout << "exmaple of a force-motion controller to control a simulated robot "
-			"with a haptic device.. The controller will first bring the haptic "
-			"device to its home pose and then switch automatically to "
-			"force-motion control"
-		 << endl;
-	cout << "Provided options:" << endl;
-	cout << "1. Press 'p' to enable/disable plane guidance" << endl;
-	cout << "2. Press 'l' to enable/disable line guidance" << endl;
-	cout << "3. Press 'o' to enable/disable orientation teleoperation" << endl;
-
 	// load simulation world
 	auto sim = make_shared<Sai2Simulation::Sai2Simulation>(world_file);
 
@@ -133,6 +123,17 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 	robot->setQ(sim->getJointPositions(robot_name));
 	robot->setDq(sim->getJointVelocities(robot_name));
 	robot->updateModel();
+
+	// instructions
+	cout << "\nexmaple of a force-motion controller to control a simulated robot "
+			"with a haptic device.. The controller will first bring the haptic "
+			"device to its home pose and then switch automatically to "
+			"force-motion control"
+		 << endl;
+	cout << "Provided options:" << endl;
+	cout << "1. Press 'p' to enable/disable plane guidance" << endl;
+	cout << "2. Press 'l' to enable/disable line guidance" << endl;
+	cout << "3. Press 'o' to enable/disable orientation teleoperation" << endl;
 
 	// create robot controller
 	Affine3d compliant_frame = Affine3d::Identity();
@@ -210,8 +211,7 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 		redis_client.sendAllFromGroup();
 
 		// compute robot control
-		motion_force_task->setGoalPosition(
-			haptic_output.robot_goal_position);
+		motion_force_task->setGoalPosition(haptic_output.robot_goal_position);
 		motion_force_task->setGoalOrientation(
 			haptic_output.robot_goal_orientation);
 
@@ -226,7 +226,6 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 			haptic_controller->getHomed()) {
 			haptic_controller->setHapticControlType(
 				Sai2Primitives::HapticControlType::FORCE_MOTION);
-			haptic_controller->setForceDeadbandForceMotionController(2.0);
 			haptic_controller->setDeviceControlGains(350.0, 15.0);
 		}
 

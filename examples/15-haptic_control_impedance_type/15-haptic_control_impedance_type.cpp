@@ -50,24 +50,6 @@ int main() {
 	signal(SIGTERM, &sighandler);
 	signal(SIGINT, &sighandler);
 
-	cout
-		<< "exmaple of a motion-motion controller to control a simulated robot "
-		   "with a haptic device, using the proxy method for force feedback "
-		   "(requires knowing the environment beforehand). The controller will "
-		   "first bring the haptic device to its home pose and then a press of "
-		   "the gripper or button is required to start cotnrolling the robot."
-		<< endl;
-	cout << "Provided options:" << endl;
-	cout << "1. press the device gripper/button to clutch the device (move the "
-			"device without moving the robot) and release to get back the "
-			"control of the robot."
-		 << endl;
-	cout << "2. Press 'p' to enable/disable plane guidance" << endl;
-	cout << "3. Press 'l' to enable/disable line guidance" << endl;
-	cout << "4. Press 'w' to enable/disable haptic workspace virtual limits"
-		 << endl;
-	cout << "5. Press 'o' to enable/disable orientation teleoperation" << endl;
-
 	// load simulation world
 	auto sim = make_shared<Sai2Simulation::Sai2Simulation>(world_file);
 	sim->addSimulatedForceSensor(robot_name, link_name, Affine3d::Identity(),
@@ -143,6 +125,26 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 	robot->setQ(sim->getJointPositions(robot_name));
 	robot->setDq(sim->getJointVelocities(robot_name));
 	robot->updateModel();
+
+	// instructions
+	cout
+		<< "\nexmaple of a motion-motion controller to control a simulated "
+		   "robot "
+		   "with a haptic device, using the proxy method for force feedback "
+		   "(requires knowing the environment beforehand). The controller will "
+		   "first bring the haptic device to its home pose and then a press of "
+		   "the gripper or button is required to start cotnrolling the robot."
+		<< endl;
+	cout << "Provided options:" << endl;
+	cout << "1. press the device gripper/button to clutch the device (move the "
+			"device without moving the robot) and release to get back the "
+			"control of the robot."
+		 << endl;
+	cout << "2. Press 'p' to enable/disable plane guidance" << endl;
+	cout << "3. Press 'l' to enable/disable line guidance" << endl;
+	cout << "4. Press 'w' to enable/disable haptic workspace virtual limits"
+		 << endl;
+	cout << "5. Press 'o' to enable/disable orientation teleoperation" << endl;
 
 	// create robot controller
 	Affine3d compliant_frame = Affine3d::Identity();
@@ -234,8 +236,7 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 		motion_force_task->updateSensedForceAndMoment(
 			sim->getSensedForce(robot_name, link_name),
 			sim->getSensedMoment(robot_name, link_name));
-		motion_force_task->setGoalPosition(
-			haptic_output.robot_goal_position);
+		motion_force_task->setGoalPosition(haptic_output.robot_goal_position);
 		motion_force_task->setGoalOrientation(
 			haptic_output.robot_goal_orientation);
 
