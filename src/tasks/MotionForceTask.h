@@ -47,6 +47,8 @@ public:
 	};
 
 	struct DefaultParameters {
+		static constexpr DynamicDecouplingType dynamic_decoupling_type =
+			DynamicDecouplingType::BOUNDED_INERTIA_ESTIMATES;
 		static constexpr double kp_pos = 100.0;
 		static constexpr double kv_pos = 14.0;
 		static constexpr double ki_pos = 0.0;
@@ -71,13 +73,13 @@ public:
 		static constexpr double linear_saturation_velocity = 0.3;
 		static constexpr double angular_saturation_velocity = M_PI / 3;
 		static constexpr bool use_internal_otg = true;
-		static constexpr double max_linear_velocity = 0.3;
-		static constexpr double max_linear_acceleration = 1.0;
-		static constexpr double max_angular_velocity = M_PI / 3;
-		static constexpr double max_angular_acceleration = M_PI;
+		static constexpr double otg_max_linear_velocity = 0.3;
+		static constexpr double otg_max_linear_acceleration = 1.0;
+		static constexpr double otg_max_angular_velocity = M_PI / 3;
+		static constexpr double otg_max_angular_acceleration = M_PI;
 		static constexpr bool internal_otg_jerk_limited = false;
-		static constexpr double max_linear_jerk = 5.0;
-		static constexpr double max_angular_jerk = 5.0 * M_PI;
+		static constexpr double otg_max_linear_jerk = 5.0;
+		static constexpr double otg_max_angular_jerk = 5.0 * M_PI;
 	};
 
 	//------------------------------------------------

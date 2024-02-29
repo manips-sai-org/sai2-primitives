@@ -371,7 +371,6 @@ void JointTask::enableInternalOtgJerkLimited(const VectorXd& max_velocity,
 			"JointTask::enableInternalOtgJerkLimited\n");
 	}
 	if (!_use_internal_otg_flag || !_otg->getJerkLimitEnabled()) {
-		std::cout << "reinitializing otg" << std::endl;
 		_otg->reInitialize(_current_position);
 	}
 	_otg->setMaxVelocity(max_velocity);

@@ -173,17 +173,17 @@ void MotionForceTask::initialSetup() {
 		_current_position, _current_orientation, getLoopTimestep());
 	if(DefaultParameters::use_internal_otg) {
 		if(DefaultParameters::internal_otg_jerk_limited) {
-			enableInternalOtgJerkLimited(DefaultParameters::max_linear_velocity,
-										 DefaultParameters::max_linear_acceleration,
-										 DefaultParameters::max_linear_jerk,
-										 DefaultParameters::max_angular_velocity,
-										 DefaultParameters::max_angular_acceleration,
-										 DefaultParameters::max_angular_jerk);
+			enableInternalOtgJerkLimited(DefaultParameters::otg_max_linear_velocity,
+										 DefaultParameters::otg_max_linear_acceleration,
+										 DefaultParameters::otg_max_linear_jerk,
+										 DefaultParameters::otg_max_angular_velocity,
+										 DefaultParameters::otg_max_angular_acceleration,
+										 DefaultParameters::otg_max_angular_jerk);
 		} else {
-			enableInternalOtgAccelerationLimited(DefaultParameters::max_linear_velocity,
-												 DefaultParameters::max_linear_acceleration,
-												 DefaultParameters::max_angular_velocity,
-												 DefaultParameters::max_angular_acceleration);
+			enableInternalOtgAccelerationLimited(DefaultParameters::otg_max_linear_velocity,
+												 DefaultParameters::otg_max_linear_acceleration,
+												 DefaultParameters::otg_max_angular_velocity,
+												 DefaultParameters::otg_max_angular_acceleration);
 		}
 	} else {
 		disableInternalOtg();
