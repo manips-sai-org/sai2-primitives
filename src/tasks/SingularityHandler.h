@@ -20,6 +20,15 @@
 using namespace Eigen;
 namespace Sai2Primitives {
 
+struct SvdData {
+    MatrixXd U, V;
+    VectorXd s;
+    SvdData(const MatrixXd& U,
+            const VectorXd& s,
+            const MatrixXd& V) : 
+            U(U), s(s), V(V) { }
+};
+
 enum SingularityType {
     NO_SINGULARITY = 0,
     TYPE_1_SINGULARITY,  
@@ -42,23 +51,24 @@ public:
      * 
      * @param robot robot model from motion force task
      * @param task_rank rank of the motion force task after partial task projection
-     * @param J_posture partial joint selection matrix of the controlled point from motion force task
      * @param s_abs_tol tolerance to declare task completely singular if all singular values from the projected
      * jacobian are under this value
      * @param type_1_tol tolerance for the dot product between the first and last singular direction in the 
      * singular direction buffer for which a type 1 singularity is classified
      * @param type_2_torque_ratio percentage of the max joint torque to use for the type 2 singularity strategy
-     * @param queue_size size of the queue for storing past singular directions
+     * @param perturb_step_size the joint angle increment to classify singularity 
      * @param verbose set to true to print singularity status every timestep 
      */
     SingularityHandler(std::shared_ptr<Sai2Model::Sai2Model> robot,
+                       const std::string& link_name,
+                       const Affine3d& compliant_frame,
                        const int& task_rank,
-                       const MatrixXd& J_posture,
                        const double& s_abs_tol = 1e-3,
-                       const double& type_1_tol = 0.8,
-                       const double& type_2_torque_ratio = 1e-6,
-                       const int& queue_size = 500,
-                       const bool& verbose = false);
+                       const double& type_1_tol = 0.05,
+                       const double& type_2_torque_ratio = 1e-3,
+                       const double& perturb_step_size = 1.5,
+                       const int& buffer_size = 100,
+                       const bool& verbose = true);
 
     /**
      * @brief Updates the model quantities for the singularity handling task, and performs singularity classification
@@ -69,13 +79,18 @@ public:
     void updateTaskModel(const MatrixXd& projected_jacobian, const MatrixXd& N_prec);
 
     /**
-     * @brief Classifies the singularity based on the column of U (singular columns) from the smallest singular value. 
-     * U is obtained from the thin SVD decomposition of the projected jacobian. The singular column is placed in a queue,
-     * and type 1 is automatically classified. Type 2 is classified if all elements in the queue are Type 2.
+     * @brief Classifies the singularity based on a joint perturbation in the J_{s} N_{ns} direction since 
+     * \delta x = J_{ns} \delta q + J_{s} N_{ns} \delta q_{0}. Type 1 singularity if the norm of 
+     * \delta x is greater than the type 1 tolerance, otherwise type 2. Type 2 singularity will have a very
+     * small \delta x norm.
      * 
+     * @param projected_jacobian Projected jacobian for task 
      * @param singular_task_range Singular task range corresponding to the columns of U from SVD
+     * @param singular_joint_task_range Singular task range corresponding to the columns of V from SVD
      */
-    void classifySingularity(const MatrixXd& singular_task_range);
+    void classifySingularity(const MatrixXd& projected_jacobian, 
+                             const MatrixXd& singular_task_range, 
+                             const MatrixXd& singular_joint_task_range);
 
     /**
      * @brief Computes the torques from the singularity handling. If the projected jacobian doesn't have
@@ -108,12 +123,12 @@ public:
     MatrixXd getNullspace() { return _N; };
 
     /**
-     * @brief Get the vector of singular values for the projected jacobian
+     * @brief Get the Svd Data object
      * 
-     * @return VectorXd singular values vector
+     * @return MatrixXd 
      */
-    VectorXd getSigmaValues() {
-        return _s_values;
+    SvdData getSvdData() {
+        return SvdData(_svd_U, _svd_s, _svd_V);
     }
 
     /**
@@ -150,15 +165,6 @@ public:
     }
 
     /**
-     * @brief Set the singularity type for the current timestep
-     * 
-     * @param type Singularity type (none, type 1, or type 2)
-     */
-    void setSingularity(const SingularityType& type) {
-        _sing_type = type;
-    }
-
-    /**
      * @brief Set the torque ratio used for type 2 singularity strategy
      * 
      * @param ratio Ratio of the specific joint's max torque to use 
@@ -171,23 +177,26 @@ private:
     // singularity setup
     std::shared_ptr<Sai2Model::Sai2Model> _robot;
     DynamicDecouplingType _dynamic_decoupling_type;
+    std::string _link_name;
+    Affine3d _compliant_frame;
     int _task_rank;
-    MatrixXd _J_posture;
-    VectorXd _joint_midrange;
+    VectorXd _joint_midrange, _q_upper, _q_lower;
     bool _verbose;
 
-    // singularity history 
-    SingularityType _sing_type;
-    int _queue_size;
-    std::queue<SingularityType> _sing_history;
-    std::queue<Eigen::Matrix<double, 6, 1>> _sing_direction_queue;
+    // singularity information
+    std::vector<SingularityType> _singularity_types;
+    double _perturb_step_size;
+    std::deque<SingularityType> _singularity_history;
+    std::deque<MatrixXd> _singularity_task_range_history;
+    int _type_1_counter, _type_2_counter;
+    int _buffer_size;
 
     // type 1 specifications
     VectorXd _q_prior, _dq_prior;
     double _kp, _kv;
     double _type_1_tol;
 
-    // type 2 specifications 
+    // type 2 specifications
     double _type_2_torque_ratio;  // use X% of the max joint torque 
     VectorXd _type_2_torque_vector;
 
@@ -198,57 +207,18 @@ private:
     MatrixXd _N;
     MatrixXd _task_range_ns, _task_range_s, _joint_task_range_s;
     MatrixXd _projected_jacobian_ns, _projected_jacobian_s;
+    MatrixXd _non_truncated_projected_jacobian_s;
     MatrixXd _Lambda_ns, _Jbar_ns, _N_ns;
     MatrixXd _Lambda_s;
     MatrixXd _Lambda_ns_modified, _Lambda_s_modified;
 
     // joint task quantities 
-    MatrixXd _posture_projected_jacobian, _current_task_range, _M_partial;
+    MatrixXd _posture_projected_jacobian, _M_partial;
 
-    // logging 
-    VectorXd _s_values;
+    // svd logging  
+    MatrixXd _svd_U, _svd_V;
+    VectorXd _svd_s;
 
-    /**
-     * @brief Checks if all elements in a queue are the same
-     */
-    template<typename T>
-    bool allElementsSame(const std::queue<T>& q) {
-        if (q.empty()) {
-            return true; // An empty queue has all elements the same (technically)
-        }
-
-        // Get the first element
-        T firstElement = q.front();
-
-        // Iterate through the queue
-        std::queue<T> tempQueue = q; // Create a copy of the original queue
-        while (!tempQueue.empty()) {
-            // If any element is different from the first element, return false
-            if (tempQueue.front() != firstElement) {
-                return false;
-            }
-            tempQueue.pop(); // Remove the front element
-        }
-
-        return true; // All elements are the same
-    }
-
-    /**
-     * @brief Prints queue elements
-     */
-    template<typename T>
-    void printQueue(const std::queue<T>& q) {   
-        // Create a copy of the queue since we'll be modifying it
-        std::queue<T> tempQueue = q;
-
-        // Print the contents of the queue
-        std::cout << "Queue: ";
-        while (!tempQueue.empty()) {
-            std::cout << tempQueue.front() << " ";
-            tempQueue.pop();
-        }
-        std::cout << std::endl;
-    }
 };
 
 }  // namespace

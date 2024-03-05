@@ -33,6 +33,7 @@ VectorXd control_torques;
 
 // mutex for global variables between different threads
 mutex mutex_torques;
+mutex mutex_robot;
 
 // simulation and control loop
 void control(shared_ptr<Sai2Model::Sai2Model> robot,
@@ -77,7 +78,10 @@ int main(int argc, char** argv) {
 
 	// while window is open:
 	while (graphics->isWindowOpen()) {
-		graphics->updateRobotGraphics(robot_name, robot->q());
+		{
+			lock_guard<mutex> lock(mutex_robot);
+			graphics->updateRobotGraphics(robot_name, robot->q());
+		}
 		graphics->renderGraphicsWorld();
 		{
 			lock_guard<mutex> lock(mutex_torques);
@@ -147,7 +151,8 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
     // double t_wait = 10;  // wait between switching desired positions 
 	// double t_reset_wait = 5;  // wait when resetting position 
     double prev_time = 0;
-    int cnt = 6 * 1;
+    // int cnt = 6 * 1;
+	int cnt = 0;
     int max_cnt = desired_offsets.size();
 
 	// create logger
@@ -171,8 +176,10 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 
 		// update tasks model. Order is important to define the hierarchy
 		N_prec = MatrixXd::Identity(dof, dof);
-
-		motion_force_task->updateTaskModel(N_prec);
+		{
+			lock_guard<mutex> lock(mutex_robot);
+			motion_force_task->updateTaskModel(N_prec);
+		}
 		N_prec = motion_force_task->getTaskAndPreviousNullspace();
 		// after each task, need to update the nullspace
 		// of the previous tasks in order to garantee
@@ -202,7 +209,8 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 		}
 
 		//------ logging data
-		svalues = motion_force_task->getSigmaValues();
+		auto svd_data = motion_force_task->getSingularitySvdData();
+		svalues = svd_data.s;
 
 		// -------------------------------------------
 		if (timer.elapsedCycles() % 500 == 0) {

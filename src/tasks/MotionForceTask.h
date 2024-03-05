@@ -453,13 +453,8 @@ public:
 		_singularity_handler->setDynamicDecouplingType(type);
 	}
 
-	/**
-	 * @brief Get the Sigma Values object
-	 * 
-	 * @return VectorXd 
-	 */
-	VectorXd getSigmaValues() {
-		return _singularity_handler->getSigmaValues();
+	SvdData getSingularitySvdData() {
+		return _singularity_handler->getSvdData();
 	}
 
 	// -------- force control related methods --------

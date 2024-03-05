@@ -163,10 +163,13 @@ void MotionForceTask::initialSetup() {
 		_current_position, _current_orientation, getLoopTimestep());
 	enableInternalOtgAccelerationLimited(0.3, 1.0, M_PI / 3, M_PI);
 
-	// singularity handling
-	MatrixXd J_posture = getConstRobotModel()->linkDependency(_link_name);
-	_singularity_handler = std::make_unique<SingularityHandler>(getConstRobotModel(), _pos_range + _ori_range, J_posture);
-	setSingularityBounds(5e-3, 5e-2);  
+	// singularity handler
+	_singularity_handler = std::make_unique<SingularityHandler>(getConstRobotModel(), 
+		      													_link_name,
+																_compliant_frame,
+																_pos_range + _ori_range);
+	setSingularityBounds(3e-3, 3e-2);  // panda
+	// setSingularityBounds(5e-3, 1e-2);  // puma 
 	setDynamicDecouplingType(BOUNDED_INERTIA_ESTIMATES);
 
 	reInitializeTask();	

@@ -14,80 +14,81 @@
 namespace Sai2Primitives {
 
 SingularityHandler::SingularityHandler(std::shared_ptr<Sai2Model::Sai2Model> robot,
+                                       const std::string& link_name,
+                                       const Affine3d& compliant_frame,
                                        const int& task_rank,
-                                       const MatrixXd& J_posture,
                                        const double& s_abs_tol,
                                        const double& type_1_tol,
                                        const double& type_2_torque_ratio,
-                                       const int& queue_size,
-                                       const bool& verbose) : _robot(robot), _task_rank(task_rank),
-                                       _J_posture(J_posture), _s_abs_tol(s_abs_tol), _type_1_tol(type_1_tol), 
-                                       _type_2_torque_ratio(type_2_torque_ratio), _queue_size(queue_size),
+                                       const double& perturb_step_size,
+                                       const int& buffer_size,
+                                       const bool& verbose) : 
+                                       _robot(robot),
+                                       _task_rank(task_rank),
+                                       _link_name(link_name),
+                                       _compliant_frame(compliant_frame),
+                                       _s_abs_tol(s_abs_tol), 
+                                       _type_1_tol(type_1_tol), 
+                                       _type_2_torque_ratio(type_2_torque_ratio), 
+                                       _perturb_step_size(perturb_step_size),
                                        _verbose(verbose)
 {
     // initialize robot specific variables 
+    _q_upper = VectorXd::Zero(_robot->dof());
+    _q_lower = VectorXd::Zero(_robot->dof());
     _joint_midrange = VectorXd::Zero(_robot->dof());
     _type_2_torque_vector = VectorXd::Zero(_robot->dof());
     auto joint_limits = _robot->jointLimits();
     for (int i = 0; i < joint_limits.size(); ++i) {
-        _type_2_torque_vector(i) = _type_2_torque_ratio * joint_limits[i].effort;
+        _q_upper(i) = joint_limits[i].position_upper;
+        _q_lower(i) = joint_limits[i].position_lower;
         _joint_midrange(i) = 0.5 * (joint_limits[i].position_lower + joint_limits[i].position_upper);
+        _type_2_torque_vector(i) = _type_2_torque_ratio * joint_limits[i].effort;
     }
 
-    std::cout << _type_2_torque_vector.transpose() << "\n";
-
-    // initialize singularity variables 
-    _sing_history = std::queue<SingularityType>();
-    _sing_direction_queue = std::queue<Eigen::Matrix<double, 6, 1>>();
-    _q_prior = robot->q();
-    _dq_prior = robot->dq();
-    setGains(20, 14);
-    setSingularity(NO_SINGULARITY);
-
-    // initialize singularity history
-    // the entire buffer history must be classified as type 2 to classify type 2 singularity, 
-    // otherwise, it's type 1 for stability since type 2 singularity commands open-loop torque 
-    _sing_history = std::queue<SingularityType>();
-    for (int i = 0; i < _queue_size; ++i) {
-        _sing_history.push(NO_SINGULARITY);
-    }
+    // initialize singularity handling variables 
+    _singularity_types.resize(0);
+    _q_prior = _joint_midrange;
+    _dq_prior = VectorXd::Zero(_robot->dof());
+    setGains(50, 20);
+    _type_1_counter = 0;
+    _type_2_counter = 0;
 }
 
 void SingularityHandler::updateTaskModel(const MatrixXd& projected_jacobian, const MatrixXd& N_prec) {
     
     // task range decomposition
     int dof = _robot->dof();
-    Sai2Model::SvdData J_svd = Sai2Model::matrixSvd(projected_jacobian);
-    _s_values = J_svd.s;
-    
-    if (J_svd.s(0) < _s_abs_tol) {
+
+    JacobiSVD<MatrixXd> J_svd(projected_jacobian, ComputeThinU | ComputeThinV);
+    _svd_U = J_svd.matrixU();
+    _svd_s = J_svd.singularValues();
+    _svd_V = J_svd.matrixV();
+
+    if (_svd_s(0) < _s_abs_tol) {
         // fully singular task
         _alpha = 0;
 
         // non-singular task
-        _task_range_ns = MatrixXd::Zero(6, _task_rank);
-        _projected_jacobian_ns = MatrixXd::Zero(_task_rank, dof);
-        _Lambda_ns = MatrixXd::Zero(_task_rank, _task_rank);
-        _Jbar_ns = MatrixXd::Zero(dof, _task_rank);
-        _N_ns = MatrixXd::Zero(dof, dof);
+        _task_range_ns = MatrixXd::Zero(_task_rank, 1);
 
         // singular task 
-        _task_range_s = J_svd.U.leftCols(_task_rank);
-        _joint_task_range_s = J_svd.V.leftCols(_task_rank);
+        _task_range_s = _svd_U.leftCols(_task_rank);
+        _joint_task_range_s = _svd_V.leftCols(_task_rank);
         _projected_jacobian_s = _task_range_s.transpose() * projected_jacobian;
         _Lambda_s = (_projected_jacobian_s *
 					_robot->MInv() * 
 					_projected_jacobian_s.transpose()).completeOrthogonalDecomposition().pseudoInverse();
     } else {
         for (int i = 1; i < _task_rank; ++i) {
-            double condition_number = J_svd.s(i) / J_svd.s(0);
+            double condition_number = _svd_s(i) / _svd_s(0);
 
             if (condition_number < _s_max) {
                 // task enters singularity blending region
                 _alpha = std::clamp((condition_number - _s_min) / (_s_max - _s_min), 0., 1.);
 
                 // non-singular task
-                _task_range_ns = J_svd.U.leftCols(i);
+                _task_range_ns = _svd_U.leftCols(i);
                 _projected_jacobian_ns = _task_range_ns.transpose() * projected_jacobian;
                 Sai2Model::OpSpaceMatrices ns_matrices =
                     _robot->operationalSpaceMatrices(_projected_jacobian_ns);
@@ -96,9 +97,9 @@ void SingularityHandler::updateTaskModel(const MatrixXd& projected_jacobian, con
                 _N_ns = ns_matrices.N;
 
                 // singular task 
-                // task range only collects columns of U up to size _task_rank - non-singular task rank
-                _joint_task_range_s = J_svd.V.block(0, i, J_svd.V.rows(), _task_rank - i);
-                _task_range_s = J_svd.U.block(0, i, J_svd.U.rows(), _task_rank - i);
+                // task range only collects columns of U up to size task_rank - non-singular task rank
+                _task_range_s = _svd_U.block(0, i, _svd_U.rows(), _task_rank - i);
+                _joint_task_range_s = _svd_V.block(0, i, _svd_V.rows(), _task_rank - i);
                 _projected_jacobian_s = _task_range_s.transpose() * projected_jacobian;
                 Sai2Model::OpSpaceMatrices s_matrices =
                     _robot->operationalSpaceMatrices(_projected_jacobian_s);
@@ -110,7 +111,7 @@ void SingularityHandler::updateTaskModel(const MatrixXd& projected_jacobian, con
                 _alpha = 1;
                 
                 // non-singular task
-                _task_range_ns = J_svd.U.leftCols(_task_rank); 
+                _task_range_ns = _svd_U.leftCols(_task_rank); 
                 _projected_jacobian_ns = _task_range_ns.transpose() * projected_jacobian;
                 Sai2Model::OpSpaceMatrices ns_matrices =
                     _robot->operationalSpaceMatrices(_projected_jacobian_ns);
@@ -119,10 +120,7 @@ void SingularityHandler::updateTaskModel(const MatrixXd& projected_jacobian, con
                 _N_ns = ns_matrices.N;
 
                 // singular task 
-                _task_range_s = MatrixXd::Zero(6, _task_rank);
-                _joint_task_range_s = MatrixXd::Zero(6, _task_rank);
-                _projected_jacobian_s = _task_range_s.transpose() * projected_jacobian;
-                _Lambda_s = MatrixXd::Zero(_task_rank, _task_rank);
+                _task_range_s = MatrixXd::Zero(_task_rank, 1);
             }
         }
     }
@@ -177,113 +175,143 @@ void SingularityHandler::updateTaskModel(const MatrixXd& projected_jacobian, con
 		}
 	}
 
-    // classify singularity
-    classifySingularity(_task_range_s);
-
     // task update
-    if (_sing_type == NO_SINGULARITY) {
+    if (_task_range_s.norm() == 0) {
         _N = _N_ns;  // _N = N_ns (rank(N_ns) = task_rank)
     } else {
-        // update posture task 
+        // update posture task (occupies all singular joint directions, but joint torque handles one at a time)
         _posture_projected_jacobian = _joint_task_range_s.transpose() * _N_ns * N_prec;
         Sai2Model::OpSpaceMatrices op_space_matrices =
             _robot->operationalSpaceMatrices(_posture_projected_jacobian);
         _M_partial = op_space_matrices.Lambda;
-        _N = op_space_matrices.N * _N_ns;  // _N = N_partial_joint * N_ns is rank of task_rank
+        _N = op_space_matrices.N * _N_ns;  // _N = N_partial_joint * N_Ns (rank(_N = N_partial_joint * N_ns) = task_rank)
     }
+
+    // classify singularity
+    classifySingularity(projected_jacobian, _task_range_s, _joint_task_range_s);
+
 }
 
-void SingularityHandler::classifySingularity(const MatrixXd& singular_task_range) {
-    // memory of entering conditions 
-    if (_sing_type == NO_SINGULARITY) {
+void SingularityHandler::classifySingularity(const MatrixXd& projected_jacobian,
+                                             const MatrixXd& singular_task_range,
+                                             const MatrixXd& singular_joint_task_range) {
+    // memory of entering conditions if previously not singular 
+    if (_singularity_types.size() == 0) {
         _q_prior = _robot->q();
         _dq_prior = _robot->dq();
-    }
+    } 
 
-    // if singular task range is empty 
+    // if singular task range is empty, return no singularities 
     if (singular_task_range.norm() == 0) {
-        _sing_type = NO_SINGULARITY;
-        // clear singularity direction queue (robot exited singularity)
-        while (!_sing_direction_queue.empty()) {
-            _sing_direction_queue.pop();
-        }
+        _singularity_types.resize(0);
+        _singularity_history.clear();
+        _type_1_counter = 0;
+        _type_2_counter = 0;
+        _singularity_task_range_history.clear();
         return;
     }
 
-    // fill buffer with the most singular task range (already disregarded zero columns)
-    _sing_direction_queue.push(singular_task_range.rightCols(1));
-    VectorXd last_direction = _sing_direction_queue.back();
-    VectorXd current_direction = _sing_direction_queue.front();
+    // classify each column in the singular task range
+    _singularity_types.resize(singular_task_range.cols());
+    VectorXd curr_q = _robot->q();
+    Vector3d curr_pos = _robot->position(_link_name, _compliant_frame.translation());
+    Matrix3d curr_ori = _robot->rotation(_link_name, _compliant_frame.linear());
 
-    // check singular direction alignment for type 1 singularity
-    // type 1 singularity is preferred due to holding behavior
-    // type 1 is classified if the first and last singular directions in queue are aligned within tolerance
-    // type 2 is classified only if the entire past queue_size timesteps is type 2 
-    if (std::abs(current_direction.dot(last_direction)) > _type_1_tol) {
-        _sing_history.pop();
-        _sing_history.push(TYPE_1_SINGULARITY);
-        _sing_type = TYPE_1_SINGULARITY;
-    } else {
-        _sing_history.pop();
-        // if both type 1 and type 2 singularities at the same time, then prefer type 1
-        if (singular_task_range.cols() > 1) {
-            _sing_history.push(TYPE_1_SINGULARITY);
-        } else {
-            _sing_history.push(TYPE_2_SINGULARITY);
-        }
-        // debug 
-        // printQueue(_sing_history);
+    for (int i = 0; i < singular_task_range.cols(); ++i) {
+        VectorXd delta_q = _perturb_step_size * singular_joint_task_range.col(i);
+        _robot->setQ(curr_q + delta_q);
+        _robot->updateKinematics();
+        Vector3d pos_error = _robot->position(_link_name, _compliant_frame.translation()) - curr_pos;
+        Vector3d ori_error = Sai2Model::orientationError(_robot->rotation(_link_name, _compliant_frame.linear()), curr_ori);
 
-        if (allElementsSame(_sing_history)) {
-            _sing_type = TYPE_2_SINGULARITY;
+        if (pos_error.norm() + ori_error.norm() > _type_1_tol) {
+            _singularity_types[i] = TYPE_1_SINGULARITY;
         } else {
-            _sing_type = TYPE_1_SINGULARITY;
+            _singularity_types[i] = TYPE_2_SINGULARITY;
         }
+        
+        _robot->setQ(curr_q);
+        _robot->updateKinematics();
     }
+
+    // add to buffer and counters
+    auto it = std::find(_singularity_types.begin(), _singularity_types.end(), TYPE_1_SINGULARITY);
+    if (it != _singularity_types.end()) {
+        int index = std::distance(_singularity_types.begin(), it);
+        _singularity_history.push_back(TYPE_1_SINGULARITY);
+        _singularity_task_range_history.push_back(singular_task_range.col(index));
+        _type_1_counter++;
+    } else {
+        _singularity_history.push_back(TYPE_2_SINGULARITY);
+        _singularity_task_range_history.push_back(singular_task_range.col(0));
+        _type_2_counter++;
+    }
+
+    // pop oldest if greater than buffer size
+    if (_singularity_history.size() > _buffer_size) {
+        if (_singularity_history.front() == TYPE_1_SINGULARITY) {
+            _type_1_counter--;
+        } else if (_singularity_history.front() == TYPE_2_SINGULARITY) {
+            _type_2_counter--;
+        }
+        _singularity_history.pop_front();
+        _singularity_task_range_history.pop_front();
+    }
+
 }
 
 VectorXd SingularityHandler::computeTorques(const VectorXd& unit_mass_force, const VectorXd& force_related_terms)
 {
-    VectorXd joint_strategy_torques = VectorXd::Zero(_robot->dof());
-    VectorXd unit_torques = VectorXd::Zero(_robot->dof());
-
     if (_verbose) {
-        if (_sing_type != NO_SINGULARITY) {
-            std::cout << "Singularity: " << singularity_labels[_sing_type] << "\n---\n";
+        if (_singularity_types.size() != 0) {
+            for (auto type : _singularity_types) {
+                std::cout << "Singularity: " << singularity_labels[type] << " | ";
+            }
+            std::cout << "\n---\n";
         }
     }
 
-    if (_sing_type == TYPE_1_SINGULARITY) {
-        // joint holding to entering joint position 
-        unit_torques = - _kp * (_robot->q() - _q_prior) - _kv * _robot->dq();  
-        joint_strategy_torques = _posture_projected_jacobian.transpose() * _M_partial * _joint_task_range_s.transpose() * unit_torques;
-    } else if (_sing_type == TYPE_2_SINGULARITY) {
-        // apply open-loop torque proportional to dot(unit mass force, singular direction)
-        // zero torque achieved when singular direction is orthgonal to the desired unit mass force direction
-        // the direction is chosen to approach the entering joint position 
-        _M_partial.setIdentity();  
-        double fTd = ((unit_mass_force.normalized()).transpose() * _task_range_s.rightCols(1))(0);
-        VectorXd q_prior_delta = _q_prior - _robot->q();
-        VectorXd torque_sign = (q_prior_delta.array() > 0).cast<double>() - (q_prior_delta.array() < 0).cast<double>();
-        VectorXd magnitude_unit_torques = std::abs(fTd) * _type_2_torque_vector;
-        unit_torques = torque_sign.array() * magnitude_unit_torques.array();
-        unit_torques += - _kv * _robot->dq();
-        joint_strategy_torques = _posture_projected_jacobian.transpose() * _M_partial * _joint_task_range_s.transpose() * unit_torques;
-    }
-
-    // Combine non-singular torques and blended singular torques with joint strategy torques 
-    VectorXd tau_ns = _projected_jacobian_ns.transpose() * (_Lambda_ns_modified * _task_range_ns.transpose() * unit_mass_force + \
+    if (_singularity_types.size() == 0) {
+        return _projected_jacobian_ns.transpose() * (_Lambda_ns_modified * _task_range_ns.transpose() * unit_mass_force + \
                             _task_range_ns.transpose() * force_related_terms);
-    if (_sing_type == NO_SINGULARITY) {
-        return tau_ns;
     } else {
+        VectorXd joint_strategy_torques = VectorXd::Zero(_robot->dof());
+        VectorXd unit_torques = VectorXd::Zero(_robot->dof());
+        VectorXd tau_ns = VectorXd::Zero(_robot->dof());
+
+        // compute non-singular torques 
+        if (_task_range_ns.norm() != 0) {
+            tau_ns = _projected_jacobian_ns.transpose() * (_Lambda_ns_modified * _task_range_ns.transpose() * unit_mass_force + \
+                        _task_range_ns.transpose() * force_related_terms);
+        }
+
+        // handle type 1 singularities over type 2 
+        if (_type_1_counter > _type_2_counter) {
+            // joint holding to entering joint conditions  
+            unit_torques = - _kp * (_robot->q() - _q_prior) - _kv * _robot->dq();  
+            joint_strategy_torques = _posture_projected_jacobian.transpose() * _M_partial * _joint_task_range_s.transpose() * unit_torques;
+        } else {
+            // apply open-loop torque proportional to dot(unit mass force, singular direction)
+            // zero torque achieved when singular direction is orthgonal to the desired unit mass force direction
+            // the direction is chosen to approach the entering joint position OR mid-range
+            double fTd = (unit_mass_force.normalized()).dot(_task_range_s.col(0));
+            // VectorXd q_prior_delta = _q_prior - _robot->q();
+            VectorXd q_prior_delta = _joint_midrange - _robot->q();
+            VectorXd torque_sign = (q_prior_delta.array() > 0).cast<double>() - (q_prior_delta.array() < 0).cast<double>();
+            VectorXd magnitude_unit_torques = std::abs(fTd) * _type_2_torque_vector;
+            unit_torques = torque_sign.array() * magnitude_unit_torques.array();
+            joint_strategy_torques = _posture_projected_jacobian.transpose() * _joint_task_range_s.transpose() * unit_torques + \
+                                        _posture_projected_jacobian.transpose() * _M_partial * _joint_task_range_s.transpose() * (- _kv * _robot->dq());
+        }
+
+        // combine non-singular torques and blended singular torques with joint strategy torques (add joint space damping in singular task force)
+        VectorXd singular_task_damping_torques = _posture_projected_jacobian.transpose() * _M_partial * _joint_task_range_s.transpose() * (- _kv * _robot->dq());
         VectorXd singular_task_force = _Lambda_s_modified * _task_range_s.transpose() * unit_mass_force + \
                                             _task_range_s.transpose() * force_related_terms;
-        VectorXd tau_s = _alpha * _projected_jacobian_s.transpose() * singular_task_force + \
+        VectorXd tau_s = _alpha * (_projected_jacobian_s.transpose() * singular_task_force) + \
                             (1 - _alpha) * joint_strategy_torques;
         return tau_ns + tau_s;
     }
-                
 }
 
 }  // namespace

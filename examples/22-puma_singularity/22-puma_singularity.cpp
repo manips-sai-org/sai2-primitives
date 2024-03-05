@@ -33,6 +33,7 @@ VectorXd control_torques;
 
 // mutex for global variables between different threads
 mutex mutex_torques;
+mutex mutex_robot;
 
 // simulation and control loop
 void control(shared_ptr<Sai2Model::Sai2Model> robot,
@@ -80,7 +81,10 @@ int main(int argc, char** argv) {
 
 	// while window is open:
 	while (graphics->isWindowOpen()) {
-		graphics->updateRobotGraphics(robot_name, robot->q());
+		{
+			lock_guard<mutex> lock(mutex_robot);
+			graphics->updateRobotGraphics(robot_name, robot->q());
+		}
 		graphics->renderGraphicsWorld();
 		{
 			lock_guard<mutex> lock(mutex_torques);
@@ -112,7 +116,7 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 	// Full motion force task
 	auto motion_force_task = make_unique<Sai2Primitives::MotionForceTask>(
 		robot, link_name, compliant_frame);
-	// motion_force_task->setSingularityBounds(1e-3, 1e-2);
+	// motion_force_task->setSingularityBounds(8e-3, 8e-2);
 
 	// // Partial motion force task
 	// vector<Vector3d> controlled_directions_translation = {
@@ -141,10 +145,14 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
     joint_task->setGoalPosition(initial_q);
 
     // desired position offsets 
-    vector<Vector3d> desired_offsets {Vector3d(2, 0, 0), Vector3d(0, 0, 0), 
-                                      Vector3d(0, 2, 0), Vector3d(0, 0, 0), 
-                                      Vector3d(0, -2, 0), Vector3d(0, 0, 0),
-                                      Vector3d(0, 0, 2), Vector3d(0, 0, 0)};
+    vector<Vector3d> desired_offsets {Vector3d(1, 0, 0), Vector3d(0, 0, 0), 
+									  Vector3d(-1, 0, 0), Vector3d(0, 0, 0),
+                                      Vector3d(0, 1, 0), Vector3d(0, 0, 0), 
+                                      Vector3d(0, 0, 1), Vector3d(0, 0, 0)};
+	// vector<Vector3d> desired_offsets {Vector3d(0, 0, 1), Vector3d(0, 0, 0), 
+    //                                   Vector3d(0, 0, -1), Vector3d(0, 0, 0), 
+    //                                   Vector3d(0, 1, 0), Vector3d(0, 0, 0),
+    //                                   Vector3d(0, -1, 0), Vector3d(0, 0, 0)};
     // vector<Vector3d> desired_offsets {Vector3d(2, 0, 0)};
 	double t_initial = 2;
 	vector<double> t_wait {5, 5};
@@ -175,8 +183,10 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 
 		// update tasks model. Order is important to define the hierarchy
 		N_prec = MatrixXd::Identity(dof, dof);
-
-		motion_force_task->updateTaskModel(N_prec);
+		{
+			lock_guard<mutex> lock(mutex_robot);
+			motion_force_task->updateTaskModel(N_prec);
+		}
 		N_prec = motion_force_task->getTaskAndPreviousNullspace();
 		// after each task, need to update the nullspace
 		// of the previous tasks in order to garantee
@@ -206,7 +216,8 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 		}
 
 		//------ logging data
-		svalues = motion_force_task->getSigmaValues();
+		auto svd_data = motion_force_task->getSingularitySvdData();
+		svalues = svd_data.s;
 
 		// -------------------------------------------
 		if (timer.elapsedCycles() % 500 == 0) {
