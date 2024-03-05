@@ -579,6 +579,10 @@ public:
 		_singularity_handler->setSingularityBounds(s_min, s_max);
 	}
 
+	VectorXd getImpedanceForces() {
+		return _impedance_force;
+	}
+
 	VectorXd getUnitControlForces() {
 		return _unit_mass_force;
 	}
@@ -722,6 +726,7 @@ private:
 	Matrix<double, 6, 6> _partial_task_projection;
 
 	VectorXd _unit_mass_force;
+	VectorXd _impedance_force;
 
 	// singularity handler
 	std::unique_ptr<SingularityHandler> _singularity_handler;

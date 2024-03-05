@@ -442,9 +442,10 @@ VectorXd MotionForceTask::computeTorques() {
 	_linear_force_control =
 		force_feedback_related_force + feedforward_force_moment.head(3);
 	_linear_motion_control = position_related_force;
+	_impedance_force = force_moment_contribution + feedforward_force_moment;
 
 	// compute torque through singularity handler 
-	task_joint_torques = _singularity_handler->computeTorques(_unit_mass_force, (force_moment_contribution + feedforward_force_moment));
+	task_joint_torques = _singularity_handler->computeTorques(_unit_mass_force, _impedance_force);
 
 	return task_joint_torques;
 }
