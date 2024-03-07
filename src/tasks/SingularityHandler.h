@@ -16,6 +16,7 @@
 #include "Sai2Model.h"
 #include <Eigen/Dense>
 #include <queue>
+#include <memory>
 
 using namespace Eigen;
 namespace Sai2Primitives {
@@ -63,8 +64,10 @@ public:
                        const std::string& link_name,
                        const Affine3d& compliant_frame,
                        const int& task_rank,
+                       const double& bie = 0.5,
                        const double& s_abs_tol = 1e-3,
                        const double& type_1_tol = 0.05,
+                       const double& type_1_torque_ratio = 1e-1,
                        const double& type_2_torque_ratio = 1e-3,
                        const double& perturb_step_size = 1.5,
                        const int& buffer_size = 100,
@@ -173,6 +176,14 @@ public:
         _type_2_torque_ratio = ratio;
     }
 
+    void setBIE(const double& bie) {
+        _bie = bie;
+    }
+
+    void setType1TorqueRatio(const double& ratio) {
+        _type_1_torque_ratio = ratio;
+    }
+
 private:
     // singularity setup
     std::shared_ptr<Sai2Model::Sai2Model> _robot;
@@ -182,6 +193,7 @@ private:
     int _task_rank;
     VectorXd _joint_midrange, _q_upper, _q_lower;
     bool _verbose;
+    double _bie;
 
     // singularity information
     std::vector<SingularityType> _singularity_types;
@@ -195,6 +207,8 @@ private:
     VectorXd _q_prior, _dq_prior;
     double _kp, _kv;
     double _type_1_tol;
+    double _type_1_torque_ratio;
+    VectorXd _type_1_torque_vector;
 
     // type 2 specifications
     double _type_2_torque_ratio;  // use X% of the max joint torque 

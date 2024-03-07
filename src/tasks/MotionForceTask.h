@@ -611,6 +611,24 @@ public:
 		_singularity_handler->setSingularityBounds(s_min, s_max);
 	}
 
+	/**
+	 * @brief	   Changes the position and velocity gains for singularity joint strategy
+	 * 
+	 * @param kp   Position gain
+	 * @param kv   Damping gain 
+	*/
+	void setSingularityGains(const double& kp, const double& kv) {
+		_singularity_handler->setGains(kp, kv);
+	}
+
+	void setSingularityHandlerBIE(const double& bie) {
+		_singularity_handler->setBIE(bie);
+	}
+
+	void setSingularityType1TorqueRatio(const double& ratio) {
+		_singularity_handler->setType1TorqueRatio(ratio);
+	}
+
 private:
 	/**
 	 * @brief Initial setup of the task, called in the constructor to avoid
