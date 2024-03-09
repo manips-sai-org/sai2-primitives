@@ -2,6 +2,7 @@
 #define SAI2_PRIMITIVES_COMMON_DEFINITIONS_H_
 
 #include <Eigen/Dense>
+#include <vector>
 
 namespace Sai2Primitives {
 

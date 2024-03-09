@@ -28,6 +28,7 @@
 
 #include "Sai2Model.h"
 #include "TemplateTask.h"
+#include "SingularityHandler.h"
 
 using namespace Eigen;
 using namespace std;
@@ -36,16 +37,6 @@ namespace Sai2Primitives {
 
 class MotionForceTask : public TemplateTask {
 public:
-	enum DynamicDecouplingType {
-		FULL_DYNAMIC_DECOUPLING,	 // use the real Lambda matrix
-		PARTIAL_DYNAMIC_DECOUPLING,	 // Use Lambda for position part, Identity
-									 // for orientation and Zero for cross
-									 // coupling
-		IMPEDANCE,					 // use Identity for the mass matrix
-		BOUNDED_INERTIA_ESTIMATES,	 // Use a Lambda computed from a saturated
-									 // joint space mass matrix
-	};
-
 	//------------------------------------------------
 	// Constructor
 	//------------------------------------------------
@@ -455,7 +446,11 @@ public:
 	 * @param type
 	 */
 	void setDynamicDecouplingType(const DynamicDecouplingType type) {
-		_dynamic_decoupling_type = type;
+		_singularity_handler->setDynamicDecouplingType(type);
+	}
+
+	SvdData getSingularitySvdData() {
+		return _singularity_handler->getSvdData();
 	}
 
 	// -------- force control related methods --------
@@ -602,6 +597,41 @@ public:
 		return _partial_task_projection.block<3, 3>(3, 3);
 	}
 
+	/**
+	 * @brief	   Changes the bounds for the singularity blending.
+	 * 
+	 * @param s_min		Upper bound to start blending  
+	 * @param s_max 	Lower bound to remove all singular task torque 
+	 */
+	void setSingularityBounds(const double& s_min, const double& s_max) {
+		_singularity_handler->setSingularityBounds(s_min, s_max);
+	}
+
+	/**
+	 * @brief	   Changes the position and velocity gains for singularity joint strategy
+	 * 
+	 * @param kp   Position gain
+	 * @param kv   Damping gain 
+	*/
+	void setSingularityGains(const double& kp, const double& kv) {
+		_singularity_handler->setGains(kp, kv);
+	}
+
+	/**
+	 * @brief	  Get singularity handler data 
+	*/
+	SingularityHandlerData getSingularityHandlerData() {
+		return _singularity_handler->getData();
+	}
+
+	MatrixXd getNonSingularLambda() {
+		return _singularity_handler->getNonSingularLambda();
+	}
+
+	MatrixXd getSingularLambda() {
+		return _singularity_handler->getSingularLambda();
+	}
+
 private:
 	/**
 	 * @brief Initial setup of the task, called in the constructor to avoid
@@ -729,6 +759,9 @@ private:
 	Matrix<double, 6, 6> _partial_task_projection;
 
 	VectorXd _unit_mass_force;
+
+	// singularity handler
+	std::unique_ptr<SingularityHandler> _singularity_handler;
 };
 
 } /* namespace Sai2Primitives */
