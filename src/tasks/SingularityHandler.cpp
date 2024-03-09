@@ -138,7 +138,7 @@ void SingularityHandler::updateTaskModel(const MatrixXd& projected_jacobian, con
         _N = _N_ns;  // _N = N_ns (rank(N_ns) = task_rank)
     } else {
         // update posture task (occupies all singular joint directions, but joint torque handles one at a time)
-        _posture_projected_jacobian = _joint_task_range_s.transpose() * N_prec;
+        _posture_projected_jacobian = _joint_task_range_s.transpose() * _N_ns * N_prec;
         Sai2Model::OpSpaceMatrices op_space_matrices =
             _robot->operationalSpaceMatrices(_posture_projected_jacobian);
         _Lambda_joint_s = op_space_matrices.Lambda;
