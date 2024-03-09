@@ -119,7 +119,7 @@ public:
      * @param projected_jacobian Projected jacobian from motion force task
      * @param N_prec Nullspace of preceding tasks from motion force task
      */
-    void updateTaskModel(const MatrixXd& projected_jacobian, const MatrixXd& N_prec);
+    void updateTaskModel(const MatrixXd& jacobian, const MatrixXd& N_prec);
 
     /**
      * @brief Classifies the singularity based on a joint perturbation in the J_{s} N_{ns} direction since 
@@ -132,7 +132,9 @@ public:
      * @param singular_joint_task_range Singular task range corresponding to the columns of V from SVD
      */
     void classifySingularity(const MatrixXd& singular_task_range, 
-                             const MatrixXd& singular_joint_task_range);
+                             const MatrixXd& singular_joint_task_range,
+                             const MatrixXd& jacobian,
+                             const MatrixXd& N_prec);
 
     /**
      * @brief Computes the torques from the singularity handling. If the projected jacobian doesn't have

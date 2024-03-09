@@ -621,12 +621,19 @@ public:
 		_singularity_handler->setGains(kp, kv);
 	}
 
-	void setSingularityHandlerBIE(const double& bie) {
-		_singularity_handler->setBIE(bie);
+	/**
+	 * @brief	  Get singularity handler data 
+	*/
+	SingularityHandlerData getSingularityHandlerData() {
+		return _singularity_handler->getData();
 	}
 
-	void setSingularityType1TorqueRatio(const double& ratio) {
-		_singularity_handler->setType1TorqueRatio(ratio);
+	MatrixXd getNonSingularLambda() {
+		return _singularity_handler->getNonSingularLambda();
+	}
+
+	MatrixXd getSingularLambda() {
+		return _singularity_handler->getSingularLambda();
 	}
 
 private:

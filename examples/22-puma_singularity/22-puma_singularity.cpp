@@ -116,7 +116,7 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 	// Full motion force task
 	auto motion_force_task = make_unique<Sai2Primitives::MotionForceTask>(
 		robot, link_name, compliant_frame);
-	// motion_force_task->setSingularityBounds(8e-3, 8e-2);
+	// motion_force_task->setSingularityBounds(1e-3, 1e-2);
 
 	// // Partial motion force task
 	// vector<Vector3d> controlled_directions_translation = {

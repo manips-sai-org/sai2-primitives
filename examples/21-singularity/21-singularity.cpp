@@ -121,7 +121,8 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 	// auto motion_force_task = make_shared<Sai2Primitives::MotionForceTask>(
 	// 	robot, link_name, controlled_directions_translation,
 	// 	controlled_directions_rotation);
-	// motion_force_task->setSingularityBounds(1e-2, 1e-1);
+	motion_force_task->setSingularityBounds(5e-2, 5e-3);
+	motion_force_task->setSingularityGains(20, 20);
 
     motion_force_task->disableInternalOtg();
     motion_force_task->enableVelocitySaturation();
