@@ -33,10 +33,16 @@
 		<lookat xyz="0.0 0.0 0.0" />
 	</light>
 
-	<camera name="camera">
-		<position xyz="-2.0 0.0 1.0" />
+	<!-- <camera name="camera">
+		<position xyz="-2 0.5 0.75" />
 		<vertical xyz="0.0 0.0 1.0" />
-		<lookat xyz="0.0 0.0 0.5" />
+		<lookat xyz="0.0 0.5 0.75" />
+	</camera> -->
+
+	<camera name="camera">
+		<position xyz="-1.34848 0.766375 1.18243" />
+		<vertical xyz="0.401548 -0.133621  0.906038" />
+		<lookat xyz="-0.469794  0.543684  0.760161" />
 	</camera>
 
 </world>

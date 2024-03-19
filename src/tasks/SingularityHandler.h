@@ -41,6 +41,7 @@ struct SingularityHandlerData {
     VectorXd nonsingular_torques;
     VectorXd singular_torques;
     VectorXd blended_torques;
+    double fTd;
     SingularityHandlerData(const std::vector<SingularityType> singularity_types,
                            const double& alpha,
                            const VectorXd& task_range_s,
@@ -53,7 +54,8 @@ struct SingularityHandlerData {
                            const VectorXd& original_torques,
                            const VectorXd& nonsingular_torques,
                            const VectorXd& singular_torques,
-                           const VectorXd& blended_torques) : 
+                           const VectorXd& blended_torques,
+                           const double& fTd) : 
                            singularity_types(singularity_types),
                            alpha(alpha),
                            task_range_s(task_range_s),
@@ -66,7 +68,8 @@ struct SingularityHandlerData {
                            original_torques(original_torques),
                            nonsingular_torques(nonsingular_torques),
                            singular_torques(singular_torques),
-                           blended_torques(blended_torques) {};
+                           blended_torques(blended_torques),
+                           fTd(fTd) {};
 };
 
 struct SvdData {
@@ -107,10 +110,10 @@ public:
                        const Affine3d& compliant_frame,
                        const int& task_rank,
                        const double& s_abs_tol = 1e-3,
-                       const double& type_1_tol = 0.001,
-                       const double& type_2_torque_ratio = 1e-3,
+                       const double& type_1_tol = 0.3,
+                       const double& type_2_torque_ratio = 1e-2,
                        const double& perturb_step_size = 1.57,
-                       const int& buffer_size = 100,
+                       const int& buffer_size = 200,
                        const bool& verbose = true);
 
     /**
@@ -201,9 +204,10 @@ public:
      * @param kp position gain
      * @param kv velocity gain
      */
-    void setGains(const double& kp, const double& kv) {
+    void setGains(const double& kp, const double& kv, const double& kv_type2) {
         _kp = kp;
         _kv = kv;
+        _kv_type2 = kv_type2;
     }
 
     /**
@@ -221,9 +225,9 @@ public:
     SingularityHandlerData getData() {
         return SingularityHandlerData(_singularity_types,
                                       _alpha,
-                                      VectorXd(_task_range_s),
+                                      VectorXd(_task_range_s.col(0)),
                                       _svd_s,
-                                      VectorXd(_joint_task_range_s),
+                                      VectorXd(_joint_task_range_s.col(0)),
                                       _singular_task_force,
                                       _nonsingular_task_force,
                                       _singular_task_torques,
@@ -231,7 +235,8 @@ public:
                                       _original_torques,
                                       _nonsingular_torques,
                                       _singular_torques,
-                                      _blended_torques);
+                                      _blended_torques,
+                                      _fTd);
     }
 
     MatrixXd getNonSingularLambda() {
@@ -268,6 +273,9 @@ private:
     // type 2 specifications
     double _type_2_torque_ratio;  // use X% of the max joint torque 
     VectorXd _type_2_torque_vector;
+    double _kv_type2;
+    VectorXd _type_2_direction;
+    double _fTd;
 
     // model quantities 
     double _s_abs_tol;  

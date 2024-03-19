@@ -35,6 +35,14 @@ VectorXd control_torques;
 mutex mutex_torques;
 mutex mutex_robot;
 
+// switch for which type 2 singularity
+bool flag_overhead_singularity = false;
+
+enum State {
+	GO_TO_SINGULARITY,
+	EXIT_SINGULARITY
+};
+
 // simulation and control loop
 void control(shared_ptr<Sai2Model::Sai2Model> robot,
 			 shared_ptr<Sai2Simulation::Sai2Simulation> sim);
@@ -54,11 +62,33 @@ int main(int argc, char** argv) {
 	auto graphics = make_shared<Sai2Graphics::Sai2Graphics>(world_file);
 	graphics->addUIForceInteraction(robot_name);
 	// graphics->showTransparency(true, robot_name, 0.5);
+	graphics->showLinkFrame(true, robot_name, "end-effector", 0.25);
 
 	// load simulation world
 	auto sim = make_shared<Sai2Simulation::Sai2Simulation>(world_file);
 	VectorXd init_q = sim->getJointPositions(robot_name);
-	init_q(4) = 0;  // wrist lock 
+	// init_q(4) = 0;  // wrist lock 
+	// init_q(4) = M_PI / 2;
+	// init_q(1) = - M_PI / 4;
+	// init_q(2) = M_PI / 4;
+	// init_q(4) = - M_PI / 4;
+
+	/*
+		Type 2 described in Marcelo's paper 
+	*/
+	init_q(1) = - M_PI / 4;
+	init_q(2) = M_PI / 4 + M_PI / 2;
+	init_q(3) = M_PI / 2;
+	init_q(4) = 0;
+	init_q(5) = M_PI;
+
+	// /*
+	// 	Extended elbow condition 
+	// */
+	// init_q(1) = 0;
+	// init_q(2) = M_PI / 2;
+	// init_q(3) = 0;
+	// init_q(4) = 0;
 	sim->setJointPositions(robot_name, init_q);
 
 	// load robots
@@ -77,7 +107,7 @@ int main(int argc, char** argv) {
 	thread sim_thread(simulation, robot, sim);
 
 	// next start the control thread
-	thread ctrl_thread(control, robot, sim);
+	// thread ctrl_thread(control, robot, sim);
 
 	// while window is open:
 	while (graphics->isWindowOpen()) {
@@ -95,7 +125,7 @@ int main(int argc, char** argv) {
 	// stop simulation
 	fSimulationRunning = false;
 	sim_thread.join();
-	ctrl_thread.join();
+	// ctrl_thread.join();
 
 	return 0;
 }
@@ -110,13 +140,20 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 
 	// Position plus orientation task
 	string link_name = "end-effector";
-	Vector3d pos_in_link = Vector3d(0.0, 0.0, 0.07);
+	// Vector3d pos_in_link = Vector3d(0.0, 0.0, 0.07);
+	Vector3d pos_in_link = Vector3d(0.0, 0.0, 0.0);
 	Affine3d compliant_frame = Affine3d(Translation3d(pos_in_link));
 
 	// Full motion force task
 	auto motion_force_task = make_unique<Sai2Primitives::MotionForceTask>(
 		robot, link_name, compliant_frame);
-	// motion_force_task->setSingularityBounds(1e-3, 1e-2);
+	motion_force_task->setSingularityBounds(6e-3, 6e-2);
+	// motion_force_task->setSingularityBounds(2e-2, 6e-2);  // working
+	// motion_force_task->setSingularityBounds(5e-3, 5e-2);
+	// motion_force_task->setSingularityBounds(1e-6, 1e-5);
+	motion_force_task->setSingularityGains(50, 20, 20);
+	// motion_force_task->disableInternalOtg();
+	// motion_force_task->enableVelocitySaturation(0.3, M_PI / 3);
 
 	// // Partial motion force task
 	// vector<Vector3d> controlled_directions_translation = {
@@ -127,13 +164,28 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 	// 	controlled_directions_rotation);
 	// motion_force_task->setSingularityBounds(1e-2, 1e-1);
 
-    motion_force_task->disableInternalOtg();
-    motion_force_task->enableVelocitySaturation();
+    // motion_force_task->disableInternalOtg();
+    // motion_force_task->enableVelocitySaturation();
 	VectorXd motion_force_task_torques = VectorXd::Zero(dof);
 
 	// no gains setting here, using the default task values
 	const Matrix3d initial_orientation = robot->rotation(link_name);
 	const Vector3d initial_position = robot->position(link_name, pos_in_link);
+
+	// singularity cases
+	// if overhead, then move robot to overhead, then move out
+	// if wrist lock, then start robot in wrist lock, and translate in z-axis
+	// and rotate about z-axis by 15 degrees 
+
+	// desired position based on singularity testing
+	Matrix3d desired_orientation = Matrix3d::Identity();
+	if (flag_overhead_singularity) {	
+		desired_orientation = AngleAxisd(M_PI / 2, Vector3d::UnitY()).toRotationMatrix();
+		// motion_force_task->setGoalPosition(Vector3d(-0.12, 0.12, 1.3));
+		motion_force_task->setGoalPosition(Vector3d(0, 0, 1.3));
+	} else {
+	}
+	// motion_force_task->setGoalOrientation(desired_orientation);
 
 	// joint task to control the redundancy
 	// using default gains and interpolation settings
@@ -144,29 +196,30 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 	VectorXd initial_q = robot->q();
     joint_task->setGoalPosition(initial_q);
 
-    // desired position offsets 
-    vector<Vector3d> desired_offsets {Vector3d(1, 0, 0), Vector3d(0, 0, 0), 
-									  Vector3d(-1, 0, 0), Vector3d(0, 0, 0),
-                                      Vector3d(0, 1, 0), Vector3d(0, 0, 0), 
-                                      Vector3d(0, 0, 1), Vector3d(0, 0, 0)};
-	// vector<Vector3d> desired_offsets {Vector3d(0, 0, 1), Vector3d(0, 0, 0), 
-    //                                   Vector3d(0, 0, -1), Vector3d(0, 0, 0), 
-    //                                   Vector3d(0, 1, 0), Vector3d(0, 0, 0),
-    //                                   Vector3d(0, -1, 0), Vector3d(0, 0, 0)};
-    // vector<Vector3d> desired_offsets {Vector3d(2, 0, 0)};
-	double t_initial = 2;
-	vector<double> t_wait {5, 5};
-    // double t_wait = 10;  // wait between switching desired positions 
-	// double t_reset_wait = 5;  // wait when resetting position 
-    double prev_time = 0;
-    int cnt = 6 * 0;
-    int max_cnt = desired_offsets.size();
+	int state = GO_TO_SINGULARITY;
+	double start_time = 0;
+	Vector3d starting_ee_pos;
+	Matrix3d starting_ee_ori;
+	int cnt = 0;
 
 	// create logger
-	Sai2Common::Logger logger("singular_values", false);
-	VectorXd svalues = VectorXd::Zero(6);
-	logger.addToLog(svalues, "svalues");
-	logger.start();
+	std::remove("puma_singularity_overhead.csv");
+	Sai2Common::Logger logger("puma_singularity_overhead", false);
+	VectorXd singular_values = VectorXd::Zero(6);
+	VectorXd singular_direction = VectorXd::Zero(6); 
+	VectorXd desired_acceleration = VectorXd::Zero(6);
+	Vector3d current_position = Vector3d::Zero();
+	Vector3d desired_position = Vector3d::Zero();
+	Vector3d orientation_error = Vector3d::Zero();
+	double dot_product = 0;
+	logger.addToLog(singular_values, "singular_values");
+	logger.addToLog(singular_direction, "singular_direction");
+	logger.addToLog(desired_acceleration, "desired_acceleration");
+	logger.addToLog(current_position, "current_position");
+	logger.addToLog(desired_position, "desired_position");
+	logger.addToLog(orientation_error, "orientation_error");
+	logger.addToLog(dot_product, "dot_product");
+	logger.start(1000);
 
 	// create a loop timer
 	double control_freq = 1000;
@@ -180,6 +233,51 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 		robot->setQ(sim->getJointPositions(robot_name));
 		robot->setDq(sim->getJointVelocities(robot_name));
 		robot->updateModel();
+
+		// update kinematics
+		Vector3d ee_pos = robot->position(link_name, compliant_frame.translation());
+		std::cout << "ee position: " << ee_pos.transpose() << "\n";
+		Matrix3d ee_ori = robot->rotation(link_name, compliant_frame.linear());
+
+		// state transition logic 
+		if (time - start_time > 20 && state == GO_TO_SINGULARITY) {
+			// std::cout << "Updated direction\n";
+			starting_ee_pos = ee_pos;
+			starting_ee_ori = ee_ori;
+			// motion_force_task->setGoalPosition(starting_ee_pos + Vector3d(-0.25, 0, 0));
+			motion_force_task->setGoalPosition(starting_ee_pos + Vector3d(0, 0, -0.2));
+			// motion_force_task->setGoalOrientation(starting_ee_ori * AngleAxisd(15 * M_PI / 180, Vector3d::UnitZ()));
+			motion_force_task->setGoalOrientation(starting_ee_ori * AngleAxisd(90 * M_PI / 180, Vector3d::UnitZ()).toRotationMatrix());
+			// motion_force_task->setGoalOrientation(AngleAxisd(15 * M_PI / 180, Vector3d::UnitZ()).toRotationMatrix() * starting_ee_ori);
+			state = EXIT_SINGULARITY;
+			start_time = time;
+		}
+
+		if (time - start_time > 5 && state == EXIT_SINGULARITY) {
+			if (cnt == 0) {
+				motion_force_task->setGoalPosition(starting_ee_pos);
+				motion_force_task->setGoalOrientation(starting_ee_ori);
+			} else if (cnt == 1) {
+				// motion_force_task->setGoalPosition(starting_ee_pos + Vector3d(0, 0.25, 0));
+				motion_force_task->setGoalPosition(starting_ee_pos + Vector3d(0, 0, -0.2));
+				motion_force_task->setGoalOrientation(starting_ee_ori * AngleAxisd(90 * M_PI / 180, Vector3d::UnitZ()).toRotationMatrix());
+			} else if (cnt == 2) {
+				motion_force_task->setGoalPosition(starting_ee_pos);
+				motion_force_task->setGoalOrientation(starting_ee_ori);
+			} else if (cnt == 3) {
+				// motion_force_task->setGoalPosition(starting_ee_pos + Vector3d(-0.25, 0, 0));
+				motion_force_task->setGoalPosition(starting_ee_pos + Vector3d(0, 0, -0.2));
+				motion_force_task->setGoalOrientation(starting_ee_ori * AngleAxisd(90 * M_PI / 180, Vector3d::UnitZ()).toRotationMatrix());
+			}
+			start_time = time;
+			cnt++;
+			if (cnt == 4) {
+				cnt = 0;
+			}
+		}
+
+		// std::cout << "pos error: " << motion_force_task->getPositionError().norm() << "\n";
+		// std::cout << "ori error: " << motion_force_task->getOrientationError().norm() << "\n";
 
 		// update tasks model. Order is important to define the hierarchy
 		N_prec = MatrixXd::Identity(dof, dof);
@@ -196,14 +294,14 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 
 		// -------- set task goals and compute control torques
 		// position: move to workspace extents 
-        if (time - prev_time > t_wait[cnt % 2]) {
-            motion_force_task->setGoalPosition(initial_position + desired_offsets[cnt]);
-            cnt++;
-            prev_time = time;
-            if (cnt == max_cnt) cnt = max_cnt - 1;
-        }
-        motion_force_task->setGoalLinearVelocity(Vector3d::Zero());
-        motion_force_task->setGoalLinearAcceleration(Vector3d::Zero());
+        // if (time - prev_time > t_wait[cnt % 2]) {
+        //     motion_force_task->setGoalPosition(initial_position + desired_offsets[cnt]);
+        //     cnt++;
+        //     prev_time = time;
+        //     if (cnt == max_cnt) cnt = max_cnt - 1;
+        // }
+        // motion_force_task->setGoalLinearVelocity(Vector3d::Zero());
+        // motion_force_task->setGoalLinearAcceleration(Vector3d::Zero());
 
 		// compute torques for the different tasks
 		motion_force_task_torques = motion_force_task->computeTorques();
@@ -217,7 +315,13 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 
 		//------ logging data
 		auto svd_data = motion_force_task->getSingularitySvdData();
-		svalues = svd_data.s;
+		auto singularity_data = motion_force_task->getSingularityHandlerData();
+		singular_values = svd_data.s;
+		desired_acceleration = motion_force_task->getUnitMassForce();
+		current_position = motion_force_task->getCurrentPosition();
+		desired_position = motion_force_task->getDesiredPosition();
+		orientation_error = motion_force_task->getOrientationError();
+		dot_product = singularity_data.fTd;
 
 		// -------------------------------------------
 		if (timer.elapsedCycles() % 500 == 0) {

@@ -617,8 +617,8 @@ public:
 	 * @param kp   Position gain
 	 * @param kv   Damping gain 
 	*/
-	void setSingularityGains(const double& kp, const double& kv) {
-		_singularity_handler->setGains(kp, kv);
+	void setSingularityGains(const double& kp, const double& kv, const double& kv_type2) {
+		_singularity_handler->setGains(kp, kv, kv_type2);
 	}
 
 	/**
