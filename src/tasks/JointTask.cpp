@@ -132,6 +132,27 @@ void JointTask::setGoalAcceleration(const VectorXd& goal_acceleration) {
 	_goal_acceleration = goal_acceleration;
 }
 
+void JointTask::setGainsUnsafe(const VectorXd& kp, const VectorXd& kv,
+						 const VectorXd& ki) {
+	if (kp.size() == 1 && kv.size() == 1 && ki.size() == 1) {
+		_are_gains_isotropic = true;
+		_kp = kp(0) * MatrixXd::Identity(_task_dof, _task_dof);
+		_kv = kv(0) * MatrixXd::Identity(_task_dof, _task_dof);
+		_ki = ki(0) * MatrixXd::Identity(_task_dof, _task_dof);
+	}
+
+	if (kp.size() != _task_dof || kv.size() != _task_dof ||
+		ki.size() != _task_dof) {
+		throw std::invalid_argument(
+			"size of gain vectors inconsistent with number of task dofs in "
+			"JointTask::setGains\n");
+	}
+	_are_gains_isotropic = false;
+	_kp = kp.asDiagonal();
+	_kv = kv.asDiagonal();
+	_ki = ki.asDiagonal();
+}
+
 void JointTask::setGains(const VectorXd& kp, const VectorXd& kv,
 						 const VectorXd& ki) {
 	if (kp.size() == 1 && kv.size() == 1 && ki.size() == 1) {
