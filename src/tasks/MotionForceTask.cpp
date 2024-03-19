@@ -478,10 +478,11 @@ VectorXd MotionForceTask::computeTorques() {
 
 	// final contribution
 	if (_use_velocity_saturation_flag) {
+		const Matrix3d kv_pos_inv = Sai2Model::computePseudoInverse(_kv_pos);
 		_desired_linear_velocity =
-			-_kp_pos * _kv_pos.inverse() * sigma_position *
+			-_kp_pos * kv_pos_inv * sigma_position *
 				(_current_position - _desired_position) -
-			_ki_pos * _kv_pos.inverse() * _integrated_position_error;
+			_ki_pos * kv_pos_inv * _integrated_position_error;
 		if (_desired_linear_velocity.norm() > _linear_saturation_velocity) {
 			_desired_linear_velocity *=
 				_linear_saturation_velocity / _desired_linear_velocity.norm();
@@ -510,9 +511,10 @@ VectorXd MotionForceTask::computeTorques() {
 
 	// final contribution
 	if (_use_velocity_saturation_flag) {
+		const Matrix3d kv_ori_inv = Sai2Model::computePseudoInverse(_kv_ori);
 		_desired_angular_velocity =
-			-_kp_ori * _kv_ori.inverse() * step_orientation_error -
-			_ki_ori * _kv_ori.inverse() * _integrated_orientation_error;
+			-_kp_ori * kv_ori_inv * step_orientation_error -
+			_ki_ori * kv_ori_inv * _integrated_orientation_error;
 		if (_desired_angular_velocity.norm() > _angular_saturation_velocity) {
 			_desired_angular_velocity *=
 				_angular_saturation_velocity / _desired_angular_velocity.norm();
@@ -641,11 +643,12 @@ void MotionForceTask::setPosControlGains(double kp_pos, double kv_pos,
 			"all gains should be positive or zero in "
 			"MotionForceTask::setPosControlGains\n");
 	}
-	if (kv_pos < 1e-2 && _use_velocity_saturation_flag) {
-		throw invalid_argument(
-			"cannot have kv_pos = 0 if using velocity saturation in "
-			"MotionForceTask::setPosControlGains\n");
-	}
+	// TODO: print warning if kv_pos is too small
+	// if (kv_pos < 1e-2 && _use_velocity_saturation_flag) {
+	// 	throw invalid_argument(
+	// 		"cannot have kv_pos = 0 if using velocity saturation in "
+	// 		"MotionForceTask::setPosControlGains\n");
+	// }
 	_are_pos_gains_isotropic = true;
 	_kp_pos = kp_pos * Matrix3d::Identity();
 	_kv_pos = kv_pos * Matrix3d::Identity();
@@ -670,15 +673,36 @@ void MotionForceTask::setPosControlGains(const VectorXd& kp_pos,
 			"all gains should be positive or zero in "
 			"MotionForceTask::setPosControlGains\n");
 	}
-	if (kv_pos.minCoeff() < 1e-2 && _use_velocity_saturation_flag) {
-		throw invalid_argument(
-			"cannot have kv_pos = 0 if using velocity saturation in "
-			"MotionForceTask::setPosControlGains\n");
-	}
+	// TODO: print warning if kv_pos is too small
+	// if (kv_pos.minCoeff() < 1e-2 && _use_velocity_saturation_flag) {
+	// 	throw invalid_argument(
+	// 		"cannot have kv_pos = 0 if using velocity saturation in "
+	// 		"MotionForceTask::setPosControlGains\n");
+	// }
 	_are_pos_gains_isotropic = false;
 	_kp_pos = kp_pos.asDiagonal();
 	_kv_pos = kv_pos.asDiagonal();
 	_ki_pos = ki_pos.asDiagonal();
+}
+
+void MotionForceTask::setPosControlGainsUnsafe(const VectorXd& kp_pos,
+										 const VectorXd& kv_pos,
+										 const VectorXd& ki_pos) {
+	if (kp_pos.size() == 1 && kv_pos.size() == 1 && ki_pos.size() == 1) {
+		_are_pos_gains_isotropic = true;
+		_kp_pos = kp_pos(0) * Matrix3d::Identity();
+		_kv_pos = kv_pos(0) * Matrix3d::Identity();
+		_ki_pos = ki_pos(0) * Matrix3d::Identity();
+	}
+	if(kp_pos.size() != 3 || kv_pos.size() != 3 || ki_pos.size() != 3) {
+		throw invalid_argument(
+			"kp_pos, kv_pos and ki_pos should be of size 1 or 3 in "
+			"MotionForceTask::setPosControlGainsUnsafe\n");
+	}
+	_are_pos_gains_isotropic = false;
+	_kp_pos = kp_pos.asDiagonal();
+	_kv_pos = kv_pos.asDiagonal();
+	_ki_pos = ki_pos.asDiagonal();	
 }
 
 vector<PIDGains> MotionForceTask::getPosControlGains() const {
@@ -705,11 +729,12 @@ void MotionForceTask::setOriControlGains(double kp_ori, double kv_ori,
 			"all gains should be positive or zero in "
 			"MotionForceTask::setOriControlGains\n");
 	}
-	if (kv_ori < 1e-2 && _use_velocity_saturation_flag) {
-		throw invalid_argument(
-			"cannot have kv_ori = 0 if using velocity saturation in "
-			"MotionForceTask::setOriControlGains\n");
-	}
+	// TODO: print warning if kv_ori is too small
+	// if (kv_ori < 1e-2 && _use_velocity_saturation_flag) {
+	// 	throw invalid_argument(
+	// 		"cannot have kv_ori = 0 if using velocity saturation in "
+	// 		"MotionForceTask::setOriControlGains\n");
+	// }
 	_are_ori_gains_isotropic = true;
 	_kp_ori = kp_ori * Matrix3d::Identity();
 	_kv_ori = kv_ori * Matrix3d::Identity();
@@ -734,9 +759,30 @@ void MotionForceTask::setOriControlGains(const VectorXd& kp_ori,
 			"all gains should be positive or zero in "
 			"MotionForceTask::setOriControlGains\n");
 	}
-	if (kv_ori.minCoeff() < 1e-2 && _use_velocity_saturation_flag) {
+	// TODO: print warning if kv_ori is too small
+	// if (kv_ori.minCoeff() < 1e-2 && _use_velocity_saturation_flag) {
+	// 	throw invalid_argument(
+	// 		"cannot have kv_ori = 0 if using velocity saturation in "
+	// 		"MotionForceTask::setOriControlGains\n");
+	// }
+	_are_ori_gains_isotropic = false;
+	_kp_ori = kp_ori.asDiagonal();
+	_kv_ori = kv_ori.asDiagonal();
+	_ki_ori = ki_ori.asDiagonal();
+}
+
+void MotionForceTask::setOriControlGainsUnsafe(const VectorXd& kp_ori,
+										 const VectorXd& kv_ori,
+										 const VectorXd& ki_ori) {
+	if (kp_ori.size() == 1 && kv_ori.size() == 1 && ki_ori.size() == 1) {
+		_are_ori_gains_isotropic = true;
+		_kp_ori = kp_ori(0) * Matrix3d::Identity();
+		_kv_ori = kv_ori(0) * Matrix3d::Identity();
+		_ki_ori = ki_ori(0) * Matrix3d::Identity();
+	}
+	if (kp_ori.size() != 3 || kv_ori.size() != 3 || ki_ori.size() != 3) {
 		throw invalid_argument(
-			"cannot have kv_ori = 0 if using velocity saturation in "
+			"kp_ori, kv_ori and ki_ori should be of size 1 or 3 in "
 			"MotionForceTask::setOriControlGains\n");
 	}
 	_are_ori_gains_isotropic = false;
@@ -785,16 +831,17 @@ void MotionForceTask::enableVelocitySaturation(const double linear_vel_sat,
 			"Velocity saturation values should be strictly positive or zero in "
 			"MotionForceTask::enableVelocitySaturation\n");
 	}
-	if (_kv_pos.determinant() < 1e-3) {
-		throw invalid_argument(
-			"Cannot enable velocity saturation if kv_pos is singular in "
-			"MotionForceTask::enableVelocitySaturation\n");
-	}
-	if (_kv_ori.determinant() < 1e-3) {
-		throw invalid_argument(
-			"Cannot enable velocity saturation if kv_ori is singular in "
-			"MotionForceTask::enableVelocitySaturation\n");
-	}
+	// TODO: print warning if kv_pos or kv_ori is too small
+	// if (_kv_pos.determinant() < 1e-3) {
+	// 	throw invalid_argument(
+	// 		"Cannot enable velocity saturation if kv_pos is singular in "
+	// 		"MotionForceTask::enableVelocitySaturation\n");
+	// }
+	// if (_kv_ori.determinant() < 1e-3) {
+	// 	throw invalid_argument(
+	// 		"Cannot enable velocity saturation if kv_ori is singular in "
+	// 		"MotionForceTask::enableVelocitySaturation\n");
+	// }
 	_use_velocity_saturation_flag = true;
 	_linear_saturation_velocity = linear_vel_sat;
 	_angular_saturation_velocity = angular_vel_sat;

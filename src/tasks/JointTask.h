@@ -251,6 +251,9 @@ public:
 	 */
 	void setGains(const double kp, const double kv, const double ki = 0);
 
+	void setGainsUnsafe(const VectorXd& kp, const VectorXd& kv, const VectorXd& ki);
+
+
 	vector<PIDGains> getGains() const;
 
 	/**
@@ -333,10 +336,7 @@ public:
 	 *
 	 * @param[in]  saturation_velocity  The saturation velocity
 	 */
-	void enableVelocitySaturation(const double saturation_velocity) {
-		enableVelocitySaturation(saturation_velocity *
-								 VectorXd::Ones(getConstRobotModel()->dof()));
-	}
+	void enableVelocitySaturation(const double saturation_velocity);
 
 	/**
 	 * @brief      Disables the velocity saturation

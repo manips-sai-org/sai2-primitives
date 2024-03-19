@@ -288,6 +288,9 @@ public:
 	}
 	vector<PIDGains> getPosControlGains() const;
 
+	void setPosControlGainsUnsafe(const VectorXd& kp_pos, const VectorXd& kv_pos,
+								  const VectorXd& ki_pos);
+
 	void setOriControlGains(const PIDGains& gains) {
 		setOriControlGains(gains.kp, gains.kv, gains.ki);
 	}
@@ -298,6 +301,9 @@ public:
 		setOriControlGains(kp_ori, kv_ori, VectorXd::Zero(kp_ori.size()));
 	}
 	vector<PIDGains> getOriControlGains() const;
+
+	void setOriControlGainsUnsafe(const VectorXd& kp_ori, const VectorXd& kv_ori,
+								  const VectorXd& ki_ori);
 
 	void setForceControlGains(const PIDGains& gains) {
 		setForceControlGains(gains.kp, gains.kv, gains.ki);
