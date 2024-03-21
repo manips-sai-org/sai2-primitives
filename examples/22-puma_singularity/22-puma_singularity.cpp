@@ -67,11 +67,6 @@ int main(int argc, char** argv) {
 	// load simulation world
 	auto sim = make_shared<Sai2Simulation::Sai2Simulation>(world_file);
 	VectorXd init_q = sim->getJointPositions(robot_name);
-	// init_q(4) = 0;  // wrist lock 
-	// init_q(4) = M_PI / 2;
-	// init_q(1) = - M_PI / 4;
-	// init_q(2) = M_PI / 4;
-	// init_q(4) = - M_PI / 4;
 
 	/*
 		Type 2 described in Marcelo's paper 
@@ -89,14 +84,13 @@ int main(int argc, char** argv) {
 	// init_q(2) = M_PI / 2;
 	// init_q(3) = 0;
 	// init_q(4) = 0;
+
 	sim->setJointPositions(robot_name, init_q);
 
 	// load robots
 	auto robot = make_shared<Sai2Model::Sai2Model>(robot_file, false);
 	robot->setQ(sim->getJointPositions(robot_name));
 	robot->updateModel();
-
-	// sim->setJointPositions(robot_name, 0 * robot->q());
 
 	// intitialize global torques variables
 	ui_torques = VectorXd::Zero(robot->dof());
@@ -107,7 +101,7 @@ int main(int argc, char** argv) {
 	thread sim_thread(simulation, robot, sim);
 
 	// next start the control thread
-	// thread ctrl_thread(control, robot, sim);
+	thread ctrl_thread(control, robot, sim);
 
 	// while window is open:
 	while (graphics->isWindowOpen()) {
@@ -125,7 +119,7 @@ int main(int argc, char** argv) {
 	// stop simulation
 	fSimulationRunning = false;
 	sim_thread.join();
-	// ctrl_thread.join();
+	ctrl_thread.join();
 
 	return 0;
 }
@@ -240,7 +234,7 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 		Matrix3d ee_ori = robot->rotation(link_name, compliant_frame.linear());
 
 		// state transition logic 
-		if (time - start_time > 20 && state == GO_TO_SINGULARITY) {
+		if (time - start_time > 5 && state == GO_TO_SINGULARITY) {
 			// std::cout << "Updated direction\n";
 			starting_ee_pos = ee_pos;
 			starting_ee_ori = ee_ori;

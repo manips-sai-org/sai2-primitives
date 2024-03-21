@@ -215,7 +215,7 @@ void SingularityHandler::updateTaskModel(const MatrixXd& projected_jacobian, con
 void SingularityHandler::classifySingularity(const MatrixXd& singular_task_range,
                                              const MatrixXd& singular_joint_task_range) {
     // memory of entering conditions if previously not singular 
-    if (_singularity_types.size() == 0) {
+    if (_singularity_types.size() == 0 || (_type_2_counter > _type_1_counter)) {
         _q_prior = _robot->q();
         _dq_prior = _robot->dq();
     } 
@@ -248,7 +248,7 @@ void SingularityHandler::classifySingularity(const MatrixXd& singular_task_range
         delta_vector.head(3) = pos_delta;
         delta_vector.tail(3) = ori_delta;
         double motion_along_singular_direction = std::abs(delta_vector.dot(singular_task_range.col(i)));     
-        std::cout << "motion: " << motion_along_singular_direction << "\n";
+        std::cout << "Singularity motion along direction: " << motion_along_singular_direction << "\n";
         if (motion_along_singular_direction > _type_1_tol) {
             _singularity_types[i] = TYPE_1_SINGULARITY;
         } else {
@@ -321,8 +321,10 @@ VectorXd SingularityHandler::computeTorques(const VectorXd& unit_mass_force, con
             _nonsingular_task_force = _Lambda_ns_modified * _task_range_ns.transpose() * unit_mass_force;
         }
 
-        // handle type 1 singularities and type 2 singularities based on majority      
+        // handle type 1 singularities over type 2         
         if (_type_1_counter > _type_2_counter) {
+        // if (true) {
+        // if (false) {
             // joint holding to entering joint conditions  
             unit_torques = - _kp * (_robot->q() - _q_prior) - _kv * _robot->dq();  
             _joint_strategy_torques = _posture_projected_jacobian.transpose() * _Lambda_joint_s_modified * _joint_task_range_s.transpose() * unit_torques;

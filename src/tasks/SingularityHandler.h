@@ -110,9 +110,9 @@ public:
                        const Affine3d& compliant_frame,
                        const int& task_rank,
                        const double& s_abs_tol = 1e-3,
-                       const double& type_1_tol = 0.3,
+                       const double& type_1_tol = 0.5,
                        const double& type_2_torque_ratio = 1e-2,
-                       const double& perturb_step_size = 1.57,
+                       const double& perturb_step_size = 5,
                        const int& buffer_size = 200,
                        const bool& verbose = true);
 
