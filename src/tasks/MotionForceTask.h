@@ -74,12 +74,12 @@ public:
 		static constexpr double angular_saturation_velocity = M_PI / 3;
 		static constexpr bool use_internal_otg = true;
 		static constexpr double otg_max_linear_velocity = 0.3;
-		static constexpr double otg_max_linear_acceleration = 1.0;
+		static constexpr double otg_max_linear_acceleration = 2.0;
 		static constexpr double otg_max_angular_velocity = M_PI / 3;
-		static constexpr double otg_max_angular_acceleration = M_PI;
+		static constexpr double otg_max_angular_acceleration = 2.0 * M_PI;
 		static constexpr bool internal_otg_jerk_limited = false;
-		static constexpr double otg_max_linear_jerk = 5.0;
-		static constexpr double otg_max_angular_jerk = 5.0 * M_PI;
+		static constexpr double otg_max_linear_jerk = 10.0;
+		static constexpr double otg_max_angular_jerk = 10.0 * M_PI;
 	};
 
 	//------------------------------------------------
@@ -288,7 +288,8 @@ public:
 	}
 	vector<PIDGains> getPosControlGains() const;
 
-	void setPosControlGainsUnsafe(const VectorXd& kp_pos, const VectorXd& kv_pos,
+	void setPosControlGainsUnsafe(const VectorXd& kp_pos,
+								  const VectorXd& kv_pos,
 								  const VectorXd& ki_pos);
 
 	void setOriControlGains(const PIDGains& gains) {
@@ -302,7 +303,8 @@ public:
 	}
 	vector<PIDGains> getOriControlGains() const;
 
-	void setOriControlGainsUnsafe(const VectorXd& kp_ori, const VectorXd& kv_ori,
+	void setOriControlGainsUnsafe(const VectorXd& kp_ori,
+								  const VectorXd& kv_ori,
 								  const VectorXd& ki_ori);
 
 	void setForceControlGains(const PIDGains& gains) {

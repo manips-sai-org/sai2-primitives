@@ -45,8 +45,8 @@ public:
 		static constexpr bool use_internal_otg = true;
 		static constexpr bool internal_otg_jerk_limited = false;
 		static constexpr double otg_max_velocity = M_PI / 3.0;
-		static constexpr double otg_max_acceleration = M_PI;
-		static constexpr double otg_max_jerk = 5.0 * M_PI;
+		static constexpr double otg_max_acceleration = 2.0 * M_PI;
+		static constexpr double otg_max_jerk = 10.0 * M_PI;
 		static constexpr bool use_velocity_saturation = false;
 		static constexpr double saturation_velocity = M_PI / 3.0;
 	};
@@ -251,8 +251,8 @@ public:
 	 */
 	void setGains(const double kp, const double kv, const double ki = 0);
 
-	void setGainsUnsafe(const VectorXd& kp, const VectorXd& kv, const VectorXd& ki);
-
+	void setGainsUnsafe(const VectorXd& kp, const VectorXd& kv,
+						const VectorXd& ki);
 
 	vector<PIDGains> getGains() const;
 

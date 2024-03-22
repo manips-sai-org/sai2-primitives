@@ -91,7 +91,8 @@ void OTG_joints::disableJerkLimits() {
 }
 
 bool OTG_joints::getJerkLimitEnabled() const {
-	return _input.max_jerk != VectorXd::Constant(_dim, std::numeric_limits<double>::infinity());
+	return _input.max_jerk !=
+		   VectorXd::Constant(_dim, std::numeric_limits<double>::infinity());
 }
 
 void OTG_joints::setGoalPositionAndVelocity(const VectorXd& goal_position,
@@ -103,9 +104,8 @@ void OTG_joints::setGoalPositionAndVelocity(const VectorXd& goal_position,
 			"OTG_joints::setGoalPositionAndVelocity\n");
 	}
 
-	if(goal_position.isApprox(_input.target_position) &&
-		goal_velocity.isApprox(_input.target_velocity))
-	{
+	if (goal_position.isApprox(_input.target_position) &&
+		goal_velocity.isApprox(_input.target_velocity)) {
 		return;
 	}
 
@@ -115,11 +115,11 @@ void OTG_joints::setGoalPositionAndVelocity(const VectorXd& goal_position,
 }
 
 void OTG_joints::update() {
-	if(_goal_reached)
-	{
+	if (_goal_reached) {
 		return;
 	}
 	// compute next state and get result value
+	OutputParameter<DynamicDOFs, EigenVector> previous_output = _output;
 	_result_value = _otg->update(_input, _output);
 
 	// if the goal is reached, either return if the current velocity is
@@ -139,9 +139,14 @@ void OTG_joints::update() {
 		return;
 	}
 
-	// if an error occurred, throw an exception
-	throw std::runtime_error(
-		"error in computing next state in OTG_joints::update.\n");
+	// if an error occurred, print a warning and keep the previous output
+	_output = previous_output;
+	std::cout << "WARNING: error in computing next state in "
+				 "OTG_joints::update. reinitializing current trajectory "
+				 "velocity and accelerations to 0. Error code: "
+			  << _result_value << "\n";
+	_input.current_velocity.setZero();
+	_input.current_acceleration.setZero();
 }
 
 } /* namespace Sai2Primitives */
