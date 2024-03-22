@@ -54,7 +54,7 @@ SingularityHandler::SingularityHandler(std::shared_ptr<Sai2Model::Sai2Model> rob
     _singularity_types.resize(0);
     _q_prior = _joint_midrange;
     _dq_prior = VectorXd::Zero(_robot->dof());
-    setGains(50, 14, 20);
+    setGains(50, 14, 5);
     _type_1_counter = 0;
     _type_2_counter = 0;
     _singular_task_force = VectorXd::Zero(6);
@@ -214,7 +214,7 @@ void SingularityHandler::updateTaskModel(const MatrixXd& projected_jacobian, con
 
 void SingularityHandler::classifySingularity(const MatrixXd& singular_task_range,
                                              const MatrixXd& singular_joint_task_range) {
-    // memory of entering conditions if previously not singular 
+    // memory of entering conditions 
     if (_singularity_types.size() == 0 || (_type_2_counter > _type_1_counter)) {
         _q_prior = _robot->q();
         _dq_prior = _robot->dq();
@@ -247,20 +247,18 @@ void SingularityHandler::classifySingularity(const MatrixXd& singular_task_range
         VectorXd delta_vector(6);
         delta_vector.head(3) = pos_delta;
         delta_vector.tail(3) = ori_delta;
-        double motion_along_singular_direction = std::abs(delta_vector.dot(singular_task_range.col(i)));     
-        std::cout << "Singularity motion along direction: " << motion_along_singular_direction << "\n";
+        double motion_along_singular_direction = std::abs(delta_vector.dot(singular_task_range.col(i)));
         if (motion_along_singular_direction > _type_1_tol) {
             _singularity_types[i] = TYPE_1_SINGULARITY;
         } else {
             _singularity_types[i] = TYPE_2_SINGULARITY;
-            // _singularity_types[i] = TYPE_1_SINGULARITY;
         }
             
         _robot->setQ(curr_q);
         _robot->updateKinematics();
     }
 
-    // add to buffer and counters
+    // add to buffer and counters (preference for handling type 1 over type 2 for multiple singularities)
     auto it = std::find(_singularity_types.begin(), _singularity_types.end(), TYPE_1_SINGULARITY);
     if (it != _singularity_types.end()) {
         int index = std::distance(_singularity_types.begin(), it);
@@ -321,10 +319,8 @@ VectorXd SingularityHandler::computeTorques(const VectorXd& unit_mass_force, con
             _nonsingular_task_force = _Lambda_ns_modified * _task_range_ns.transpose() * unit_mass_force;
         }
 
-        // handle type 1 singularities over type 2         
+        // handle singularity type based on which one has more coutns 
         if (_type_1_counter > _type_2_counter) {
-        // if (true) {
-        // if (false) {
             // joint holding to entering joint conditions  
             unit_torques = - _kp * (_robot->q() - _q_prior) - _kv * _robot->dq();  
             _joint_strategy_torques = _posture_projected_jacobian.transpose() * _Lambda_joint_s_modified * _joint_task_range_s.transpose() * unit_torques;
@@ -345,7 +341,7 @@ VectorXd SingularityHandler::computeTorques(const VectorXd& unit_mass_force, con
             }
             unit_torques = _type_2_direction.array() * magnitude_unit_torques.array(); 
             _joint_strategy_torques = _posture_projected_jacobian.transpose() * _joint_task_range_s.transpose() * unit_torques + \
-                                        _posture_projected_jacobian.transpose() * _Lambda_joint_s_modified * _joint_task_range_s.transpose() * (- _kv_type2 * _robot->dq());
+                                        _posture_projected_jacobian.transpose() * _Lambda_joint_s_modified * _joint_task_range_s.transpose() * (- _kv_type_2 * _robot->dq());
         }
         
         // combine non-singular torques and blended singular torques with joint strategy torques (add joint space damping in singular task force)

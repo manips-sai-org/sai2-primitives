@@ -78,7 +78,7 @@ struct SvdData {
     SvdData(const MatrixXd& U,
             const VectorXd& s,
             const MatrixXd& V) : 
-            U(U), s(s), V(V) { }
+            U(U), s(s), V(V) {}
 };
 
 const std::vector<std::string> singularity_labels {"No Singularity", "Type 1 Singularity", "Type 2 Singularity"};      
@@ -96,6 +96,8 @@ public:
      * @brief Construct a new Singularity Handler task
      * 
      * @param robot robot model from motion force task
+     * @param link_name control link of motion force task
+     * @param compliant_frame compliant frame of motion force task 
      * @param task_rank rank of the motion force task after partial task projection
      * @param s_abs_tol tolerance to declare task completely singular if all singular values from the projected
      * jacobian are under this value
@@ -103,6 +105,7 @@ public:
      * singular direction buffer for which a type 1 singularity is classified
      * @param type_2_torque_ratio percentage of the max joint torque to use for the type 2 singularity strategy
      * @param perturb_step_size the joint angle increment to classify singularity 
+     * @param buffer_size size of buffer to compare which singularity type has more counts 
      * @param verbose set to true to print singularity status every timestep 
      */
     SingularityHandler(std::shared_ptr<Sai2Model::Sai2Model> robot,
@@ -130,7 +133,6 @@ public:
      * \delta x is greater than the type 1 tolerance, otherwise type 2. Type 2 singularity will have a very
      * small \delta x norm.
      * 
-     * @param projected_jacobian Projected jacobian for task 
      * @param singular_task_range Singular task range corresponding to the columns of U from SVD
      * @param singular_joint_task_range Singular task range corresponding to the columns of V from SVD
      */
@@ -204,10 +206,10 @@ public:
      * @param kp position gain
      * @param kv velocity gain
      */
-    void setGains(const double& kp, const double& kv, const double& kv_type2) {
+    void setGains(const double& kp, const double& kv, const double& kv_type_2) {
         _kp = kp;
         _kv = kv;
-        _kv_type2 = kv_type2;
+        _kv_type_2 = kv_type_2;
     }
 
     /**
@@ -215,8 +217,12 @@ public:
      * 
      * @param ratio Ratio of the specific joint's max torque to use 
      */
-    void setTorqueRatio(const double& ratio) {
-        _type_2_torque_ratio = ratio;
+    void setClassificationParams(const double& perturb_step_size, 
+                                 const double& type_1_tol,
+                                 const double& type_2_torque_ratio = 1e-2) {
+        _perturb_step_size = perturb_step_size;
+        _type_1_tol = type_1_tol;
+        _type_2_torque_ratio = type_2_torque_ratio;
     }
 
     /**
@@ -225,9 +231,9 @@ public:
     SingularityHandlerData getData() {
         return SingularityHandlerData(_singularity_types,
                                       _alpha,
-                                      VectorXd(_task_range_s.col(0)),
+                                      _task_range_s,
                                       _svd_s,
-                                      VectorXd(_joint_task_range_s.col(0)),
+                                      _joint_task_range_s,
                                       _singular_task_force,
                                       _nonsingular_task_force,
                                       _singular_task_torques,
@@ -273,7 +279,7 @@ private:
     // type 2 specifications
     double _type_2_torque_ratio;  // use X% of the max joint torque 
     VectorXd _type_2_torque_vector;
-    double _kv_type2;
+    double _kv_type_2;
     VectorXd _type_2_direction;
     double _fTd;
 
