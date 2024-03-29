@@ -18,8 +18,8 @@ using namespace Eigen;
 using namespace Sai2Common::ChaiHapticDriverKeys;
 
 namespace {
-const string world_file = "./resources/world.urdf";
-const string robot_file = "./resources/panda_arm.urdf";
+const string world_file = "${EXAMPLE_16_FOLDER}/world.urdf";
+const string robot_file = "${EXAMPLE_16_FOLDER}/panda_arm.urdf";
 const string robot_name = "PANDA";
 const string link_name = "end-effector";
 
@@ -48,6 +48,8 @@ Vector3d sensed_moment = Vector3d::Zero();
 VectorXd robot_control_torques = Eigen::VectorXd::Zero(7);
 
 int main() {
+	Sai2Model::URDF_FOLDERS["EXAMPLE_16_FOLDER"] =
+		string(EXAMPLES_FOLDER) + "/16-haptic_control_admittance_type";
 	// set up signal handler
 	signal(SIGABRT, &sighandler);
 	signal(SIGTERM, &sighandler);

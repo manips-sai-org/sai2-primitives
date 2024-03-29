@@ -33,8 +33,8 @@ using namespace std;
 using namespace Eigen;
 
 // config file names and object names
-const string world_file = "resources/world.urdf";
-const string robot_file = "resources/puma.urdf";
+const string world_file = "${EXAMPLE_03_FOLDER}/world.urdf";
+const string robot_file = "${SAI2_MODEL_URDF_FOLDER}/puma/puma.urdf";
 const string robot_name = "PUMA";  // name in the workd file
 
 // simulation and control loop
@@ -55,7 +55,10 @@ mutex mmutex_torques;
  * and starts the control and simulation threads
  */
 int main(int argc, char** argv) {
-	cout << "Loading URDF world model file: " << world_file << endl;
+	Sai2Model::URDF_FOLDERS["EXAMPLE_03_FOLDER"] =
+		string(EXAMPLES_FOLDER) + "/03-cartesian_motion_control";
+	cout << "Loading URDF world model file: "
+		 << Sai2Model::ReplaceUrdfPathPrefix(world_file) << endl;
 
 	// set up signal handler
 	signal(SIGABRT, &sighandler);

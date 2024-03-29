@@ -18,8 +18,8 @@ using namespace Eigen;
 using namespace Sai2Common::ChaiHapticDriverKeys;
 
 namespace {
-const string world_file = "./resources/world.urdf";
-const string robot_file = "./resources/panda_arm.urdf";
+const string world_file = "${EXAMPLE_17_FOLDER}/world.urdf";
+const string robot_file = "${EXAMPLE_17_FOLDER}/panda_arm.urdf";
 const string robot_name = "PANDA";
 const string link_name = "end-effector";
 
@@ -45,6 +45,8 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim);
 VectorXd robot_control_torques = Eigen::VectorXd::Zero(7);
 
 int main() {
+	Sai2Model::URDF_FOLDERS["EXAMPLE_17_FOLDER"] =
+		string(EXAMPLES_FOLDER) + "/17-bilateral_teleop_with_POPC";
 	// set up signal handler
 	signal(SIGABRT, &sighandler);
 	signal(SIGTERM, &sighandler);
@@ -128,7 +130,8 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 
 	// instructions
 	cout
-		<< "\nexmaple of a motion-motion controller to control a simulated robot "
+		<< "\nexmaple of a motion-motion controller to control a simulated "
+		   "robot "
 		   "with a haptic device, using direct force feedback with POPC "
 		   "bilateral teleoperation to stabilize the contact force. The "
 		   "controller will first bring the haptic device to its home pose and "
