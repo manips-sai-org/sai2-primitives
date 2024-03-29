@@ -50,7 +50,7 @@ public:
 		static constexpr DynamicDecouplingType dynamic_decoupling_type =
 			DynamicDecouplingType::BOUNDED_INERTIA_ESTIMATES;
 		static constexpr double kp_pos = 100.0;
-		static constexpr double kv_pos = 14.0;
+		static constexpr double kv_pos = 20.0;
 		static constexpr double ki_pos = 0.0;
 		static constexpr double kp_ori = 200.0;
 		static constexpr double kv_ori = 28.3;
