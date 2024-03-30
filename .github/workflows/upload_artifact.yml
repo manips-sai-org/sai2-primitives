@@ -4,7 +4,7 @@ on:
   schedule:
     - cron: "0 0 1 * *"
   push:
-    branches: [ "master" ]
+    branches: ["master"]
   workflow_dispatch:
 
 jobs:
@@ -16,13 +16,13 @@ jobs:
 
       - name: build-repo
         uses: ./.github/actions/build-repo
-        with: 
+        with:
           token: ${{ secrets.SAI2_TOKEN }}
 
       - name: Archive Sai2-primitives Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: sai2-primitives-artifact
           path: |
             build/libsai2-primitives.a
-            libruckig.so
+            ruckig/build/libruckig.so
