@@ -20,7 +20,7 @@
 #include "Sai2Simulation.h"
 
 // sai2 utilities from sai2-common
-#include "Sai2Common.h"
+#include "timer/LoopTimer.h"
 
 // control tasks from sai2-primitives
 #include "tasks/JointTask.h"
