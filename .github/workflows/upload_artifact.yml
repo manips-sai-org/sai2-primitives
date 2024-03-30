@@ -19,10 +19,15 @@ jobs:
         with:
           token: ${{ secrets.SAI2_TOKEN }}
 
+      - name: Copy Libraries to Archive
+        run: |
+          cp build/libsai2-primitives.a ./libsai2-primitives.a
+          cp ruckig/build/libruckig.so ./libruckig.so
+
       - name: Archive Sai2-primitives Artifact
         uses: actions/upload-artifact@v4
         with:
           name: sai2-primitives-artifact
           path: |
-            build/libsai2-primitives.a
-            ruckig/build/libruckig.so
+            libsai2-primitives.a
+            libruckig.so
