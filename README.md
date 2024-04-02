@@ -23,10 +23,10 @@ The examples depend on additional libraries : sai2-simulation, sai2-graphics, sa
 ## Build instructions
 First build ruckig:
 ```
-cd third_party/ruckig
+cd ruckig
 mkdir build && cd build
 cmake .. && make -j4
-cd ../../..
+cd ../..
 ```
 Next, build sai2-primitives
 ```
