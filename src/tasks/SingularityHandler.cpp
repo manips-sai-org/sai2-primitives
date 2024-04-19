@@ -349,6 +349,10 @@ VectorXd SingularityHandler::computeTorques(const VectorXd& unit_mass_force, con
                                             _task_range_s.transpose() * force_related_terms;
         _singular_task_torques = _projected_jacobian_s.transpose() * _singular_task_force;
 
+        if (!_handling_flag) {
+            return tau_ns;
+        }
+
         for (int i = 0; i < _robot->dof(); ++i) {
             if (isnan(_singular_task_torques(i))) {
                 _singular_task_torques(i) = _singular_task_torques(i) > 0 ? _tau_upper(i) : _tau_lower(i);
@@ -358,13 +362,13 @@ VectorXd SingularityHandler::computeTorques(const VectorXd& unit_mass_force, con
                 _singular_task_torques(i) = _tau_lower(i);
             }
         }
-        VectorXd tau_s = pow(_alpha, 1) * _singular_task_torques + (1 - pow(_alpha, 1)) * _joint_strategy_torques;
+        _tau_s = pow(_alpha, 1) * _singular_task_torques + (1 - pow(_alpha, 1)) * _joint_strategy_torques;
         _original_torques = tau_ns + _singular_task_torques;
-        _blended_torques = tau_ns + tau_s;
+        _blended_torques = tau_ns + _tau_s;
         _nonsingular_torques = tau_ns;
-        _singular_torques = tau_s;
+        _singular_torques = _tau_s;
 
-        return tau_ns + tau_s;
+        return tau_ns + _tau_s;
     }
 }
 

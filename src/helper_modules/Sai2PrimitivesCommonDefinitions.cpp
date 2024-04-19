@@ -1,4 +1,5 @@
 #include "Sai2PrimitivesCommonDefinitions.h"
+#include <vector>
 
 using namespace Eigen;
 

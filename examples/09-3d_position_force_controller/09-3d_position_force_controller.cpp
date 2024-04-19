@@ -28,8 +28,9 @@ using namespace std;
 using namespace Eigen;
 
 // config file names and object names
-const string world_file = "resources/world.urdf";
-const string robot_file = "resources/panda_arm.urdf";
+const string world_file = "${EXAMPLE_09_FOLDER}/world.urdf";
+const string robot_file =
+	"${SAI2_MODEL_URDF_FOLDER}/panda/panda_arm_sphere.urdf";
 const string robot_name = "PANDA";
 
 // simulation and control loop
@@ -46,7 +47,10 @@ string link_name = "end-effector";
 mutex mutex_torques;
 
 int main(int argc, char** argv) {
-	cout << "Loading URDF world model file: " << world_file << endl;
+	Sai2Model::URDF_FOLDERS["EXAMPLE_09_FOLDER"] =
+		string(EXAMPLES_FOLDER) + "/09-3d_position_force_controller";
+	cout << "Loading URDF world model file: "
+		 << Sai2Model::ReplaceUrdfPathPrefix(world_file) << endl;
 
 	// set up signal handler
 	signal(SIGABRT, &sighandler);

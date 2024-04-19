@@ -3,7 +3,7 @@
 <world name="demo_world" gravity="0.0 0.0 0.0">
 
 	<robot name="RRRRBOT">
-		<model dir="./resources" path="rrrrbot.urdf" name="RRRRBot" />
+		<model dir="${EXAMPLE_11_FOLDER}" path="rrrrbot.urdf" name="RRRRBot" />
 		<origin xyz="0.0 0.0 0.0" rpy="0 0 0" />
 	</robot>
 

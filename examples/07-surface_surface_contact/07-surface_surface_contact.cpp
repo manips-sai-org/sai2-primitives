@@ -26,11 +26,11 @@ void sighandler(int) { fSimulationRunning = false; }
 using namespace std;
 using namespace Eigen;
 
-const string world_file = "resources/world.urdf";
-const string robot_file = "resources/panda_arm.urdf";
+const string world_file = "${EXAMPLE_07_FOLDER}/world.urdf";
+const string robot_file = "${SAI2_MODEL_URDF_FOLDER}/panda//panda_arm_box.urdf";
 const string robot_name = "PANDA";
 // need a second robot model for the plate
-const string plate_file = "resources/plate.urdf";
+const string plate_file = "${EXAMPLE_07_FOLDER}/plate.urdf";
 const string plate_name = "Plate";
 
 // global variables for sensed force and moment
@@ -58,7 +58,10 @@ void simulation(shared_ptr<Sai2Model::Sai2Model> robot,
 
 //------------ main function
 int main(int argc, char** argv) {
-	cout << "Loading URDF world model file: " << world_file << endl;
+	Sai2Model::URDF_FOLDERS["EXAMPLE_07_FOLDER"] =
+		string(EXAMPLES_FOLDER) + "/07-surface_surface_contact";
+	cout << "Loading URDF world model file: "
+		 << Sai2Model::ReplaceUrdfPathPrefix(world_file) << endl;
 
 	// set up signal handler
 	signal(SIGABRT, &sighandler);

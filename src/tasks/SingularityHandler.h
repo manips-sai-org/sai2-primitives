@@ -162,6 +162,10 @@ public:
         _dynamic_decoupling_type = type;
     }
 
+    void setOption(const bool opt) {
+        _handling_flag = opt;
+    }
+
     /**
      * @brief Get the nullspace of the singularity task
      * 
@@ -185,6 +189,18 @@ public:
      */
     Sai2Model::OpSpaceMatrices getNonSingularOpSpaceMatrices() {
         return Sai2Model::OpSpaceMatrices(_projected_jacobian_ns, _Lambda_ns, _Jbar_ns, _N_ns);
+    }
+
+    MatrixXd getNonSingularTaskRange() {
+        return _task_range_ns;
+    }
+
+    MatrixXd getSingularTaskRange() {
+        return _task_range_s;
+    }
+
+    VectorXd getSingularTorques() {
+        return _tau_s;
     }
 
     /**
@@ -262,6 +278,7 @@ private:
     int _task_rank;
     VectorXd _joint_midrange, _q_upper, _q_lower, _tau_upper, _tau_lower;
     bool _verbose;
+    bool _handling_flag;
 
     // singularity information
     std::vector<SingularityType> _singularity_types;
@@ -310,6 +327,7 @@ private:
     VectorXd _blended_torques;
     VectorXd _nonsingular_torques;
     VectorXd _singular_torques;
+    VectorXd _tau_s, _tau_ns;
 };
 
 }  // namespace

@@ -26,8 +26,9 @@ void sighandler(int) { fSimulationRunning = false; }
 using namespace std;
 using namespace Eigen;
 
-const string world_file = "resources/world.urdf";
-const string robot_file = "resources/panda_arm.urdf";
+const string world_file = "${EXAMPLE_04_FOLDER}/world.urdf";
+const string robot_file =
+	"${SAI2_MODEL_URDF_FOLDER}/panda/panda_arm_sphere.urdf";
 const string robot_name = "PANDA";
 
 // ui torques and control torques
@@ -45,7 +46,10 @@ void simulation(shared_ptr<Sai2Model::Sai2Model> robot,
 
 //------------ main function
 int main(int argc, char** argv) {
-	cout << "Loading URDF world model file: " << world_file << endl;
+	Sai2Model::URDF_FOLDERS["EXAMPLE_04_FOLDER"] =
+		string(EXAMPLES_FOLDER) + "/04-task_and_redundancy";
+	cout << "Loading URDF world model file: "
+		 << Sai2Model::ReplaceUrdfPathPrefix(world_file) << endl;
 
 	// set up signal handler
 	signal(SIGABRT, &sighandler);
@@ -160,11 +164,11 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 			AngleAxisd(angle_ori_traj, Vector3d::UnitY()).toRotationMatrix();
 
 		motion_force_task->setGoalOrientation(R.transpose() *
-												 initial_orientation);
+											  initial_orientation);
 		motion_force_task->setGoalAngularVelocity(ang_vel_traj *
-													 Vector3d::UnitY());
+												  Vector3d::UnitY());
 		motion_force_task->setGoalAngularAcceleration(ang_accel_traj *
-														 Vector3d::UnitY());
+													  Vector3d::UnitY());
 
 		// position: circle in the y-z plane
 		double radius_circle_pos = 0.05;
