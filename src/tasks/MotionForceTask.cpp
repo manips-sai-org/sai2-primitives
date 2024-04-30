@@ -168,8 +168,7 @@ void MotionForceTask::initialSetup() {
 		      													_link_name,
 																_compliant_frame,
 																_pos_range + _ori_range);
-	setSingularityBounds(3e-3, 3e-2);  // panda
-	// setSingularityBounds(5e-3, 1e-2);  // puma 
+	setSingularityBounds(6e-3, 6e-2); 
 	setDynamicDecouplingType(BOUNDED_INERTIA_ESTIMATES);
 
 	reInitializeTask();	
@@ -238,7 +237,7 @@ void MotionForceTask::updateTaskModel(const MatrixXd& N_prec) {
 	_projected_jacobian = _jacobian * _N_prec;
 
 	_singularity_handler->updateTaskModel(_projected_jacobian, _N_prec);
-	_N = _singularity_handler->getNullspace();  // N_posture * N_ns or N_ns 
+	_N = _singularity_handler->getNullspace();  
 
 }
 
@@ -456,7 +455,7 @@ VectorXd MotionForceTask::computeTorques() {
 	_linear_motion_control = position_related_force;
 
 	// compute torque through singularity handler 
-	task_joint_torques = _singularity_handler->computeTorques(_unit_mass_force, (force_moment_contribution + feedforward_force_moment));
+	task_joint_torques = _singularity_handler->computeTorques(_unit_mass_force, force_moment_contribution + feedforward_force_moment);
 
 	return task_joint_torques;
 }

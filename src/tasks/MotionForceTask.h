@@ -442,21 +442,6 @@ public:
 	bool goalOrientationReached(const double tolerance,
 								const bool verbose = false);
 
-	/**
-	 * @brief Set the Dynamic Decoupling Type. See the definition of the
-	 * DynamicDecouplingType enum for more details
-	 *
-	 *
-	 * @param type
-	 */
-	void setDynamicDecouplingType(const DynamicDecouplingType type) {
-		_singularity_handler->setDynamicDecouplingType(type);
-	}
-
-	SvdData getSingularitySvdData() {
-		return _singularity_handler->getSvdData();
-	}
-
 	// -------- force control related methods --------
 
 	/**
@@ -601,39 +586,49 @@ public:
 		return _partial_task_projection.block<3, 3>(3, 3);
 	}
 
+	// -------- singularity handling methods --------
+
 	/**
-	 * @brief	   Changes the bounds for the singularity blending.
-	 * 
-	 * @param s_min		Upper bound to start blending  
-	 * @param s_max 	Lower bound to remove all singular task torque 
+	 * @brief 	Set the Dynamic Decoupling Type. See the definition of the
+	 * DynamicDecouplingType enum for more details
+	 *
+	 * @param type Dynamic decoupling type 
 	 */
+	void setDynamicDecouplingType(const DynamicDecouplingType type) {
+		_singularity_handler->setDynamicDecouplingType(type);
+	}
+
+    /**
+     * @brief Enforces type 1 handling behavior if set to true, otherwise handle 
+     * type 1 or type 2 as usual
+     * 
+     * @param flag  true to enforce type 1 handling behavior 
+     */
+	void setType1Behavior(const bool flag) {
+		_singularity_handler->setType1Behavior(flag);
+	}
+
+    /**
+     * @brief Set the singularity bounds for torque blending based on the inverse of the condition number
+     * The linear blending coefficient \alpha is computed as \alpha = (s - _s_min) / (_s_max - _s_min),
+     * and is clamped between 0 and 1.
+     * 
+     * @param s_min lower bound
+     * @param s_max upper bound 
+     */
 	void setSingularityBounds(const double& s_min, const double& s_max) {
 		_singularity_handler->setSingularityBounds(s_min, s_max);
 	}
 
-	/**
-	 * @brief	   Changes the position and velocity gains for singularity joint strategy
-	 * 
-	 * @param kp   Position gain
-	 * @param kv   Damping gain 
-	*/
-	void setSingularityGains(const double& kp, const double& kv, const double& kv_type2) {
-		_singularity_handler->setGains(kp, kv, kv_type2);
-	}
-
-	/**
-	 * @brief	  Get singularity handler data 
-	*/
-	SingularityHandlerData getSingularityHandlerData() {
-		return _singularity_handler->getData();
-	}
-
-	MatrixXd getNonSingularLambda() {
-		return _singularity_handler->getNonSingularLambda();
-	}
-
-	MatrixXd getSingularLambda() {
-		return _singularity_handler->getSingularLambda();
+    /**
+     * @brief Set the gains for the partial joint task for the singularity strategy
+     * 
+     * @param kp_type_1 position gain for type 1 strategy
+     * @param kv_type_1 velocity damping gain for type 1 strategy
+     * @param kv_type_2 velocity damping gain for type 2 strategy
+     */
+	void setSingularityGains(const double& kp_type_1, const double& kv_type_1, const double& kv_type_2) {
+		_singularity_handler->setGains(kp_type_1, kv_type_1, kv_type_2);
 	}
 
 private:
