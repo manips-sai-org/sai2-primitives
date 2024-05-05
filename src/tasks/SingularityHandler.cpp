@@ -35,12 +35,13 @@ SingularityHandler::SingularityHandler(std::shared_ptr<Sai2Model::Sai2Model> rob
                                        _verbose(verbose)
 {
     // initialize limits 
-    _q_upper = VectorXd::Zero(_robot->dof());
-    _q_lower = VectorXd::Zero(_robot->dof());
-    _tau_upper = VectorXd::Zero(_robot->dof());
-    _tau_lower = VectorXd::Zero(_robot->dof());
-    _joint_midrange = VectorXd::Zero(_robot->dof());
-    _type_2_torque_vector = VectorXd::Zero(_robot->dof());
+    _dof = _robot->dof();
+    _q_upper = VectorXd::Zero(_dof);
+    _q_lower = VectorXd::Zero(_dof);
+    _tau_upper = VectorXd::Zero(_dof);
+    _tau_lower = VectorXd::Zero(_dof);
+    _joint_midrange = VectorXd::Zero(_dof);
+    _type_2_torque_vector = VectorXd::Zero(_dof);
     auto joint_limits = _robot->jointLimits();
     for (int i = 0; i < joint_limits.size(); ++i) {
         _q_upper(i) = joint_limits[i].position_upper;
@@ -54,18 +55,18 @@ SingularityHandler::SingularityHandler(std::shared_ptr<Sai2Model::Sai2Model> rob
     // initialize singularity handling variables 
     _singularity_types.resize(0);
     _q_prior = _joint_midrange;
-    _dq_prior = VectorXd::Zero(_robot->dof());
+    _dq_prior = VectorXd::Zero(_dof);
     setGains(50, 14, 5);
     _type_1_counter = 0;
     _type_2_counter = 0;
-    _type_2_direction = VectorXd::Ones(_robot->dof());
+    _type_2_direction = VectorXd::Ones(_dof);
     _enforce_type_1_strategy = false;
+    _enforce_joint_strategy = true;
 }
 
 void SingularityHandler::updateTaskModel(const MatrixXd& projected_jacobian, const MatrixXd& N_prec) {
     
     // task range decomposition
-    int dof = _robot->dof();
     JacobiSVD<MatrixXd> J_svd(projected_jacobian, ComputeThinU | ComputeThinV);
     _svd_U = J_svd.matrixU();
     _svd_s = J_svd.singularValues();
@@ -124,7 +125,7 @@ void SingularityHandler::updateTaskModel(const MatrixXd& projected_jacobian, con
 
                 // placeholder singular task range
                 _task_range_s = MatrixXd::Zero(_task_rank, 1);
-                _joint_task_range_s = MatrixXd::Zero(dof, 1);
+                _joint_task_range_s = MatrixXd::Zero(_dof, 1);
             }
         }
     }
@@ -132,6 +133,8 @@ void SingularityHandler::updateTaskModel(const MatrixXd& projected_jacobian, con
     // model updates 
     if (_task_range_s.norm() == 0) {
         _N = _N_ns;  
+    } else if (_task_range_ns.norm() == 0) {
+        _N = N_prec;  // if task is fully singular, then pass through the task 
     } else {
         _posture_projected_jacobian = _joint_task_range_s.transpose() * _N_ns * N_prec;
         Sai2Model::OpSpaceMatrices op_space_matrices =
@@ -201,7 +204,6 @@ void SingularityHandler::updateTaskModel(const MatrixXd& projected_jacobian, con
 	}
 
     classifySingularity(_task_range_s, _joint_task_range_s);
-
 }
 
 void SingularityHandler::classifySingularity(const MatrixXd& singular_task_range,
@@ -285,13 +287,18 @@ VectorXd SingularityHandler::computeTorques(const VectorXd& unit_mass_force, con
         return _projected_jacobian_ns.transpose() * (_Lambda_ns_modified * _task_range_ns.transpose() * unit_mass_force + \
                     _task_range_ns.transpose() * force_related_terms);
     } else {
-        VectorXd tau_ns = VectorXd::Zero(_robot->dof());
+        VectorXd tau_ns = VectorXd::Zero(_dof);
 
         // compute non-singular torques 
-        if (_task_range_ns.norm() != 0) {
+        if (_task_range_ns.norm() == 0) {
+            return tau_ns;
+        } else {
             tau_ns = _projected_jacobian_ns.transpose() * (_Lambda_ns_modified * _task_range_ns.transpose() * unit_mass_force + \
                         _task_range_ns.transpose() * force_related_terms);
-        }
+            if (!_enforce_joint_strategy) {
+                return tau_ns;
+            }
+        } 
 
         // handle singularity type based on which one has more counts  
         if (_type_1_counter > _type_2_counter || _enforce_type_1_strategy) {
@@ -318,10 +325,10 @@ VectorXd SingularityHandler::computeTorques(const VectorXd& unit_mass_force, con
                                         _posture_projected_jacobian.transpose() * _Lambda_joint_s_modified * \
                                         _joint_task_range_s.transpose() * (- _kv_type_2 * _robot->dq());
         }
-        
+
         // combine non-singular torques and blended singular torques with joint strategy torques
-        _singular_task_torques = _projected_jacobian_s.transpose() * _Lambda_s_modified * _task_range_s.transpose() * unit_mass_force + \
-                                            _task_range_s.transpose() * force_related_terms;
+        _singular_task_torques = _projected_jacobian_s.transpose() * (_Lambda_s_modified * _task_range_s.transpose() * unit_mass_force + \
+                                            _task_range_s.transpose() * force_related_terms);
 
         for (int i = 0; i < _robot->dof(); ++i) {
             if (isnan(_singular_task_torques(i))) {

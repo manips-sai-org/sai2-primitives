@@ -602,10 +602,19 @@ public:
      * @brief Enforces type 1 handling behavior if set to true, otherwise handle 
      * type 1 or type 2 as usual
      * 
-     * @param flag  true to enforce type 1 handling behavior 
+     * @param flag true to enforce type 1 handling behavior 
      */
 	void setType1Behavior(const bool flag) {
 		_singularity_handler->setType1Behavior(flag);
+	}
+
+	/**
+	 * @brief Enables or disables joint handling in singularity handler  
+	 * 
+	 * @param flag true to enforce joint handling behavior 
+	 */
+	void enableJointHandling(const bool flag) {
+		_singularity_handler->enableJointHandling(flag);
 	}
 
     /**

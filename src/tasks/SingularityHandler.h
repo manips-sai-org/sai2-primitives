@@ -145,7 +145,16 @@ public:
      * @param flag  true to enforce type 1 handling behavior 
      */
     void setType1Behavior(const bool flag) {
-        _enforce_type_1_strategy = true;
+        _enforce_type_1_strategy = flag;
+    }
+
+    /**
+     * @brief Enables or disables joint strategy 
+     * 
+     * @param flag true to enforce joint strategy 
+     */
+    void enableJointHandling(const bool flag) {
+        _enforce_joint_strategy = flag;
     }
 
 private:
@@ -155,8 +164,10 @@ private:
     std::string _link_name;
     Affine3d _compliant_frame;
     int _task_rank;
+    int _dof;
     VectorXd _joint_midrange, _q_upper, _q_lower, _tau_upper, _tau_lower;
     bool _enforce_type_1_strategy;
+    bool _enforce_joint_strategy;
     bool _verbose;
 
     // singularity information
