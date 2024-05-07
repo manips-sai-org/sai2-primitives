@@ -139,6 +139,7 @@ void JointTask::setGainsUnsafe(const VectorXd& kp, const VectorXd& kv,
 		_kp = kp(0) * MatrixXd::Identity(_task_dof, _task_dof);
 		_kv = kv(0) * MatrixXd::Identity(_task_dof, _task_dof);
 		_ki = ki(0) * MatrixXd::Identity(_task_dof, _task_dof);
+		return;
 	}
 
 	if (kp.size() != _task_dof || kv.size() != _task_dof ||

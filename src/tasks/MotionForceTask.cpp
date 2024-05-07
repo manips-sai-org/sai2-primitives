@@ -693,6 +693,7 @@ void MotionForceTask::setPosControlGainsUnsafe(const VectorXd& kp_pos,
 		_kp_pos = kp_pos(0) * Matrix3d::Identity();
 		_kv_pos = kv_pos(0) * Matrix3d::Identity();
 		_ki_pos = ki_pos(0) * Matrix3d::Identity();
+		return;
 	}
 	if(kp_pos.size() != 3 || kv_pos.size() != 3 || ki_pos.size() != 3) {
 		throw invalid_argument(
@@ -779,6 +780,7 @@ void MotionForceTask::setOriControlGainsUnsafe(const VectorXd& kp_ori,
 		_kp_ori = kp_ori(0) * Matrix3d::Identity();
 		_kv_ori = kv_ori(0) * Matrix3d::Identity();
 		_ki_ori = ki_ori(0) * Matrix3d::Identity();
+		return;
 	}
 	if (kp_ori.size() != 3 || kv_ori.size() != 3 || ki_ori.size() != 3) {
 		throw invalid_argument(
