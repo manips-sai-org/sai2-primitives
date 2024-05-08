@@ -13,6 +13,8 @@ enum DynamicDecouplingType {
 	IMPEDANCE,					// use Identity for the Mass matrix
 };
 
+const double BIE_SATURATION_VALUE = 0.1;
+
 struct PIDGains {
 	double kp;
 	double kv;

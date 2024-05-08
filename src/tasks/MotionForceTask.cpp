@@ -299,8 +299,8 @@ void MotionForceTask::updateTaskModel(const MatrixXd& N_prec) {
 		case BOUNDED_INERTIA_ESTIMATES: {
 			MatrixXd M_BIE = getConstRobotModel()->M();
 			for (int i = 0; i < getConstRobotModel()->dof(); i++) {
-				if (M_BIE(i, i) < 0.1) {
-					M_BIE(i, i) = 0.1;
+				if (M_BIE(i, i) < BIE_SATURATION_VALUE) {
+					M_BIE(i, i) = BIE_SATURATION_VALUE;
 				}
 			}
 			MatrixXd M_inv_BIE = M_BIE.inverse();
