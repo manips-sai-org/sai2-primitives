@@ -28,12 +28,19 @@ namespace Sai2Primitives {
 
 class JointTask : public TemplateTask {
 public:
-	enum DynamicDecouplingType {
-		FULL_DYNAMIC_DECOUPLING,	// use the real Mass matrix
-		BOUNDED_INERTIA_ESTIMATES,	// use a Mass matrix computed from
-									// saturating the minimal values of the Mass
-									// Matrix
-		IMPEDANCE,					// use Identity for the Mass matrix
+	struct DefaultParameters {
+		static constexpr double kp = 50.0;
+		static constexpr double kv = 14.0;
+		static constexpr double ki = 0.0;
+		static constexpr DynamicDecouplingType dynamic_decoupling_type =
+			DynamicDecouplingType::BOUNDED_INERTIA_ESTIMATES;
+		static constexpr bool use_internal_otg = true;
+		static constexpr bool internal_otg_jerk_limited = false;
+		static constexpr double otg_max_velocity = M_PI / 3.0;
+		static constexpr double otg_max_acceleration = 2.0 * M_PI;
+		static constexpr double otg_max_jerk = 10.0 * M_PI;
+		static constexpr bool use_velocity_saturation = false;
+		static constexpr double saturation_velocity = M_PI / 3.0;
 	};
 
 	/**
@@ -236,6 +243,9 @@ public:
 	 */
 	void setGains(const double kp, const double kv, const double ki = 0);
 
+	void setGainsUnsafe(const VectorXd& kp, const VectorXd& kv,
+						const VectorXd& ki);
+
 	vector<PIDGains> getGains() const;
 
 	/**
@@ -259,8 +269,8 @@ public:
 	void enableInternalOtgAccelerationLimited(const double max_velocity,
 											  const double max_acceleration) {
 		enableInternalOtgAccelerationLimited(
-			max_velocity * VectorXd::Ones(getConstRobotModel()->dof()),
-			max_acceleration * VectorXd::Ones(getConstRobotModel()->dof()));
+			max_velocity * VectorXd::Ones(_task_dof),
+			max_acceleration * VectorXd::Ones(_task_dof));
 	}
 
 	/**
@@ -288,9 +298,9 @@ public:
 									  const double max_acceleration,
 									  const double max_jerk) {
 		enableInternalOtgJerkLimited(
-			max_velocity * VectorXd::Ones(getConstRobotModel()->dof()),
-			max_acceleration * VectorXd::Ones(getConstRobotModel()->dof()),
-			max_jerk * VectorXd::Ones(getConstRobotModel()->dof()));
+			max_velocity * VectorXd::Ones(_task_dof),
+			max_acceleration * VectorXd::Ones(_task_dof),
+			max_jerk * VectorXd::Ones(_task_dof));
 	}
 
 	/**
@@ -318,10 +328,7 @@ public:
 	 *
 	 * @param[in]  saturation_velocity  The saturation velocity
 	 */
-	void enableVelocitySaturation(const double saturation_velocity) {
-		enableVelocitySaturation(saturation_velocity *
-								 VectorXd::Ones(getConstRobotModel()->dof()));
-	}
+	void enableVelocitySaturation(const double saturation_velocity);
 
 	/**
 	 * @brief      Disables the velocity saturation

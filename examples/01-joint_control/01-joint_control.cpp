@@ -39,8 +39,11 @@ using namespace Eigen;
 mutex mutex_torques;
 
 // config file names and object names
-const string world_file = "resources/world.urdf";
-const string robot_file = "resources/puma.urdf";
+// ${SAI2_MODEL_URDF_FOLDER} is always available to be replaced by the correct
+// path. in order for other prefixes to be valid, they myst be set in
+// Sai2Model::URDF_FOLDERS
+const string world_file = "${EXAMPLE_01_FOLDER}/world.urdf";
+const string robot_file = "${SAI2_MODEL_URDF_FOLDER}/puma/puma.urdf";
 const string robot_name = "PUMA";  // name in the world file
 
 // control and ui interaction torques
@@ -60,7 +63,14 @@ void simulation(shared_ptr<Sai2Model::Sai2Model> robot,
  * and starts the control and simulation threads
  */
 int main(int argc, char** argv) {
-	cout << "Loading URDF world model file: " << world_file << endl;
+	// add custom reference folders to the urdf parsing
+	// the EXAMPLES_FOLDER macro has been set in the CMakeLists file of the
+	// examples
+	Sai2Model::URDF_FOLDERS["EXAMPLE_01_FOLDER"] =
+		string(EXAMPLES_FOLDER) + "/01-joint_control";
+
+	cout << "Loading URDF world model file: "
+		 << Sai2Model::ReplaceUrdfPathPrefix(world_file) << endl;
 
 	// set up signal handler
 	signal(SIGABRT, &sighandler);

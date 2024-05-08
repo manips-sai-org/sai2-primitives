@@ -13,11 +13,6 @@ using namespace Eigen;
 
 namespace Sai2Primitives {
 
-namespace {
-const double MAX_FEEDBACK_FORCE_FORCE_CONTROLLER = 20.0;
-const double MAX_FEEDBACK_MOMENT_FORCE_CONTROLLER = 10.0;
-}  // namespace
-
 MotionForceTask::MotionForceTask(
 	std::shared_ptr<Sai2Model::Sai2Model>& robot, const string& link_name,
 	const Affine3d& compliant_frame, const std::string& task_name,
@@ -109,21 +104,35 @@ void MotionForceTask::initialSetup() {
 		_link_name, _compliant_frame.rotation());
 
 	// default values for gains and velocity saturation
-	setPosControlGains(50.0, 14.0, 0.0);
-	setOriControlGains(50.0, 14.0, 0.0);
-	setForceControlGains(0.7, 10.0, 1.3);
-	setMomentControlGains(0.7, 10.0, 1.3);
+	setPosControlGains(DefaultParameters::kp_pos, DefaultParameters::kv_pos,
+					   DefaultParameters::ki_pos);
+	setOriControlGains(DefaultParameters::kp_ori, DefaultParameters::kv_ori,
+					   DefaultParameters::ki_ori);
+	setForceControlGains(DefaultParameters::kp_force,
+						 DefaultParameters::kv_force,
+						 DefaultParameters::ki_force);
+	setMomentControlGains(DefaultParameters::kp_moment,
+						  DefaultParameters::kv_moment,
+						  DefaultParameters::ki_moment);
 
-	disableVelocitySaturation();
-	_linear_saturation_velocity = 0;
-	_angular_saturation_velocity = 0;
+	if(DefaultParameters::use_velocity_saturation) {
+		enableVelocitySaturation(DefaultParameters::linear_saturation_velocity,
+								 DefaultParameters::angular_saturation_velocity);
+	} else {
+		disableVelocitySaturation();
+	}
 
-	_k_ff = 0.95;
+	_kff_force = DefaultParameters::kff_force;
+	_kff_moment = DefaultParameters::kff_moment;
+	_max_force_control_feedback_output =
+		DefaultParameters::max_force_control_feedback_output;
+	_max_moment_control_feedback_output =
+		DefaultParameters::max_moment_control_feedback_output;
 
-	_force_space_dimension = 0;
-	_moment_space_dimension = 0;
-	setClosedLoopForceControl(false);
-	setClosedLoopMomentControl(false);
+	_force_space_dimension = DefaultParameters::force_space_dimension;
+	_moment_space_dimension = DefaultParameters::moment_space_dimension;
+	setClosedLoopForceControl(DefaultParameters::closed_loop_force_control);
+	setClosedLoopMomentControl(DefaultParameters::closed_loop_moment_control);
 
 	// initialize matrices sizes
 	_jacobian.setZero(6, dof);
@@ -161,7 +170,23 @@ void MotionForceTask::initialSetup() {
 	// trajectory generation
 	_otg = make_unique<OTG_6dof_cartesian>(
 		_current_position, _current_orientation, getLoopTimestep());
-	enableInternalOtgAccelerationLimited(0.3, 1.0, M_PI / 3, M_PI);
+	if(DefaultParameters::use_internal_otg) {
+		if(DefaultParameters::internal_otg_jerk_limited) {
+			enableInternalOtgJerkLimited(DefaultParameters::otg_max_linear_velocity,
+										 DefaultParameters::otg_max_linear_acceleration,
+										 DefaultParameters::otg_max_linear_jerk,
+										 DefaultParameters::otg_max_angular_velocity,
+										 DefaultParameters::otg_max_angular_acceleration,
+										 DefaultParameters::otg_max_angular_jerk);
+		} else {
+			enableInternalOtgAccelerationLimited(DefaultParameters::otg_max_linear_velocity,
+												 DefaultParameters::otg_max_linear_acceleration,
+												 DefaultParameters::otg_max_angular_velocity,
+												 DefaultParameters::otg_max_angular_acceleration);
+		}
+	} else {
+		disableInternalOtg();
+	}
 
 	// singularity handler
 	_singularity_handler = std::make_unique<SingularityHandler>(getConstRobotModel(), 
@@ -301,8 +326,8 @@ VectorXd MotionForceTask::computeTorques() {
 			sigma_force *
 			(-_kp_force * (_sensed_force_control_world_frame - goal_force) -
 			 _ki_force * _integrated_force_error);
-		if (force_feedback_term.norm() > MAX_FEEDBACK_FORCE_FORCE_CONTROLLER) {
-			force_feedback_term *= MAX_FEEDBACK_FORCE_FORCE_CONTROLLER /
+		if (force_feedback_term.norm() > _max_force_control_feedback_output) {
+			force_feedback_term *= _max_force_control_feedback_output /
 								   force_feedback_term.norm();
 		}
 
@@ -312,7 +337,7 @@ VectorXd MotionForceTask::computeTorques() {
 				sigma_force * goal_force,
 				sigma_force * _sensed_force_control_world_frame,
 				sigma_force * force_feedback_term,
-				sigma_force * _current_linear_velocity, _kv_force, _k_ff);
+				sigma_force * _current_linear_velocity, _kv_force, _kff_force);
 	} else	// open loop force control
 	{
 		force_feedback_related_force =
@@ -334,8 +359,8 @@ VectorXd MotionForceTask::computeTorques() {
 
 		// saturate the feedback term
 		if (moment_feedback_term.norm() >
-			MAX_FEEDBACK_MOMENT_FORCE_CONTROLLER) {
-			moment_feedback_term *= MAX_FEEDBACK_MOMENT_FORCE_CONTROLLER /
+			_max_moment_control_feedback_output) {
+			moment_feedback_term *= _max_moment_control_feedback_output /
 									moment_feedback_term.norm();
 		}
 
@@ -381,10 +406,11 @@ VectorXd MotionForceTask::computeTorques() {
 
 	// final contribution
 	if (_use_velocity_saturation_flag) {
+		const Matrix3d kv_pos_inv = Sai2Model::computePseudoInverse(_kv_pos);
 		_desired_linear_velocity =
-			-_kp_pos * _kv_pos.inverse() * sigma_position *
+			-_kp_pos * kv_pos_inv * sigma_position *
 				(_current_position - _desired_position) -
-			_ki_pos * _kv_pos.inverse() * _integrated_position_error;
+			_ki_pos * kv_pos_inv * _integrated_position_error;
 		if (_desired_linear_velocity.norm() > _linear_saturation_velocity) {
 			_desired_linear_velocity *=
 				_linear_saturation_velocity / _desired_linear_velocity.norm();
@@ -413,9 +439,10 @@ VectorXd MotionForceTask::computeTorques() {
 
 	// final contribution
 	if (_use_velocity_saturation_flag) {
+		const Matrix3d kv_ori_inv = Sai2Model::computePseudoInverse(_kv_ori);
 		_desired_angular_velocity =
-			-_kp_ori * _kv_ori.inverse() * step_orientation_error -
-			_ki_ori * _kv_ori.inverse() * _integrated_orientation_error;
+			-_kp_ori * kv_ori_inv * step_orientation_error -
+			_ki_ori * kv_ori_inv * _integrated_orientation_error;
 		if (_desired_angular_velocity.norm() > _angular_saturation_velocity) {
 			_desired_angular_velocity *=
 				_angular_saturation_velocity / _desired_angular_velocity.norm();
@@ -447,7 +474,8 @@ VectorXd MotionForceTask::computeTorques() {
 	feedforward_force_moment.tail(3) = sigma_moment * goal_moment;
 
 	if (_closed_loop_force_control) {
-		feedforward_force_moment *= _k_ff;
+		feedforward_force_moment.head(3) *= _kff_force;
+		feedforward_force_moment.tail(3) *= _kff_moment;
 	}
 
 	_linear_force_control =
@@ -463,14 +491,14 @@ VectorXd MotionForceTask::computeTorques() {
 void MotionForceTask::enableInternalOtgAccelerationLimited(
 	const double max_linear_velelocity, const double max_linear_acceleration,
 	const double max_angular_velocity, const double max_angular_acceleration) {
+	if (!_use_internal_otg_flag || _otg->getJerkLimitEnabled()) {
+		_otg->reInitialize(_current_position, _current_orientation);
+	}
 	_otg->setMaxLinearVelocity(max_linear_velelocity);
 	_otg->setMaxLinearAcceleration(max_linear_acceleration);
 	_otg->setMaxAngularVelocity(max_angular_velocity);
 	_otg->setMaxAngularAcceleration(max_angular_acceleration);
 	_otg->disableJerkLimits();
-	if (!_use_internal_otg_flag) {
-		_otg->reInitialize(_current_position, _current_orientation);
-	}
 	_use_internal_otg_flag = true;
 }
 
@@ -478,14 +506,14 @@ void MotionForceTask::enableInternalOtgJerkLimited(
 	const double max_linear_velelocity, const double max_linear_acceleration,
 	const double max_linear_jerk, const double max_angular_velocity,
 	const double max_angular_acceleration, const double max_angular_jerk) {
+	if (!_use_internal_otg_flag || !_otg->getJerkLimitEnabled()) {
+		_otg->reInitialize(_current_position, _current_orientation);
+	}
 	_otg->setMaxLinearVelocity(max_linear_velelocity);
 	_otg->setMaxLinearAcceleration(max_linear_acceleration);
 	_otg->setMaxAngularVelocity(max_angular_velocity);
 	_otg->setMaxAngularAcceleration(max_angular_acceleration);
 	_otg->setMaxJerk(max_linear_jerk, max_angular_jerk);
-	if (!_use_internal_otg_flag) {
-		_otg->reInitialize(_current_position, _current_orientation);
-	}
 	_use_internal_otg_flag = true;
 }
 
@@ -537,35 +565,16 @@ void MotionForceTask::setPosControlGains(double kp_pos, double kv_pos,
 			"all gains should be positive or zero in "
 			"MotionForceTask::setPosControlGains\n");
 	}
-	if (kv_pos < 1e-2 && _use_velocity_saturation_flag) {
-		throw invalid_argument(
-			"cannot have kv_pos = 0 if using velocity saturation in "
-			"MotionForceTask::setPosControlGains\n");
-	}
+	// TODO: print warning if kv_pos is too small
+	// if (kv_pos < 1e-2 && _use_velocity_saturation_flag) {
+	// 	throw invalid_argument(
+	// 		"cannot have kv_pos = 0 if using velocity saturation in "
+	// 		"MotionForceTask::setPosControlGains\n");
+	// }
 	_are_pos_gains_isotropic = true;
 	_kp_pos = kp_pos * Matrix3d::Identity();
 	_kv_pos = kv_pos * Matrix3d::Identity();
 	_ki_pos = ki_pos * Matrix3d::Identity();
-}
-
-void MotionForceTask::setPosControlGains(const Vector3d& kp_pos,
-										 const Vector3d& kv_pos,
-										 const Vector3d& ki_pos) {
-	if (kp_pos.minCoeff() < 0 || kv_pos.minCoeff() < 0 ||
-		ki_pos.minCoeff() < 0) {
-		throw invalid_argument(
-			"all gains should be positive or zero in "
-			"MotionForceTask::setPosControlGains\n");
-	}
-	if (kv_pos.minCoeff() < 1e-2 && _use_velocity_saturation_flag) {
-		throw invalid_argument(
-			"cannot have kv_pos = 0 if using velocity saturation in "
-			"MotionForceTask::setPosControlGains\n");
-	}
-	_are_pos_gains_isotropic = false;
-	_kp_pos = kp_pos.asDiagonal();
-	_kv_pos = kv_pos.asDiagonal();
-	_ki_pos = ki_pos.asDiagonal();
 }
 
 void MotionForceTask::setPosControlGains(const VectorXd& kp_pos,
@@ -575,13 +584,48 @@ void MotionForceTask::setPosControlGains(const VectorXd& kp_pos,
 		setPosControlGains(kp_pos(0), kv_pos(0), ki_pos(0));
 		return;
 	}
-	if (kp_pos.size() == 3 && kv_pos.size() == 3 && ki_pos.size() == 3) {
-		setPosControlGains(kp_pos, kv_pos, ki_pos);
+	if (kp_pos.size() != 3 || kv_pos.size() != 3 || ki_pos.size() != 3) {
+		throw invalid_argument(
+			"kp_pos, kv_pos and ki_pos should be of size 1 or 3 in "
+			"MotionForceTask::setPosControlGains\n");
+	}
+	if (kp_pos.minCoeff() < 0 || kv_pos.minCoeff() < 0 ||
+		ki_pos.minCoeff() < 0) {
+		throw invalid_argument(
+			"all gains should be positive or zero in "
+			"MotionForceTask::setPosControlGains\n");
+	}
+	// TODO: print warning if kv_pos is too small
+	// if (kv_pos.minCoeff() < 1e-2 && _use_velocity_saturation_flag) {
+	// 	throw invalid_argument(
+	// 		"cannot have kv_pos = 0 if using velocity saturation in "
+	// 		"MotionForceTask::setPosControlGains\n");
+	// }
+	_are_pos_gains_isotropic = false;
+	_kp_pos = kp_pos.asDiagonal();
+	_kv_pos = kv_pos.asDiagonal();
+	_ki_pos = ki_pos.asDiagonal();
+}
+
+void MotionForceTask::setPosControlGainsUnsafe(const VectorXd& kp_pos,
+										 const VectorXd& kv_pos,
+										 const VectorXd& ki_pos) {
+	if (kp_pos.size() == 1 && kv_pos.size() == 1 && ki_pos.size() == 1) {
+		_are_pos_gains_isotropic = true;
+		_kp_pos = kp_pos(0) * Matrix3d::Identity();
+		_kv_pos = kv_pos(0) * Matrix3d::Identity();
+		_ki_pos = ki_pos(0) * Matrix3d::Identity();
 		return;
 	}
-	throw invalid_argument(
-		"kp_pos, kv_pos and ki_pos should be of size 1 or 3 in "
-		"MotionForceTask::setPosControlGains\n");
+	if(kp_pos.size() != 3 || kv_pos.size() != 3 || ki_pos.size() != 3) {
+		throw invalid_argument(
+			"kp_pos, kv_pos and ki_pos should be of size 1 or 3 in "
+			"MotionForceTask::setPosControlGainsUnsafe\n");
+	}
+	_are_pos_gains_isotropic = false;
+	_kp_pos = kp_pos.asDiagonal();
+	_kv_pos = kv_pos.asDiagonal();
+	_ki_pos = ki_pos.asDiagonal();	
 }
 
 vector<PIDGains> MotionForceTask::getPosControlGains() const {
@@ -608,35 +652,16 @@ void MotionForceTask::setOriControlGains(double kp_ori, double kv_ori,
 			"all gains should be positive or zero in "
 			"MotionForceTask::setOriControlGains\n");
 	}
-	if (kv_ori < 1e-2 && _use_velocity_saturation_flag) {
-		throw invalid_argument(
-			"cannot have kv_ori = 0 if using velocity saturation in "
-			"MotionForceTask::setOriControlGains\n");
-	}
+	// TODO: print warning if kv_ori is too small
+	// if (kv_ori < 1e-2 && _use_velocity_saturation_flag) {
+	// 	throw invalid_argument(
+	// 		"cannot have kv_ori = 0 if using velocity saturation in "
+	// 		"MotionForceTask::setOriControlGains\n");
+	// }
 	_are_ori_gains_isotropic = true;
 	_kp_ori = kp_ori * Matrix3d::Identity();
 	_kv_ori = kv_ori * Matrix3d::Identity();
 	_ki_ori = ki_ori * Matrix3d::Identity();
-}
-
-void MotionForceTask::setOriControlGains(const Vector3d& kp_ori,
-										 const Vector3d& kv_ori,
-										 const Vector3d& ki_ori) {
-	if (kp_ori.minCoeff() < 0 || kv_ori.minCoeff() < 0 ||
-		ki_ori.minCoeff() < 0) {
-		throw invalid_argument(
-			"all gains should be positive or zero in "
-			"MotionForceTask::setOriControlGains\n");
-	}
-	if (kv_ori.minCoeff() < 1e-2 && _use_velocity_saturation_flag) {
-		throw invalid_argument(
-			"cannot have kv_ori = 0 if using velocity saturation in "
-			"MotionForceTask::setOriControlGains\n");
-	}
-	_are_ori_gains_isotropic = false;
-	_kp_ori = kp_ori.asDiagonal();
-	_kv_ori = kv_ori.asDiagonal();
-	_ki_ori = ki_ori.asDiagonal();
 }
 
 void MotionForceTask::setOriControlGains(const VectorXd& kp_ori,
@@ -646,13 +671,48 @@ void MotionForceTask::setOriControlGains(const VectorXd& kp_ori,
 		setOriControlGains(kp_ori(0), kv_ori(0), ki_ori(0));
 		return;
 	}
-	if (kp_ori.size() == 3 && kv_ori.size() == 3 && ki_ori.size() == 3) {
-		setOriControlGains(kp_ori, kv_ori, ki_ori);
+	if (kp_ori.size() != 3 || kv_ori.size() != 3 || ki_ori.size() != 3) {
+		throw invalid_argument(
+			"kp_ori, kv_ori and ki_ori should be of size 1 or 3 in "
+			"MotionForceTask::setOriControlGains\n");
+	}
+	if (kp_ori.minCoeff() < 0 || kv_ori.minCoeff() < 0 ||
+		ki_ori.minCoeff() < 0) {
+		throw invalid_argument(
+			"all gains should be positive or zero in "
+			"MotionForceTask::setOriControlGains\n");
+	}
+	// TODO: print warning if kv_ori is too small
+	// if (kv_ori.minCoeff() < 1e-2 && _use_velocity_saturation_flag) {
+	// 	throw invalid_argument(
+	// 		"cannot have kv_ori = 0 if using velocity saturation in "
+	// 		"MotionForceTask::setOriControlGains\n");
+	// }
+	_are_ori_gains_isotropic = false;
+	_kp_ori = kp_ori.asDiagonal();
+	_kv_ori = kv_ori.asDiagonal();
+	_ki_ori = ki_ori.asDiagonal();
+}
+
+void MotionForceTask::setOriControlGainsUnsafe(const VectorXd& kp_ori,
+										 const VectorXd& kv_ori,
+										 const VectorXd& ki_ori) {
+	if (kp_ori.size() == 1 && kv_ori.size() == 1 && ki_ori.size() == 1) {
+		_are_ori_gains_isotropic = true;
+		_kp_ori = kp_ori(0) * Matrix3d::Identity();
+		_kv_ori = kv_ori(0) * Matrix3d::Identity();
+		_ki_ori = ki_ori(0) * Matrix3d::Identity();
 		return;
 	}
-	throw invalid_argument(
-		"kp_ori, kv_ori and ki_ori should be of size 1 or 3 in "
-		"MotionForceTask::setOriControlGains\n");
+	if (kp_ori.size() != 3 || kv_ori.size() != 3 || ki_ori.size() != 3) {
+		throw invalid_argument(
+			"kp_ori, kv_ori and ki_ori should be of size 1 or 3 in "
+			"MotionForceTask::setOriControlGains\n");
+	}
+	_are_ori_gains_isotropic = false;
+	_kp_ori = kp_ori.asDiagonal();
+	_kv_ori = kv_ori.asDiagonal();
+	_ki_ori = ki_ori.asDiagonal();
 }
 
 vector<PIDGains> MotionForceTask::getOriControlGains() const {
@@ -695,16 +755,17 @@ void MotionForceTask::enableVelocitySaturation(const double linear_vel_sat,
 			"Velocity saturation values should be strictly positive or zero in "
 			"MotionForceTask::enableVelocitySaturation\n");
 	}
-	if (_kv_pos.determinant() < 1e-3) {
-		throw invalid_argument(
-			"Cannot enable velocity saturation if kv_pos is singular in "
-			"MotionForceTask::enableVelocitySaturation\n");
-	}
-	if (_kv_ori.determinant() < 1e-3) {
-		throw invalid_argument(
-			"Cannot enable velocity saturation if kv_ori is singular in "
-			"MotionForceTask::enableVelocitySaturation\n");
-	}
+	// TODO: print warning if kv_pos or kv_ori is too small
+	// if (_kv_pos.determinant() < 1e-3) {
+	// 	throw invalid_argument(
+	// 		"Cannot enable velocity saturation if kv_pos is singular in "
+	// 		"MotionForceTask::enableVelocitySaturation\n");
+	// }
+	// if (_kv_ori.determinant() < 1e-3) {
+	// 	throw invalid_argument(
+	// 		"Cannot enable velocity saturation if kv_ori is singular in "
+	// 		"MotionForceTask::enableVelocitySaturation\n");
+	// }
 	_use_velocity_saturation_flag = true;
 	_linear_saturation_velocity = linear_vel_sat;
 	_angular_saturation_velocity = angular_vel_sat;

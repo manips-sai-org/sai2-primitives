@@ -92,6 +92,23 @@ public:
 			  max_gripper_force(max_force_torque(2)) {}
 	};
 
+	struct DefaultParameters {
+		static constexpr HapticControlType haptic_control_type = CLUTCH;
+		static constexpr bool scaling_factor_pos = 1.0;
+		static constexpr bool scaling_factor_ori = 1.0;
+		static constexpr double homing_max_linvel = 0.15;
+		static constexpr double homing_max_angvel = M_PI;
+		static constexpr double reduction_factor_force = 1.0;
+		static constexpr double reduction_factor_moment = 1.0;
+		static constexpr double device_force_to_robot_delta_position = 3e-5;
+		static constexpr double device_moment_to_robot_delta_orientation =
+			M_PI / 2000.0;
+		static constexpr double force_deadband = 2.0;
+		static constexpr double moment_deadband = 0.02;
+		static constexpr double device_workspace_radius_limit = 0.1;
+		static constexpr double device_workspace_angle_limit = M_PI / 3.0;
+	};
+
 	////////////////////////////////////////////////////////////////////////////////////////////////////
 	//// Constructor, Destructor and Initialization of the haptic controllers
 	////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -591,7 +608,8 @@ public:
 
 	/**
 	 * @brief Set the Force Deadband for force-motion controller. This is the
-	 * minimum force required to start making the robot position change. the default is 0.
+	 * minimum force required to start making the robot position change. the
+	 * default is 2.0.
 	 *
 	 * @param force_deadband
 	 */
@@ -599,7 +617,8 @@ public:
 
 	/**
 	 * @brief Set the Moment Deadband for force-motion controller. This is the
-	 * minimum moment required to start making the robot orientation change. the default is 0.
+	 * minimum moment required to start making the robot orientation change. the
+	 * default is 0.02.
 	 *
 	 * @param force_deadband
 	 */

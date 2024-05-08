@@ -37,6 +37,43 @@ namespace Sai2Primitives {
 
 class MotionForceTask : public TemplateTask {
 public:
+
+	struct DefaultParameters {
+		static constexpr DynamicDecouplingType dynamic_decoupling_type =
+			DynamicDecouplingType::BOUNDED_INERTIA_ESTIMATES;
+		static constexpr double kp_pos = 100.0;
+		static constexpr double kv_pos = 20.0;
+		static constexpr double ki_pos = 0.0;
+		static constexpr double kp_ori = 200.0;
+		static constexpr double kv_ori = 28.3;
+		static constexpr double ki_ori = 0.0;
+		static constexpr double kp_force = 0.7;
+		static constexpr double kv_force = 10.0;
+		static constexpr double ki_force = 1.3;
+		static constexpr double kp_moment = 0.7;
+		static constexpr double kv_moment = 10.0;
+		static constexpr double ki_moment = 1.3;
+		static constexpr double kff_force = 0.95;
+		static constexpr double kff_moment = 0.95;
+		static constexpr double max_force_control_feedback_output = 20.0;
+		static constexpr double max_moment_control_feedback_output = 10.0;
+		static constexpr bool closed_loop_force_control = false;
+		static constexpr bool closed_loop_moment_control = false;
+		static constexpr int force_space_dimension = 0;
+		static constexpr int moment_space_dimension = 0;
+		static constexpr bool use_velocity_saturation = false;
+		static constexpr double linear_saturation_velocity = 0.3;
+		static constexpr double angular_saturation_velocity = M_PI / 3;
+		static constexpr bool use_internal_otg = true;
+		static constexpr double otg_max_linear_velocity = 0.3;
+		static constexpr double otg_max_linear_acceleration = 2.0;
+		static constexpr double otg_max_angular_velocity = M_PI / 3;
+		static constexpr double otg_max_angular_acceleration = 2.0 * M_PI;
+		static constexpr bool internal_otg_jerk_limited = false;
+		static constexpr double otg_max_linear_jerk = 10.0;
+		static constexpr double otg_max_angular_jerk = 10.0 * M_PI;
+	};
+
 	//------------------------------------------------
 	// Constructor
 	//------------------------------------------------
@@ -236,8 +273,6 @@ public:
 		setPosControlGains(gains.kp, gains.kv, gains.ki);
 	}
 	void setPosControlGains(double kp_pos, double kv_pos, double ki_pos = 0);
-	void setPosControlGains(const Vector3d& kp_pos, const Vector3d& kv_pos,
-							const Vector3d& ki_pos = Vector3d::Zero());
 	void setPosControlGains(const VectorXd& kp_pos, const VectorXd& kv_pos,
 							const VectorXd& ki_pos);
 	void setPosControlGains(const VectorXd& kp_pos, const VectorXd& kv_pos) {
@@ -245,18 +280,24 @@ public:
 	}
 	vector<PIDGains> getPosControlGains() const;
 
+	void setPosControlGainsUnsafe(const VectorXd& kp_pos,
+								  const VectorXd& kv_pos,
+								  const VectorXd& ki_pos);
+
 	void setOriControlGains(const PIDGains& gains) {
 		setOriControlGains(gains.kp, gains.kv, gains.ki);
 	}
 	void setOriControlGains(double kp_ori, double kv_ori, double ki_ori = 0);
-	void setOriControlGains(const Vector3d& kp_ori, const Vector3d& kv_ori,
-							const Vector3d& ki_ori = Vector3d::Zero());
 	void setOriControlGains(const VectorXd& kp_ori, const VectorXd& kv_ori,
 							const VectorXd& ki_ori);
 	void setOriControlGains(const VectorXd& kp_ori, const VectorXd& kv_ori) {
 		setOriControlGains(kp_ori, kv_ori, VectorXd::Zero(kp_ori.size()));
 	}
 	vector<PIDGains> getOriControlGains() const;
+
+	void setOriControlGainsUnsafe(const VectorXd& kp_ori,
+								  const VectorXd& kv_ori,
+								  const VectorXd& ki_ori);
 
 	void setForceControlGains(const PIDGains& gains) {
 		setForceControlGains(gains.kp, gains.kv, gains.ki);
@@ -284,6 +325,33 @@ public:
 	vector<PIDGains> getMomentControlGains() const {
 		return vector<PIDGains>(
 			1, PIDGains(_kp_moment(0, 0), _kv_moment(0, 0), _ki_moment(0, 0)));
+	}
+
+	void setFeedforwardForceGain(const double kff_force) {
+		_kff_force = kff_force;
+	}
+	double getFeedforwardForceGain() const { return _kff_force; }
+
+	void setFeedforwardmomentGain(const double kff_moment) {
+		_kff_moment = kff_moment;
+	}
+	double getFeedforwardmomentGain() const { return _kff_moment; }
+
+	void setMaxForceControlFeedbackOutput(
+		const double max_force_control_feedback_output) {
+		_max_force_control_feedback_output = max_force_control_feedback_output;
+	}
+	double getMaxForceControlFeedbackOutput() const {
+		return _max_force_control_feedback_output;
+	}
+
+	void setMaxMomentControlFeedbackOutput(
+		const double max_moment_control_feedback_output) {
+		_max_moment_control_feedback_output =
+			max_moment_control_feedback_output;
+	}
+	double getMaxMomentControlFeedbackOutput() const {
+		return _max_moment_control_feedback_output;
 	}
 
 	/**
@@ -747,7 +815,10 @@ private:
 
 	bool _closed_loop_force_control;
 	bool _closed_loop_moment_control;
-	double _k_ff;
+	double _kff_force;
+	double _kff_moment;
+	double _max_force_control_feedback_output;
+	double _max_moment_control_feedback_output;
 
 	// POPC for closed loop force control
 	std::unique_ptr<POPCExplicitForceControl> _POPC_force;

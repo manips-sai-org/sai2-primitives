@@ -48,14 +48,17 @@ JointTask::JointTask(std::shared_ptr<Sai2Model::Sai2Model>& robot,
 void JointTask::initialSetup() {
 	const int robot_dof = getConstRobotModel()->dof();
 	_task_dof = _joint_selection.rows();
-	setDynamicDecouplingType(BOUNDED_INERTIA_ESTIMATES);
+	setDynamicDecouplingType(DefaultParameters::dynamic_decoupling_type);
+	_current_position = _joint_selection * getConstRobotModel()->q();
 
 	// default values for gains and velocity saturation
-	_are_gains_isotropic = true;
-	setGains(50.0, 14.0, 0.0);
+	setGains(DefaultParameters::kp, DefaultParameters::kv, DefaultParameters::ki);
 
-	_use_velocity_saturation_flag = false;
-	_saturation_velocity = VectorXd::Zero(_task_dof);
+	if(DefaultParameters::use_velocity_saturation) {
+		enableVelocitySaturation(DefaultParameters::saturation_velocity);
+	} else {
+		disableVelocitySaturation();
+	}
 
 	// initialize matrices sizes
 	_N_prec = MatrixXd::Identity(robot_dof, robot_dof);
@@ -65,12 +68,21 @@ void JointTask::initialSetup() {
 	_N = MatrixXd::Zero(robot_dof, robot_dof);
 	_current_task_range = MatrixXd::Identity(_task_dof, _task_dof);
 
-	_use_internal_otg_flag = true;
+	// initialize internal otg
 	_otg = make_shared<OTG_joints>(_joint_selection * getConstRobotModel()->q(),
 								   getLoopTimestep());
-	_otg->setMaxVelocity(M_PI / 3);
-	_otg->setMaxAcceleration(M_PI);
-	_otg->disableJerkLimits();
+	if(DefaultParameters::use_internal_otg) {
+		if(DefaultParameters::internal_otg_jerk_limited) {
+			enableInternalOtgJerkLimited(DefaultParameters::otg_max_velocity,
+										 DefaultParameters::otg_max_acceleration,
+										 DefaultParameters::otg_max_jerk);
+		} else {
+			enableInternalOtgAccelerationLimited(DefaultParameters::otg_max_velocity,
+												 DefaultParameters::otg_max_acceleration);
+		}
+	} else {
+		disableInternalOtg();
+	}
 
 	reInitializeTask();
 }
@@ -120,6 +132,28 @@ void JointTask::setGoalAcceleration(const VectorXd& goal_acceleration) {
 	_goal_acceleration = goal_acceleration;
 }
 
+void JointTask::setGainsUnsafe(const VectorXd& kp, const VectorXd& kv,
+						 const VectorXd& ki) {
+	if (kp.size() == 1 && kv.size() == 1 && ki.size() == 1) {
+		_are_gains_isotropic = true;
+		_kp = kp(0) * MatrixXd::Identity(_task_dof, _task_dof);
+		_kv = kv(0) * MatrixXd::Identity(_task_dof, _task_dof);
+		_ki = ki(0) * MatrixXd::Identity(_task_dof, _task_dof);
+		return;
+	}
+
+	if (kp.size() != _task_dof || kv.size() != _task_dof ||
+		ki.size() != _task_dof) {
+		throw std::invalid_argument(
+			"size of gain vectors inconsistent with number of task dofs in "
+			"JointTask::setGains\n");
+	}
+	_are_gains_isotropic = false;
+	_kp = kp.asDiagonal();
+	_kv = kv.asDiagonal();
+	_ki = ki.asDiagonal();
+}
+
 void JointTask::setGains(const VectorXd& kp, const VectorXd& kv,
 						 const VectorXd& ki) {
 	if (kp.size() == 1 && kv.size() == 1 && ki.size() == 1) {
@@ -138,11 +172,12 @@ void JointTask::setGains(const VectorXd& kp, const VectorXd& kv,
 			"gains must be positive or zero in "
 			"JointTask::setGains\n");
 	}
-	if (kv.maxCoeff() < 1e-3 && _use_velocity_saturation_flag) {
-		throw std::invalid_argument(
-			"cannot set singular kv if using velocity saturation in "
-			"JointTask::setGains\n");
-	}
+	// TODO: print warning if kv is too small
+	// if (kv.maxCoeff() < 1e-3 && _use_velocity_saturation_flag) {
+	// 	throw std::invalid_argument(
+	// 		"cannot set singular kv if using velocity saturation in "
+	// 		"JointTask::setGains\n");
+	// }
 
 	_are_gains_isotropic = false;
 	_kp = kp.asDiagonal();
@@ -155,11 +190,12 @@ void JointTask::setGains(const double kp, const double kv, const double ki) {
 		throw std::invalid_argument(
 			"gains must be positive or zero in JointTask::setGains\n");
 	}
-	if (kv < 1e-3 && _use_velocity_saturation_flag) {
-		throw std::invalid_argument(
-			"cannot set singular kv if using velocity saturation in "
-			"JointTask::setGains\n");
-	}
+	// TODO: print warning if kv is too small
+	// if (kv < 1e-3 && _use_velocity_saturation_flag) {
+	// 	throw std::invalid_argument(
+	// 		"cannot set singular kv if using velocity saturation in "
+	// 		"JointTask::setGains\n");
+	// }
 
 	_are_gains_isotropic = true;
 	_kp = kp * MatrixXd::Identity(_task_dof, _task_dof);
@@ -222,8 +258,8 @@ void JointTask::updateTaskModel(const MatrixXd& N_prec) {
 		case BOUNDED_INERTIA_ESTIMATES: {
 			MatrixXd M_BIE = getConstRobotModel()->M();
 			for (int i = 0; i < getConstRobotModel()->dof(); i++) {
-				if (M_BIE(i, i) < 0.1) {
-					M_BIE(i, i) = 0.1;
+				if (M_BIE(i, i) < BIE_SATURATION_VALUE) {
+					M_BIE(i, i) = BIE_SATURATION_VALUE;
 				}
 			}
 			if (_is_partial_joint_task) {
@@ -289,9 +325,10 @@ VectorXd JointTask::computeTorques() {
 
 	// compute task force (with velocity saturation if asked)
 	if (_use_velocity_saturation_flag) {
+		const MatrixXd kv_inverse = Sai2Model::computePseudoInverse(_kv);
 		_desired_velocity =
-			-_kp * _kv.inverse() * (_current_position - _desired_position) -
-			_ki * _kv.inverse() * _integrated_position_error;
+			-_kp * kv_inverse * (_current_position - _desired_position) -
+			_ki * kv_inverse * _integrated_position_error;
 		for (int i = 0; i < getConstRobotModel()->dof(); i++) {
 			if (_desired_velocity(i) > _saturation_velocity(i)) {
 				_desired_velocity(i) = _saturation_velocity(i);
@@ -333,12 +370,12 @@ void JointTask::enableInternalOtgAccelerationLimited(
 			"max velocity or max acceleration vector size not consistent with "
 			"task dof in JointTask::enableInternalOtgAccelerationLimited\n");
 	}
+	if (!_use_internal_otg_flag || _otg->getJerkLimitEnabled()) {
+		_otg->reInitialize(_current_position);
+	}
 	_otg->setMaxVelocity(max_velocity);
 	_otg->setMaxAcceleration(max_acceleration);
 	_otg->disableJerkLimits();
-	if (!_use_internal_otg_flag) {
-		_otg->reInitialize(_current_position);
-	}
 	_use_internal_otg_flag = true;
 }
 
@@ -358,13 +395,23 @@ void JointTask::enableInternalOtgJerkLimited(const VectorXd& max_velocity,
 			"consistent with task dof in "
 			"JointTask::enableInternalOtgJerkLimited\n");
 	}
+	if (!_use_internal_otg_flag || !_otg->getJerkLimitEnabled()) {
+		_otg->reInitialize(_current_position);
+	}
 	_otg->setMaxVelocity(max_velocity);
 	_otg->setMaxAcceleration(max_acceleration);
 	_otg->setMaxJerk(max_jerk);
-	if (!_use_internal_otg_flag) {
-		_otg->reInitialize(_current_position);
-	}
 	_use_internal_otg_flag = true;
+}
+
+void JointTask::enableVelocitySaturation(const double saturation_velocity) {
+	if (saturation_velocity <= 0) {
+		throw std::invalid_argument(
+			"saturation velocity must be positive in "
+			"JointTask::enableVelocitySaturation\n");
+	}
+	_use_velocity_saturation_flag = true;
+	_saturation_velocity = VectorXd::Constant(_task_dof, saturation_velocity);
 }
 
 void JointTask::enableVelocitySaturation(const VectorXd& saturation_velocity) {
@@ -375,6 +422,11 @@ void JointTask::enableVelocitySaturation(const VectorXd& saturation_velocity) {
 	if (saturation_velocity.size() != _task_dof) {
 		throw std::invalid_argument(
 			"saturation velocity vector size not consistent with task dof in "
+			"JointTask::enableVelocitySaturation\n");
+	}
+	if (saturation_velocity.minCoeff() <= 0) {
+		throw std::invalid_argument(
+			"saturation velocity must be positive in "
 			"JointTask::enableVelocitySaturation\n");
 	}
 	_use_velocity_saturation_flag = true;

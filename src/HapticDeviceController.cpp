@@ -32,8 +32,7 @@ AngleAxisd orientationDiffAngleAxis(const Matrix3d& goal_orientation,
 		current_orientation * goal_orientation.transpose());
 
 	return AngleAxisd(
-		scaling_factor *
-			current_orientation_from_goal_orientation_aa.angle(),
+		scaling_factor * current_orientation_from_goal_orientation_aa.angle(),
 		current_orientation_from_goal_orientation_aa.axis());
 }
 
@@ -90,12 +89,11 @@ HapticDeviceController::HapticDeviceController(
 
 	// Initialize homing task
 	_device_homed = false;
-
-	_haptic_control_type = HapticControlType::CLUTCH;
+	_haptic_control_type = DefaultParameters::haptic_control_type;
 
 	// Initialize scaling factors (can be set through setScalingFactors())
-	_scaling_factor_pos = 1.0;
-	_scaling_factor_ori = 1.0;
+	_scaling_factor_pos = DefaultParameters::scaling_factor_pos;
+	_scaling_factor_ori = DefaultParameters::scaling_factor_ori;
 
 	// Initialize position controller parameters
 	_kp_haptic_pos = 0.5 * _device_limits.max_linear_stiffness;
@@ -109,16 +107,18 @@ HapticDeviceController::HapticDeviceController(
 		_kv_haptic_ori = 0.5 * _device_limits.max_angular_damping;
 	}
 
-	_homing_max_linvel = 0.15;
-	_homing_max_angvel = M_PI;
+	_homing_max_linvel = DefaultParameters::homing_max_linvel;
+	_homing_max_angvel = DefaultParameters::homing_max_angvel;
 
-	_reduction_factor_force = 1.0;
-	_reduction_factor_moment = 1.0;
+	_reduction_factor_force = DefaultParameters::reduction_factor_force;
+	_reduction_factor_moment = DefaultParameters::reduction_factor_moment;
 
-	_device_force_to_robot_delta_position = 3e-5;
-	_device_moment_to_robot_delta_orientation = M_PI / 2000.0;
-	_force_deadband = 0.0;
-	_moment_deadband = 0.0;
+	_device_force_to_robot_delta_position =
+		DefaultParameters::device_force_to_robot_delta_position;
+	_device_moment_to_robot_delta_orientation =
+		DefaultParameters::device_moment_to_robot_delta_orientation;
+	_force_deadband = DefaultParameters::force_deadband;
+	_moment_deadband = DefaultParameters::moment_deadband;
 
 	// Initialiaze force feedback space
 	_sigma_proxy_force_feedback.setZero();
@@ -140,8 +140,10 @@ HapticDeviceController::HapticDeviceController(
 	_line_origin_point = _device_home_pose.translation();
 	_line_direction = Vector3d::UnitZ();
 
-	_device_workspace_radius_limit = 0.1;
-	_device_workspace_angle_limit = M_PI / 3.0;
+	_device_workspace_radius_limit =
+		DefaultParameters::device_workspace_radius_limit;
+	_device_workspace_angle_limit =
+		DefaultParameters::device_workspace_angle_limit;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

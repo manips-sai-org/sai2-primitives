@@ -35,6 +35,8 @@ RobotController::RobotController(std::shared_ptr<Sai2Model::Sai2Model>& robot,
 	}
 	_redundancy_completion_task = std::make_shared<JointTask>(
 		_robot, REDUNDANCY_COMPLETION_TASK_NAME, _tasks[0]->getLoopTimestep());
+	_redundancy_completion_task->disableInternalOtg();
+	_redundancy_completion_task->disableVelocitySaturation();
 	_task_names.push_back(REDUNDANCY_COMPLETION_TASK_NAME);
 }
 

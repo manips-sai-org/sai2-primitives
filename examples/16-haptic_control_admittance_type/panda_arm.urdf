@@ -9,7 +9,7 @@
 		</inertial>
 		<visual>
 			<geometry>
-				<mesh filename="../../../../examples/models/panda/meshes/visual/link0.obj"/>
+				<mesh filename="${SAI2_MODEL_URDF_FOLDER}/panda/meshes/visual/link0.obj"/>
 			</geometry>
 		</visual>
 	</link>
@@ -21,7 +21,7 @@
 		</inertial>
 		<visual>
 			<geometry>
-				<mesh filename="../../../../examples/models/panda/meshes/visual/link1.obj"/>
+				<mesh filename="${SAI2_MODEL_URDF_FOLDER}/panda/meshes/visual/link1.obj"/>
 			</geometry>
 		</visual>
 	</link>
@@ -33,7 +33,7 @@
 		</inertial>
 		<visual>
 			<geometry>
-				<mesh filename="../../../../examples/models/panda/meshes/visual/link2.obj"/>
+				<mesh filename="${SAI2_MODEL_URDF_FOLDER}/panda/meshes/visual/link2.obj"/>
 			</geometry>
 		</visual>
 	</link>
@@ -45,7 +45,7 @@
 		</inertial>
 		<visual>
 			<geometry>
-				<mesh filename="../../../../examples/models/panda/meshes/visual/link3.obj"/>
+				<mesh filename="${SAI2_MODEL_URDF_FOLDER}/panda/meshes/visual/link3.obj"/>
 			</geometry>
 		</visual>
 	</link>
@@ -57,7 +57,7 @@
 		</inertial>
 		<visual>
 			<geometry>
-				<mesh filename="../../../../examples/models/panda/meshes/visual/link4.obj"/>
+				<mesh filename="${SAI2_MODEL_URDF_FOLDER}/panda/meshes/visual/link4.obj"/>
 			</geometry>
 		</visual>
 	</link>
@@ -69,7 +69,7 @@
 		</inertial>
 		<visual>
 			<geometry>
-				<mesh filename="../../../../examples/models/panda/meshes/visual/link5.obj"/>
+				<mesh filename="${SAI2_MODEL_URDF_FOLDER}/panda/meshes/visual/link5.obj"/>
 			</geometry>
 		</visual>
 	</link>
@@ -81,7 +81,7 @@
 		</inertial>
 		<visual>
 			<geometry>
-				<mesh filename="../../../../examples/models/panda/meshes/visual/link6.obj"/>
+				<mesh filename="${SAI2_MODEL_URDF_FOLDER}/panda/meshes/visual/link6.obj"/>
 			</geometry>
 		</visual>
 	</link>
@@ -93,7 +93,7 @@
 		</inertial>
 		<visual>
 			<geometry>
-				<mesh filename="../../../../examples/models/panda/meshes/visual/link7.obj"/>
+				<mesh filename="${SAI2_MODEL_URDF_FOLDER}/panda/meshes/visual/link7.obj"/>
 			</geometry>
 		</visual>
 	</link>
