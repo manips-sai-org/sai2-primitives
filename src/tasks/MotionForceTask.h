@@ -36,15 +36,6 @@ namespace Sai2Primitives {
 
 class MotionForceTask : public TemplateTask {
 public:
-	enum DynamicDecouplingType {
-		FULL_DYNAMIC_DECOUPLING,	 // use the real Lambda matrix
-		PARTIAL_DYNAMIC_DECOUPLING,	 // Use Lambda for position part, Identity
-									 // for orientation and Zero for cross
-									 // coupling
-		IMPEDANCE,					 // use Identity for the mass matrix
-		BOUNDED_INERTIA_ESTIMATES,	 // Use a Lambda computed from a saturated
-									 // joint space mass matrix
-	};
 
 	struct DefaultParameters {
 		static constexpr DynamicDecouplingType dynamic_decoupling_type =

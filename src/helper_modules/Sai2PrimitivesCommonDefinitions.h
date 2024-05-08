@@ -5,6 +5,14 @@
 
 namespace Sai2Primitives {
 
+enum DynamicDecouplingType {
+	FULL_DYNAMIC_DECOUPLING,	// use the real Mass matrix
+	BOUNDED_INERTIA_ESTIMATES,	// use a Mass matrix computed from
+								// saturating the minimal values of the Mass
+								// Matrix
+	IMPEDANCE,					// use Identity for the Mass matrix
+};
+
 struct PIDGains {
 	double kp;
 	double kv;

@@ -28,20 +28,12 @@ namespace Sai2Primitives {
 
 class JointTask : public TemplateTask {
 public:
-	enum DynamicDecouplingType {
-		FULL_DYNAMIC_DECOUPLING,	// use the real Mass matrix
-		BOUNDED_INERTIA_ESTIMATES,	// use a Mass matrix computed from
-									// saturating the minimal values of the Mass
-									// Matrix
-		IMPEDANCE,					// use Identity for the Mass matrix
-	};
-
 	struct DefaultParameters {
 		static constexpr double kp = 50.0;
 		static constexpr double kv = 14.0;
 		static constexpr double ki = 0.0;
 		static constexpr DynamicDecouplingType dynamic_decoupling_type =
-			BOUNDED_INERTIA_ESTIMATES;
+			DynamicDecouplingType::BOUNDED_INERTIA_ESTIMATES;
 		static constexpr bool use_internal_otg = true;
 		static constexpr bool internal_otg_jerk_limited = false;
 		static constexpr double otg_max_velocity = M_PI / 3.0;

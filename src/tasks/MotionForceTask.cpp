@@ -290,25 +290,6 @@ void MotionForceTask::updateTaskModel(const MatrixXd& N_prec) {
 			break;
 		}
 
-		case PARTIAL_DYNAMIC_DECOUPLING: {
-			_Lambda_modified = _Lambda;
-			if (_ori_range > 0) {
-				_Lambda_modified.block(_pos_range, _pos_range, _ori_range,
-									   _ori_range) =
-					MatrixXd::Identity(_ori_range, _ori_range);
-				if (_pos_range > 0) {
-					_Lambda_modified.block(0, _pos_range, _pos_range,
-										   _ori_range) =
-						MatrixXd::Zero(_pos_range, _ori_range);
-					_Lambda_modified.block(_pos_range, 0, _ori_range,
-										   _pos_range) =
-						MatrixXd::Zero(_ori_range, _pos_range);
-				}
-			}
-
-			break;
-		}
-
 		case IMPEDANCE: {
 			_Lambda_modified = MatrixXd::Identity(_pos_range + _ori_range,
 												  _pos_range + _ori_range);
