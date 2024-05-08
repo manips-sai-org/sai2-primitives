@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.10)
 project(SAI2-PRIMITIVES)
 set(PROJECT_VERSION 0.1.0)
 
-set(CMAKE_CXX_FLAGS "-std=c++17 -I/usr/include -I/usr/local/include -fPIC")
+set(CMAKE_CXX_FLAGS "-std=c++17 -I/usr/include -I/usr/local/include -fPIC -O3")
 if(${CMAKE_SYSTEM_NAME} MATCHES Darwin)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I/opt/homebrew/include")
 endif()

@@ -149,6 +149,15 @@ public:
     }
 
     /**
+     * @brief Set the Type1 posture 
+     * 
+     * @param q_des Desired posture 
+     */
+    void setType1Posture(const VectorXd& q_des) {
+        _q_prior = q_des;
+    }
+
+    /**
      * @brief Enables or disables joint strategy 
      * 
      * @param flag true to enforce joint strategy 

@@ -607,6 +607,15 @@ public:
 	void setType1Behavior(const bool flag) {
 		_singularity_handler->setType1Behavior(flag);
 	}
+	
+	/**
+	 * @brief Set the Type1 posture 
+	 * 
+	 * @param q_des desired posture 
+	 */
+	void setType1Posture(const VectorXd& q_des) {
+		_singularity_handler->setType1Posture(q_des);
+	}
 
 	/**
 	 * @brief Enables or disables joint handling in singularity handler  

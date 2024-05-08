@@ -126,6 +126,7 @@ void SingularityHandler::updateTaskModel(const MatrixXd& projected_jacobian, con
                 // placeholder singular task range
                 _task_range_s = MatrixXd::Zero(_task_rank, 1);
                 _joint_task_range_s = MatrixXd::Zero(_dof, 1);
+                _projected_jacobian_s = MatrixXd::Zero(_task_rank, _dof);
             }
         }
     }
@@ -143,64 +144,69 @@ void SingularityHandler::updateTaskModel(const MatrixXd& projected_jacobian, con
         _N = op_space_matrices.N * _N_ns; 
     }
 
-    switch (_dynamic_decoupling_type) {
-		case FULL_DYNAMIC_DECOUPLING: {
-			_Lambda_ns_modified = _Lambda_ns;
-			_Lambda_s_modified = _Lambda_s;
-            _Lambda_joint_s_modified = _Lambda_joint_s;
-			break;
-		}
+    if (_task_range_ns.norm() != 0) {
+        switch (_dynamic_decoupling_type) {
+            case FULL_DYNAMIC_DECOUPLING: {
+                _Lambda_ns_modified = _Lambda_ns;
+                _Lambda_s_modified = _Lambda_s;
+                _Lambda_joint_s_modified = _Lambda_joint_s;
+                break;
+            }
 
-		case IMPEDANCE: {
-			_Lambda_ns_modified.setIdentity();
-			_Lambda_s_modified.setIdentity();
-            _Lambda_joint_s_modified.setIdentity();
-			break;
-		}
+            case IMPEDANCE: {
+                _Lambda_ns_modified.setIdentity();
+                _Lambda_s_modified.setIdentity();
+                _Lambda_joint_s_modified.setIdentity();
+                break;
+            }
 
-		case BOUNDED_INERTIA_ESTIMATES: {
-			MatrixXd M_BIE = _robot->M();
-			for (int i = 0; i < _robot->dof(); i++) {
-				if (M_BIE(i, i) < 0.1) {
-					M_BIE(i, i) = 0.1;
-				}
-			}
-			MatrixXd M_inv_BIE = M_BIE.inverse();
+            case BOUNDED_INERTIA_ESTIMATES: {
+                MatrixXd M_BIE = _robot->M();
+                for (int i = 0; i < _robot->dof(); i++) {
+                    if (M_BIE(i, i) < 0.1) {
+                        M_BIE(i, i) = 0.1;
+                    }
+                }
+                MatrixXd M_inv_BIE = M_BIE.inverse();
 
-			// non-singular lambda
-			MatrixXd Lambda_inv_BIE =
-				_projected_jacobian_ns *
-				M_inv_BIE * 
-				_projected_jacobian_ns.transpose();
-			_Lambda_ns_modified = Lambda_inv_BIE.inverse();
+                // non-singular lambda
+                MatrixXd Lambda_inv_BIE =
+                    _projected_jacobian_ns *
+                    M_inv_BIE * 
+                    _projected_jacobian_ns.transpose();
+                _Lambda_ns_modified = Lambda_inv_BIE.inverse();
 
-			// singular lambda
-			if (_task_range_s.norm() != 0) {
-				Lambda_inv_BIE =
-					_projected_jacobian_s *
-					M_inv_BIE * 
-					_projected_jacobian_s.transpose();
-                _Lambda_s_modified = Lambda_inv_BIE.inverse();
-			} else {
-				_Lambda_s_modified = _Lambda_s;
-			}
+                // singular lambda
+                if (_task_range_s.norm() != 0) {
+                    Lambda_inv_BIE =
+                        _projected_jacobian_s *
+                        M_inv_BIE * 
+                        _projected_jacobian_s.transpose();
+                    _Lambda_s_modified = Lambda_inv_BIE.inverse();
+                } else {
+                    _Lambda_s_modified = _Lambda_s;
+                }
 
-            // joint strategy lambda 
-            if (_task_range_s.norm() != 0) {
-                Lambda_inv_BIE = _posture_projected_jacobian * 
-                                 M_inv_BIE * 
-                                 _posture_projected_jacobian.transpose();
-                _Lambda_joint_s_modified = Lambda_inv_BIE.inverse();
-            } 
-			break;
-		}
+                // joint strategy lambda 
+                if (_task_range_s.norm() != 0) {
+                    Lambda_inv_BIE = 
+                        _posture_projected_jacobian * 
+                        M_inv_BIE * 
+                        _posture_projected_jacobian.transpose();
+                    _Lambda_joint_s_modified = Lambda_inv_BIE.inverse();
+                } else {
+                    _Lambda_joint_s_modified = _Lambda_joint_s;
+                }
+                break;
+            }
 
-		default: {
-			_Lambda_s_modified = _Lambda_s;
-			_Lambda_ns_modified = _Lambda_ns;
-            _Lambda_joint_s_modified = _Lambda_joint_s;
-			break;
-		}
+            default: {
+                _Lambda_s_modified = _Lambda_s;
+                _Lambda_ns_modified = _Lambda_ns;
+                _Lambda_joint_s_modified = _Lambda_joint_s;
+                break;
+            }
+        }
 	}
 
     classifySingularity(_task_range_s, _joint_task_range_s);
@@ -291,7 +297,7 @@ VectorXd SingularityHandler::computeTorques(const VectorXd& unit_mass_force, con
 
         // compute non-singular torques 
         if (_task_range_ns.norm() == 0) {
-            return tau_ns;
+            return tau_ns;  // pass through task if fully singular 
         } else {
             tau_ns = _projected_jacobian_ns.transpose() * (_Lambda_ns_modified * _task_range_ns.transpose() * unit_mass_force + \
                         _task_range_ns.transpose() * force_related_terms);
@@ -330,7 +336,7 @@ VectorXd SingularityHandler::computeTorques(const VectorXd& unit_mass_force, con
         _singular_task_torques = _projected_jacobian_s.transpose() * (_Lambda_s_modified * _task_range_s.transpose() * unit_mass_force + \
                                             _task_range_s.transpose() * force_related_terms);
 
-        for (int i = 0; i < _robot->dof(); ++i) {
+        for (int i = 0; i < _dof; ++i) {
             if (isnan(_singular_task_torques(i))) {
                 _singular_task_torques(i) = 0;  
             } else if (_singular_task_torques(i) > _tau_upper(i)) {
