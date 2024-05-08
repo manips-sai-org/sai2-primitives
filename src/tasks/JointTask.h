@@ -344,18 +344,6 @@ public:
 		_dynamic_decoupling_type = type;
 	}
 
-	/**
-	 * @brief	   Returns whether current position is near goal position 
-	*/
-	bool goalPositionReached(const double& tol = 1e-2);
-
-	/**
-	 * @brief	Reset integrator error  
-	*/
-	void resetIntegrators() {
-		_integrated_position_error.setZero();
-	}
-
 	//-----------------------------------------------
 	//         Member variables
 	//-----------------------------------------------

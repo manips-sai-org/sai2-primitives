@@ -36,7 +36,3 @@
 **/build/
 .vscode/
 
-# Unrelated files
-*.py 
-*.csv
-

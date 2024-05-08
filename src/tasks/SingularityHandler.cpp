@@ -1,15 +1,22 @@
-/**
- * @file SingularityHandler.cpp
- * @author William Chong (wmchong@stnaford.edu)
- * @brief 
- * @version 0.1
- * @date 2024-01-13
- * 
- * @copyright Copyright (c) 2024
- * 
+/*
+ * SingularityHandler.cpp
+ *
+ *      Author: William Chong 
  */
 
 #include "SingularityHandler.h"
+
+namespace {
+    double S_ABS_TOL = 1e-3;
+    double TYPE_1_TOL = 0.5;
+    double TYPE_2_TORQUE_RATIO = 1e-2;
+    double TYPE_2_ANGLE_THRESHOLD = 5 * M_PI / 180;
+    double PERTURB_STEP_SIZE = 5;
+    double BUFFER_SIZE = 200;
+    double KP_TYPE_1 = 50;
+    double KV_TYPE_1 = 14;
+    double KV_TYPE_2 = 5;
+}
 
 namespace Sai2Primitives {
 
@@ -17,21 +24,11 @@ SingularityHandler::SingularityHandler(std::shared_ptr<Sai2Model::Sai2Model> rob
                                        const std::string& link_name,
                                        const Affine3d& compliant_frame,
                                        const int& task_rank,
-                                       const double& s_abs_tol,
-                                       const double& type_1_tol,
-                                       const double& type_2_torque_ratio,
-                                       const double& perturb_step_size,
-                                       const int& buffer_size,
                                        const bool& verbose) : 
                                        _robot(robot),
                                        _link_name(link_name),
                                        _compliant_frame(compliant_frame),
                                        _task_rank(task_rank),
-                                       _s_abs_tol(s_abs_tol), 
-                                       _type_1_tol(type_1_tol), 
-                                       _type_2_torque_ratio(type_2_torque_ratio), 
-                                       _perturb_step_size(perturb_step_size),
-                                       _buffer_size(buffer_size),
                                        _verbose(verbose)
 {
     // initialize limits 
@@ -56,12 +53,20 @@ SingularityHandler::SingularityHandler(std::shared_ptr<Sai2Model::Sai2Model> rob
     _singularity_types.resize(0);
     _q_prior = _joint_midrange;
     _dq_prior = VectorXd::Zero(_dof);
-    setGains(50, 14, 5);
+    setGains(KP_TYPE_1, KV_TYPE_1, KV_TYPE_2);
     _type_1_counter = 0;
     _type_2_counter = 0;
     _type_2_direction = VectorXd::Ones(_dof);
     _enforce_type_1_strategy = false;
-    _enforce_joint_strategy = true;
+    _enforce_handling_strategy = true;
+
+    // initialize singularity handling classification variables
+    _s_abs_tol = S_ABS_TOL;
+    _type_1_tol = TYPE_1_TOL; 
+    _type_2_torque_ratio = TYPE_2_TORQUE_RATIO;
+    _type_2_angle_threshold = TYPE_2_ANGLE_THRESHOLD;
+    _perturb_step_size = PERTURB_STEP_SIZE;
+    _buffer_size = BUFFER_SIZE;
 }
 
 void SingularityHandler::updateTaskModel(const MatrixXd& projected_jacobian, const MatrixXd& N_prec) {
@@ -132,7 +137,7 @@ void SingularityHandler::updateTaskModel(const MatrixXd& projected_jacobian, con
     }
 
     // model updates 
-    if (_task_range_s.norm() == 0) {
+    if (_task_range_s.norm() == 0 || _enforce_handling_strategy) {
         _N = _N_ns;  
     } else if (_task_range_ns.norm() == 0) {
         _N = N_prec;  // if task is fully singular, then pass through the task 
@@ -301,7 +306,7 @@ VectorXd SingularityHandler::computeTorques(const VectorXd& unit_mass_force, con
         } else {
             tau_ns = _projected_jacobian_ns.transpose() * (_Lambda_ns_modified * _task_range_ns.transpose() * unit_mass_force + \
                         _task_range_ns.transpose() * force_related_terms);
-            if (!_enforce_joint_strategy) {
+            if (!_enforce_handling_strategy) {
                 return tau_ns;
             }
         } 
@@ -317,14 +322,14 @@ VectorXd SingularityHandler::computeTorques(const VectorXd& unit_mass_force, con
             // the direction is reversed if the joint is approaching a joint limit 
             for (int i = 0; i < _joint_task_range_s.rows(); ++i) {
                 if (_joint_task_range_s(i, 0) != 0) {
-                    if (std::abs(_robot->q()(i) - _q_upper(i)) < 5 * M_PI / 180) {
+                    if (std::abs(_robot->q()(i) - _q_upper(i)) < _type_2_angle_threshold) {
                         _type_2_direction(i) = - 1;
-                    } else if (std::abs(_robot->q()(i) - _q_lower(i)) < 5 * M_PI / 180) {
+                    } else if (std::abs(_robot->q()(i) - _q_lower(i)) < _type_2_angle_threshold) {
                         _type_2_direction(i) = 1;
                     } 
                 }
             }
-            double fTd = ((unit_mass_force.normalized() + force_related_terms.normalized()).normalized()).dot(_task_range_s.col(0));
+            double fTd = ((unit_mass_force + force_related_terms).normalized()).dot(_task_range_s.col(0));
             VectorXd magnitude_unit_torques = std::abs(fTd) * _type_2_torque_vector;
             VectorXd unit_torques = _type_2_direction.array() * magnitude_unit_torques.array(); 
             _joint_strategy_torques = _posture_projected_jacobian.transpose() * _joint_task_range_s.transpose() * unit_torques + \

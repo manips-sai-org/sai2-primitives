@@ -604,8 +604,8 @@ public:
      * 
      * @param flag true to enforce type 1 handling behavior 
      */
-	void setType1Behavior(const bool flag) {
-		_singularity_handler->setType1Behavior(flag);
+	void handleAllSingularitiesAsType1(const bool flag) {
+		_singularity_handler->handleAllSingularitiesAsType1(flag);
 	}
 	
 	/**
@@ -618,12 +618,12 @@ public:
 	}
 
 	/**
-	 * @brief Enables or disables joint handling in singularity handler  
+	 * @brief Enables or disables singularity handling in singularity handler  
 	 * 
-	 * @param flag true to enforce joint handling behavior 
+	 * @param flag true to enable singularity handling; the behavior is just task truncation 
 	 */
-	void enableJointHandling(const bool flag) {
-		_singularity_handler->enableJointHandling(flag);
+	void enablSingularityHandling(const bool flag) {
+		_singularity_handler->enableSingularityHandling(flag);
 	}
 
     /**
