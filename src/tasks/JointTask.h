@@ -351,6 +351,18 @@ public:
 		_dynamic_decoupling_type = type;
 	}
 
+	/**
+	 * @brief	   Returns whether current position is within a tolerance to the goal
+	*/
+	bool goalPositionReached(const double& tol = 1e-2);
+
+	/**
+	 * @brief	Reset integrator error  
+	*/
+	void resetIntegrators() {
+		_integrated_position_error.setZero();
+	}
+
 	//-----------------------------------------------
 	//         Member variables
 	//-----------------------------------------------

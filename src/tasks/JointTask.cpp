@@ -433,4 +433,15 @@ void JointTask::enableVelocitySaturation(const VectorXd& saturation_velocity) {
 	_saturation_velocity = saturation_velocity;
 }
 
+bool JointTask::goalPositionReached(const double& tol) {
+	double squared_error = (_current_position - _goal_position).transpose() * \
+							_current_task_range * _current_task_range.transpose() * \
+							(_current_position - _goal_position);
+	if (std::sqrt(squared_error) < tol) {
+		return true;
+	} else {
+		return false;
+	}
+}
+
 } /* namespace Sai2Primitives */

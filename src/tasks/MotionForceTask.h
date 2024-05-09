@@ -677,7 +677,7 @@ public:
 	}
 	
 	/**
-	 * @brief Set the Type1 posture 
+	 * @brief Set the desired posture for type 1 singularity handling  
 	 * 
 	 * @param q_des desired posture 
 	 */
@@ -688,9 +688,9 @@ public:
 	/**
 	 * @brief Enables or disables singularity handling in singularity handler  
 	 * 
-	 * @param flag true to enable singularity handling; the behavior is just task truncation 
+	 * @param flag true to enable singularity handling, if false the behavior is just task truncation 
 	 */
-	void enablSingularityHandling(const bool flag) {
+	void enableSingularityHandling(const bool flag) {
 		_singularity_handler->enableSingularityHandling(flag);
 	}
 

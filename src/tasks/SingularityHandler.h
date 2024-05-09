@@ -13,6 +13,7 @@
 #ifndef SAI2_PRIMITIVES_SINGULARITY_HANDLER_
 #define SAI2_PRIMITIVES_SINGULARITY_HANDLER_
 
+#include <helper_modules/Sai2PrimitivesCommonDefinitions.h>
 #include "Sai2Model.h"
 #include <Eigen/Dense>
 #include <queue>
@@ -21,21 +22,13 @@
 using namespace Eigen;
 namespace Sai2Primitives {
 
-// For logging purposes only
 enum SingularityType {
     NO_SINGULARITY = 0,
     TYPE_1_SINGULARITY,  
     TYPE_2_SINGULARITY
 };
 
-const std::vector<std::string> singularity_labels {"No Singularity", "Type 1 Singularity", "Type 2 Singularity"};      
-
-enum DynamicDecouplingType {
-    FULL_DYNAMIC_DECOUPLING = 0, // use the real Lambda matrix
-    IMPEDANCE,					 // use Identity for the mass matrix
-    BOUNDED_INERTIA_ESTIMATES,	 // use a Lambda computed from a saturated
-                                 // joint space mass matrix
-};            
+const std::vector<std::string> singularity_labels {"No Singularity", "Type 1 Singularity", "Type 2 Singularity"};               
 
 class SingularityHandler {
 public:
@@ -120,7 +113,7 @@ public:
 
     /**
      * @brief Enforces type 1 handling behavior if set to true, otherwise handle 
-     * type 1 or type 2 as usual
+     *  type 1 or type 2 as usual
      * 
      * @param flag  true to enforce type 1 handling behavior 
      */
@@ -129,16 +122,17 @@ public:
     }
 
     /**
-     * @brief Set the Type1 posture 
+     * @brief Set the desired type 1 posture 
      * 
-     * @param q_des Desired posture 
+     * @param q_des desired posture 
      */
     void setType1Posture(const VectorXd& q_des) {
         _q_prior = q_des;
     }
 
     /**
-     * @brief Enables or disables singularity handling 
+     * @brief Enables or disables singularity handling. If disabled, then 
+     * task truncation is performed. 
      * 
      * @param flag true to enforce singularity handling 
      */

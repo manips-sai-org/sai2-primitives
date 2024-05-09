@@ -6,6 +6,7 @@
 
 #include "SingularityHandler.h"
 
+// Default parameters 
 namespace {
     double S_ABS_TOL = 1e-3;
     double TYPE_1_TOL = 0.5;
@@ -54,6 +55,7 @@ SingularityHandler::SingularityHandler(std::shared_ptr<Sai2Model::Sai2Model> rob
     _q_prior = _joint_midrange;
     _dq_prior = VectorXd::Zero(_dof);
     setGains(KP_TYPE_1, KV_TYPE_1, KV_TYPE_2);
+    setDynamicDecouplingType(BOUNDED_INERTIA_ESTIMATES);
     _type_1_counter = 0;
     _type_2_counter = 0;
     _type_2_direction = VectorXd::Ones(_dof);
@@ -81,8 +83,10 @@ void SingularityHandler::updateTaskModel(const MatrixXd& projected_jacobian, con
         // fully singular task
         _alpha = 0;
 
-        // placeholder non-singular task range 
+        // placeholder non-singular terms 
         _task_range_ns = MatrixXd::Zero(_task_rank, 1);
+        _projected_jacobian_ns = MatrixXd::Zero(_task_rank, _dof);
+        _Lambda_ns = MatrixXd::Zero(_task_rank, _task_rank);
 
         // singular task 
         _task_range_s = _svd_U.leftCols(_task_rank);
@@ -128,19 +132,22 @@ void SingularityHandler::updateTaskModel(const MatrixXd& projected_jacobian, con
                 _Jbar_ns = ns_matrices.Jbar;
                 _N_ns = ns_matrices.N;
 
-                // placeholder singular task range
+                // placeholder singular task terms 
                 _task_range_s = MatrixXd::Zero(_task_rank, 1);
                 _joint_task_range_s = MatrixXd::Zero(_dof, 1);
                 _projected_jacobian_s = MatrixXd::Zero(_task_rank, _dof);
+                _Lambda_s = MatrixXd::Zero(_task_rank, _task_rank);
             }
         }
     }
 
     // model updates 
-    if (_task_range_s.norm() == 0 || _enforce_handling_strategy) {
+    if (_task_range_s.norm() == 0 || !_enforce_handling_strategy) {
         _N = _N_ns;  
+        _Lambda_joint_s = MatrixXd::Zero(1, 1);  // placeholder
     } else if (_task_range_ns.norm() == 0) {
         _N = N_prec;  // if task is fully singular, then pass through the task 
+        _Lambda_joint_s = MatrixXd::Zero(1, 1);  // placeholder
     } else {
         _posture_projected_jacobian = _joint_task_range_s.transpose() * _N_ns * N_prec;
         Sai2Model::OpSpaceMatrices op_space_matrices =
@@ -149,68 +156,70 @@ void SingularityHandler::updateTaskModel(const MatrixXd& projected_jacobian, con
         _N = op_space_matrices.N * _N_ns; 
     }
 
-    if (_task_range_ns.norm() != 0) {
-        switch (_dynamic_decoupling_type) {
-            case FULL_DYNAMIC_DECOUPLING: {
-                _Lambda_ns_modified = _Lambda_ns;
-                _Lambda_s_modified = _Lambda_s;
-                _Lambda_joint_s_modified = _Lambda_joint_s;
-                break;
-            }
+    switch (_dynamic_decoupling_type) {
+        case FULL_DYNAMIC_DECOUPLING: {
+            _Lambda_ns_modified = _Lambda_ns;
+            _Lambda_s_modified = _Lambda_s;
+            _Lambda_joint_s_modified = _Lambda_joint_s;
+            break;
+        }
 
-            case IMPEDANCE: {
-                _Lambda_ns_modified.setIdentity();
-                _Lambda_s_modified.setIdentity();
-                _Lambda_joint_s_modified.setIdentity();
-                break;
-            }
+        case IMPEDANCE: {
+            _Lambda_ns_modified.setIdentity();
+            _Lambda_s_modified.setIdentity();
+            _Lambda_joint_s_modified.setIdentity();
+            break;
+        }
 
-            case BOUNDED_INERTIA_ESTIMATES: {
-                MatrixXd M_BIE = _robot->M();
-                for (int i = 0; i < _robot->dof(); i++) {
-                    if (M_BIE(i, i) < 0.1) {
-                        M_BIE(i, i) = 0.1;
-                    }
+        case BOUNDED_INERTIA_ESTIMATES: {
+            MatrixXd M_BIE = _robot->M();
+            for (int i = 0; i < _robot->dof(); i++) {
+                if (M_BIE(i, i) < 0.1) {
+                    M_BIE(i, i) = 0.1;
                 }
-                MatrixXd M_inv_BIE = M_BIE.inverse();
+            }
+            MatrixXd M_inv_BIE = M_BIE.inverse();
 
-                // non-singular lambda
+            // non-singular lambda
+            if (_task_range_ns.norm() != 0) {
                 MatrixXd Lambda_inv_BIE =
                     _projected_jacobian_ns *
                     M_inv_BIE * 
                     _projected_jacobian_ns.transpose();
                 _Lambda_ns_modified = Lambda_inv_BIE.inverse();
-
-                // singular lambda
-                if (_task_range_s.norm() != 0) {
-                    Lambda_inv_BIE =
-                        _projected_jacobian_s *
-                        M_inv_BIE * 
-                        _projected_jacobian_s.transpose();
-                    _Lambda_s_modified = Lambda_inv_BIE.inverse();
-                } else {
-                    _Lambda_s_modified = _Lambda_s;
-                }
-
-                // joint strategy lambda 
-                if (_task_range_s.norm() != 0) {
-                    Lambda_inv_BIE = 
-                        _posture_projected_jacobian * 
-                        M_inv_BIE * 
-                        _posture_projected_jacobian.transpose();
-                    _Lambda_joint_s_modified = Lambda_inv_BIE.inverse();
-                } else {
-                    _Lambda_joint_s_modified = _Lambda_joint_s;
-                }
-                break;
-            }
-
-            default: {
-                _Lambda_s_modified = _Lambda_s;
+            } else {
                 _Lambda_ns_modified = _Lambda_ns;
-                _Lambda_joint_s_modified = _Lambda_joint_s;
-                break;
             }
+
+            // singular lambda
+            if (_task_range_s.norm() != 0) {
+                MatrixXd Lambda_inv_BIE =
+                    _projected_jacobian_s *
+                    M_inv_BIE * 
+                    _projected_jacobian_s.transpose();
+                _Lambda_s_modified = Lambda_inv_BIE.inverse();
+            } else {
+                _Lambda_s_modified = _Lambda_s;
+            }
+
+            // joint strategy lambda 
+            if (_task_range_s.norm() != 0) {
+                MatrixXd Lambda_inv_BIE = 
+                    _posture_projected_jacobian * 
+                    M_inv_BIE * 
+                    _posture_projected_jacobian.transpose();
+                _Lambda_joint_s_modified = Lambda_inv_BIE.inverse();
+            } else {
+                _Lambda_joint_s_modified = _Lambda_joint_s;
+            }
+            break;
+        }
+
+        default: {
+            _Lambda_s_modified = _Lambda_s;
+            _Lambda_ns_modified = _Lambda_ns;
+            _Lambda_joint_s_modified = _Lambda_joint_s;
+            break;
         }
 	}
 

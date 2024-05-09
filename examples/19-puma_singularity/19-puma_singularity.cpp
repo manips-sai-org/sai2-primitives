@@ -23,9 +23,9 @@ void sighandler(int) { fSimulationRunning = false; }
 using namespace std;
 using namespace Eigen;
 
-const string world_file = "resources/world.urdf";
-const string robot_file = "resources/puma.urdf";
-const string robot_name = "PUMA";
+const string world_file = "${EXAMPLE_19_FOLDER}/world.urdf";
+const string robot_file = "${SAI2_MODEL_URDF_FOLDER}/puma/puma.urdf";
+const string robot_name = "PUMA";  // name in the world file
 
 // ui torques and control torques
 VectorXd ui_torques;
@@ -51,6 +51,8 @@ void simulation(shared_ptr<Sai2Model::Sai2Model> robot,
 
 //------------ main function
 int main(int argc, char** argv) {
+	Sai2Model::URDF_FOLDERS["EXAMPLE_19_FOLDER"] =
+		string(EXAMPLES_FOLDER) + "/19-puma_singularity";
 	cout << "Loading URDF world model file: " << world_file << endl;
 
 	// set up signal handler
