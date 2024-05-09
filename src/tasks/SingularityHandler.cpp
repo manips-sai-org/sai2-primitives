@@ -54,7 +54,7 @@ SingularityHandler::SingularityHandler(std::shared_ptr<Sai2Model::Sai2Model> rob
     _singularity_types.resize(0);
     _q_prior = _joint_midrange;
     _dq_prior = VectorXd::Zero(_dof);
-    setGains(KP_TYPE_1, KV_TYPE_1, KV_TYPE_2);
+    setSingularityHandlingGains(KP_TYPE_1, KV_TYPE_1, KV_TYPE_2);
     setDynamicDecouplingType(BOUNDED_INERTIA_ESTIMATES);
     _type_1_counter = 0;
     _type_2_counter = 0;
