@@ -23,13 +23,17 @@ find_package(SAI2-URDF REQUIRED)
 include_directories(${SAI2-URDF_INCLUDE_DIRS})
 
 set(SAI2-PRIMITIVES_EXAMPLES_COMMON_LIBRARIES
-    ${SAI2-MODEL_LIBRARIES}
-	${SAI2-GRAPHICS_LIBRARIES}
-    ${SAI2-SIMULATION_LIBRARIES}
-	${SAI2-COMMON_LIBRARIES}
-    ${SAI2-URDF_LIBRARIES}
-	${CHAI3D_LIBRARIES}
-	)
+${SAI2-MODEL_LIBRARIES}
+${SAI2-GRAPHICS_LIBRARIES}
+${SAI2-SIMULATION_LIBRARIES}
+${SAI2-COMMON_LIBRARIES}
+${SAI2-URDF_LIBRARIES}
+${CHAI3D_LIBRARIES}
+)
+
+# examples folder
+set(EXAMPLES_FOLDER "${CMAKE_CURRENT_SOURCE_DIR}")
+add_definitions(-DEXAMPLES_FOLDER="${EXAMPLES_FOLDER}")
 
 add_subdirectory(01-joint_control)
 add_subdirectory(02-joint_control_internal_otg)
@@ -45,4 +49,5 @@ add_subdirectory(11-planar_robot_controller)
 add_subdirectory(15-haptic_control_impedance_type)
 add_subdirectory(16-haptic_control_admittance_type)
 add_subdirectory(17-bilateral_teleop_with_POPC)
-add_subdirectory(21-singularity)
+add_subdirectory(18-panda_singularity)
+add_subdirectory(19-puma_singularity)

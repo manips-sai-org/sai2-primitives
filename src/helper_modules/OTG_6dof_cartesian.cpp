@@ -65,7 +65,8 @@ void OTG_6dof_cartesian::reInitializeLinear(const Vector3d& initial_position) {
 	_output.new_acceleration.head<3>().setZero();
 }
 
-void OTG_6dof_cartesian::reInitializeAngular(const Matrix3d& initial_orientation) {
+void OTG_6dof_cartesian::reInitializeAngular(
+	const Matrix3d& initial_orientation) {
 	setGoalOrientation(initial_orientation);
 
 	_input.current_position.tail<3>() = _input.target_position.tail<3>();
@@ -185,7 +186,11 @@ void OTG_6dof_cartesian::setGoalOrientationAndAngularVelocity(
 }
 
 void OTG_6dof_cartesian::update() {
+	if (_goal_reached) {
+		return;
+	}
 	// compute next state and get result value
+	OutputParameter<6, EigenVector> previous_output = _output;
 	_result_value = _otg->update(_input, _output);
 
 	// if the goal is reached, either return if the current velocity is
@@ -206,9 +211,14 @@ void OTG_6dof_cartesian::update() {
 		return;
 	}
 
-	// is an error occured, throw an exception
-	throw std::runtime_error(
-		"error in computing next state in OTG_6dof_cartesian::update.\n");
+	// if an error occured, print a warning and keep the previous output
+	_output = previous_output;
+	std::cout << "WARNING: error in computing next state in "
+				 "OTG_6dof_cartesian::update. Reinitializing current "
+				 "trajectory velocity and acceleration to zero. Error code: "
+			  << _result_value << "\n";
+	_input.current_velocity.setZero();
+	_input.current_acceleration.setZero();
 }
 
 Matrix3d OTG_6dof_cartesian::getNextOrientation() const {

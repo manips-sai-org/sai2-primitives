@@ -23,8 +23,10 @@ void sighandler(int) { fSimulationRunning = false; }
 using namespace std;
 using namespace Eigen;
 
-const string world_file = "resources/world.urdf";
-const string robot_file = "resources/panda_arm.urdf";
+// config file names and object names
+const string world_file = "${EXAMPLE_18_FOLDER}/world.urdf";
+const string robot_file =
+	"${SAI2_MODEL_URDF_FOLDER}/panda/panda_arm_sphere.urdf";
 const string robot_name = "PANDA";
 
 // ui torques and control torques
@@ -33,6 +35,7 @@ VectorXd control_torques;
 
 // mutex for global variables between different threads
 mutex mutex_torques;
+mutex mutex_robot;
 
 // simulation and control loop
 void control(shared_ptr<Sai2Model::Sai2Model> robot,
@@ -42,6 +45,8 @@ void simulation(shared_ptr<Sai2Model::Sai2Model> robot,
 
 //------------ main function
 int main(int argc, char** argv) {
+	Sai2Model::URDF_FOLDERS["EXAMPLE_18_FOLDER"] =
+		string(EXAMPLES_FOLDER) + "/18-panda_singularity";
 	cout << "Loading URDF world model file: " << world_file << endl;
 
 	// set up signal handler
@@ -77,7 +82,10 @@ int main(int argc, char** argv) {
 
 	// while window is open:
 	while (graphics->isWindowOpen()) {
-		graphics->updateRobotGraphics(robot_name, robot->q());
+		{
+			lock_guard<mutex> lock(mutex_robot);
+			graphics->updateRobotGraphics(robot_name, robot->q());
+		}
 		graphics->renderGraphicsWorld();
 		{
 			lock_guard<mutex> lock(mutex_torques);
@@ -110,13 +118,14 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 	auto motion_force_task = make_unique<Sai2Primitives::MotionForceTask>(
 		robot, link_name, compliant_frame);
 
-	// Partial motion force task
+	// // Partial motion force task
 	// vector<Vector3d> controlled_directions_translation = {
 	// 	Vector3d::UnitX(), Vector3d::UnitY(), Vector3d::UnitZ()};
 	// vector<Vector3d> controlled_directions_rotation = {};
 	// auto motion_force_task = make_shared<Sai2Primitives::MotionForceTask>(
 	// 	robot, link_name, controlled_directions_translation,
 	// 	controlled_directions_rotation);
+	// motion_force_task->setSingularityGains(20, 20);
 
     // motion_force_task->disableInternalOtg();
     // motion_force_task->enableVelocitySaturation();
@@ -158,7 +167,8 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
     // double t_wait = 10;  // wait between switching desired positions 
 	// double t_reset_wait = 5;  // wait when resetting position 
     double prev_time = 0;
-    int cnt = 6 * 0;
+    // int cnt = 6 * 1;
+	int cnt = 0;
     int max_cnt = desired_offsets.size();
 
 	// create logger
@@ -182,8 +192,10 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 
 		// update tasks model. Order is important to define the hierarchy
 		N_prec = MatrixXd::Identity(dof, dof);
-
-		motion_force_task->updateTaskModel(N_prec);
+		{
+			lock_guard<mutex> lock(mutex_robot);
+			motion_force_task->updateTaskModel(N_prec);
+		}
 		N_prec = motion_force_task->getTaskAndPreviousNullspace();
 		// after each task, need to update the nullspace
 		// of the previous tasks in order to garantee
@@ -211,9 +223,6 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 			lock_guard<mutex> lock(mutex_torques);
 			control_torques = motion_force_task_torques + joint_task_torques;
 		}
-
-		//------ logging data
-		svalues = motion_force_task->getSigmaValues();
 
 		// -------------------------------------------
 		if (timer.elapsedCycles() % 500 == 0) {

@@ -26,11 +26,11 @@ void sighandler(int) { fSimulationRunning = false; }
 using namespace std;
 using namespace Eigen;
 
-const string world_file = "resources/world.urdf";
-const string robot_file = "resources/panda_arm.urdf";
+const string world_file = "${EXAMPLE_07_FOLDER}/world.urdf";
+const string robot_file = "${SAI2_MODEL_URDF_FOLDER}/panda//panda_arm_box.urdf";
 const string robot_name = "PANDA";
 // need a second robot model for the plate
-const string plate_file = "resources/plate.urdf";
+const string plate_file = "${EXAMPLE_07_FOLDER}/plate.urdf";
 const string plate_name = "Plate";
 
 // global variables for sensed force and moment
@@ -58,7 +58,10 @@ void simulation(shared_ptr<Sai2Model::Sai2Model> robot,
 
 //------------ main function
 int main(int argc, char** argv) {
-	cout << "Loading URDF world model file: " << world_file << endl;
+	Sai2Model::URDF_FOLDERS["EXAMPLE_07_FOLDER"] =
+		string(EXAMPLES_FOLDER) + "/07-surface_surface_contact";
+	cout << "Loading URDF world model file: "
+		 << Sai2Model::ReplaceUrdfPathPrefix(world_file) << endl;
 
 	// set up signal handler
 	signal(SIGABRT, &sighandler);
@@ -130,7 +133,8 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 
 	// Position plus orientation task
 	auto motion_force_task = make_shared<Sai2Primitives::MotionForceTask>(
-		robot, link_name, Affine3d(Translation3d(pos_in_link)), "surface_alignment_task", true);
+		robot, link_name, Affine3d(Translation3d(pos_in_link)),
+		"surface_alignment_task", true);
 	motion_force_task->enablePassivity();
 	motion_force_task->disableInternalOtg();
 	VectorXd motion_force_task_torques = VectorXd::Zero(dof);
@@ -177,7 +181,8 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 				0.00003;  // go down at 30 cm/s until contact is detected
 			motion_force_task->setGoalPosition(goal_position);
 
-			if (motion_force_task->getSensedForce()(2) <= -1.0) {
+			if (motion_force_task->getSensedForceControlWorldFrame()(2) <=
+				-1.0) {
 				// switch the local z axis to be force controlled and the local
 				// x and y axis to be moment controlled
 				motion_force_task->parametrizeForceMotionSpaces(
@@ -201,16 +206,17 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 		} else if (state == CONTACT_CONTROL) {
 			if (timer.elapsedCycles() % 1000 == 0) {
 				cout << "Current force: "
-					 << motion_force_task->getSensedForce().transpose() << endl;
+					 << motion_force_task->getSensedForceControlWorldFrame()
+							.transpose()
+					 << endl;
 				cout << "Current moment: "
-					 << motion_force_task->getSensedMoment().transpose()
+					 << motion_force_task->getSensedMomentControlWorldFrame()
+							.transpose()
 					 << endl;
 				cout << "Goal force: "
-					 << motion_force_task->getGoalForce().transpose()
-					 << endl;
+					 << motion_force_task->getGoalForce().transpose() << endl;
 				cout << "Goal moment: "
-					 << motion_force_task->getGoalMoment().transpose()
-					 << endl;
+					 << motion_force_task->getGoalMoment().transpose() << endl;
 				cout << endl;
 			}
 		}

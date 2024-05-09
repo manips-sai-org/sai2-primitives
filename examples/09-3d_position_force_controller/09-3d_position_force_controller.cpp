@@ -28,8 +28,9 @@ using namespace std;
 using namespace Eigen;
 
 // config file names and object names
-const string world_file = "resources/world.urdf";
-const string robot_file = "resources/panda_arm.urdf";
+const string world_file = "${EXAMPLE_09_FOLDER}/world.urdf";
+const string robot_file =
+	"${SAI2_MODEL_URDF_FOLDER}/panda/panda_arm_sphere.urdf";
 const string robot_name = "PANDA";
 
 // simulation and control loop
@@ -46,7 +47,10 @@ string link_name = "end-effector";
 mutex mutex_torques;
 
 int main(int argc, char** argv) {
-	cout << "Loading URDF world model file: " << world_file << endl;
+	Sai2Model::URDF_FOLDERS["EXAMPLE_09_FOLDER"] =
+		string(EXAMPLES_FOLDER) + "/09-3d_position_force_controller";
+	cout << "Loading URDF world model file: "
+		 << Sai2Model::ReplaceUrdfPathPrefix(world_file) << endl;
 
 	// set up signal handler
 	signal(SIGABRT, &sighandler);
@@ -165,7 +169,8 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 		}
 		motion_force_task->setGoalPosition(goal_position);
 
-		if (!force_control && motion_force_task->getSensedForce()(2) <= -1.0) {
+		if (!force_control &&
+			motion_force_task->getSensedForceControlWorldFrame()(2) <= -1.0) {
 			force_control = true;
 			motion_force_task->parametrizeForceMotionSpaces(1,
 															Vector3d::UnitZ());
@@ -182,7 +187,9 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 			cout << "goal force: "
 				 << motion_force_task->getGoalForce().transpose() << endl;
 			cout << "sensed force: "
-				 << motion_force_task->getSensedForce().transpose() << endl;
+				 << motion_force_task->getSensedForceControlWorldFrame()
+						.transpose()
+				 << endl;
 			cout << endl;
 		}
 

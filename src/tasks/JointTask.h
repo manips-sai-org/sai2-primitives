@@ -28,12 +28,19 @@ namespace Sai2Primitives {
 
 class JointTask : public TemplateTask {
 public:
-	enum DynamicDecouplingType {
-		FULL_DYNAMIC_DECOUPLING,	// use the real Mass matrix
-		BOUNDED_INERTIA_ESTIMATES,	// use a Mass matrix computed from
-									// saturating the minimal values of the Mass
-									// Matrix
-		IMPEDANCE,					// use Identity for the Mass matrix
+	struct DefaultParameters {
+		static constexpr double kp = 50.0;
+		static constexpr double kv = 14.0;
+		static constexpr double ki = 0.0;
+		static constexpr DynamicDecouplingType dynamic_decoupling_type =
+			DynamicDecouplingType::BOUNDED_INERTIA_ESTIMATES;
+		static constexpr bool use_internal_otg = true;
+		static constexpr bool internal_otg_jerk_limited = false;
+		static constexpr double otg_max_velocity = M_PI / 3.0;
+		static constexpr double otg_max_acceleration = 2.0 * M_PI;
+		static constexpr double otg_max_jerk = 10.0 * M_PI;
+		static constexpr bool use_velocity_saturation = false;
+		static constexpr double saturation_velocity = M_PI / 3.0;
 	};
 
 	/**
@@ -88,8 +95,8 @@ public:
 	VectorXd computeTorques() override;
 
 	/**
-	 * @brief      reinitializes the desired and goal states to the current robot
-	 *             configuration as well as the integrator terms
+	 * @brief      reinitializes the desired and goal states to the current
+	 * robot configuration as well as the integrator terms
 	 */
 	void reInitializeTask() override;
 
@@ -127,6 +134,13 @@ public:
 	const VectorXd& getGoalPosition() const { return _goal_position; }
 
 	/**
+	 * @brief Get the Current Velocity
+	 *
+	 * @return const VectorXd&
+	 */
+	const VectorXd& getCurrentVelocity() { return _current_velocity; }
+
+	/**
 	 * @brief Set the Goal Velocity
 	 *
 	 * @param goal_velocity
@@ -152,8 +166,26 @@ public:
 	 *
 	 * @return goal acceleration as a VectorXd
 	 */
-	const VectorXd& getGoalAcceleration() const {
-		return _goal_acceleration;
+	const VectorXd& getGoalAcceleration() const { return _goal_acceleration; }
+
+	/**
+	 * @brief Get the desired position which is the output of OTG if enabled, or
+	 * otherwise equal to the goal position
+	 */
+	const VectorXd& getDesiredPosition() const { return _desired_position; }
+
+	/**
+	 * @brief Get the desired velocity which is the output of OTG if enabled, or
+	 * otherwise equal to the goal velocity
+	 */
+	const VectorXd& getDesiredVelocity() const { return _desired_velocity; }
+
+	/**
+	 * @brief Get the desired acceleration which is the output of OTG if
+	 * enabled, or otherwise equal to the goal acceleration
+	 */
+	const VectorXd& getDesiredAcceleration() const {
+		return _desired_acceleration;
 	}
 
 	/**
@@ -211,6 +243,9 @@ public:
 	 */
 	void setGains(const double kp, const double kv, const double ki = 0);
 
+	void setGainsUnsafe(const VectorXd& kp, const VectorXd& kv,
+						const VectorXd& ki);
+
 	vector<PIDGains> getGains() const;
 
 	/**
@@ -234,8 +269,8 @@ public:
 	void enableInternalOtgAccelerationLimited(const double max_velocity,
 											  const double max_acceleration) {
 		enableInternalOtgAccelerationLimited(
-			max_velocity * VectorXd::Ones(getConstRobotModel()->dof()),
-			max_acceleration * VectorXd::Ones(getConstRobotModel()->dof()));
+			max_velocity * VectorXd::Ones(_task_dof),
+			max_acceleration * VectorXd::Ones(_task_dof));
 	}
 
 	/**
@@ -263,9 +298,9 @@ public:
 									  const double max_acceleration,
 									  const double max_jerk) {
 		enableInternalOtgJerkLimited(
-			max_velocity * VectorXd::Ones(getConstRobotModel()->dof()),
-			max_acceleration * VectorXd::Ones(getConstRobotModel()->dof()),
-			max_jerk * VectorXd::Ones(getConstRobotModel()->dof()));
+			max_velocity * VectorXd::Ones(_task_dof),
+			max_acceleration * VectorXd::Ones(_task_dof),
+			max_jerk * VectorXd::Ones(_task_dof));
 	}
 
 	/**
@@ -293,10 +328,7 @@ public:
 	 *
 	 * @param[in]  saturation_velocity  The saturation velocity
 	 */
-	void enableVelocitySaturation(const double saturation_velocity) {
-		enableVelocitySaturation(saturation_velocity *
-								 VectorXd::Ones(getConstRobotModel()->dof()));
-	}
+	void enableVelocitySaturation(const double saturation_velocity);
 
 	/**
 	 * @brief      Disables the velocity saturation
@@ -319,11 +351,16 @@ public:
 		_dynamic_decoupling_type = type;
 	}
 
-	bool goalPositionReached(const double tol = 1e-2) {
-		if ((_goal_position - _current_position).norm() < tol) {
-			return true;
-		}
-		return false;
+	/**
+	 * @brief	   Returns whether current position is within a tolerance to the goal
+	*/
+	bool goalPositionReached(const double& tol = 1e-2);
+
+	/**
+	 * @brief	Reset integrator error  
+	*/
+	void resetIntegrators() {
+		_integrated_position_error.setZero();
 	}
 
 	//-----------------------------------------------
@@ -336,10 +373,17 @@ private:
 	 */
 	void initialSetup();
 
-	// goal controller state
+	// The goal state of the task is set by the user
 	VectorXd _goal_position;
 	VectorXd _goal_velocity;
 	VectorXd _goal_acceleration;
+
+	// the desired state is the one used in the control equations. It is equal
+	// to the output of the OTG interpolation if enabled, and otherwise equal to
+	// the goal state
+	VectorXd _desired_position;
+	VectorXd _desired_velocity;
+	VectorXd _desired_acceleration;
 
 	// current state from robot model
 	VectorXd _current_position;

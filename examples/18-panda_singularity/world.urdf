@@ -3,26 +3,21 @@
 <world name="demo_world" gravity="0.0 0.0 0.0">
 
 	<robot name="PANDA">
-		<model dir="${SAI2_MODEL_URDF_FOLDER}/panda" path="panda_arm_box.urdf" name="panda" />
-	</robot>
-
-	<!-- treat the moving plate as a rr robot -->
-	<robot name="Plate">
-		<model dir="${EXAMPLE_07_FOLDER}" path="plate.urdf" name="plate" />
-		<origin xyz="0.4 0.0 0.35" rpy="0 0 0" />
+		<model dir="${SAI2_MODEL_URDF_FOLDER}/panda" path="panda_arm_sphere.urdf" name="panda" />
+		<origin xyz="0.0 0.0 0.0" rpy="0 0 0" />
 	</robot>
 
 	<static_object name="Floor">
 		<origin xyz="0.0 0.0 0.0" rpy="0 0 0" />
-		<visual>
-			<origin xyz="0.0 0.0 0.0" rpy="0 0 0" />
-			<geometry>
-				<box size="3.0 3.0 0.1" />
-			</geometry>
-			<material name="material_red">
-				<color rgba="0.1 0.1 0.1 1.0" />
-			</material>
-		</visual>
+	    <visual>
+	        <origin xyz="0.0 0.0 0.0" rpy="0 0 0" />
+	        <geometry>
+	            <box size="3.0 3.0 0.1" />
+	        </geometry>
+	        <material name="material_red">
+		        <color rgba="0.1 0.1 0.1 1.0" />
+	        </material>
+	    </visual>
 	</static_object>
 
 	<light name="light1" type="directional">
@@ -36,7 +31,7 @@
 	</light>
 
 	<camera name="camera">
-		<position xyz="1.0 0.9 1.0" />
+		<position xyz="1.5 0.4 1.0" />
 		<vertical xyz="0.0 0.0 1.0" />
 		<lookat xyz="0.0 0.0 0.5" />
 	</camera>

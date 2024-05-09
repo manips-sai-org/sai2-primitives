@@ -13,9 +13,11 @@
 #ifndef SAI2_PRIMITIVES_SINGULARITY_HANDLER_
 #define SAI2_PRIMITIVES_SINGULARITY_HANDLER_
 
+#include <helper_modules/Sai2PrimitivesCommonDefinitions.h>
 #include "Sai2Model.h"
 #include <Eigen/Dense>
 #include <queue>
+#include <memory>
 
 using namespace Eigen;
 namespace Sai2Primitives {
@@ -26,14 +28,7 @@ enum SingularityType {
     TYPE_2_SINGULARITY
 };
 
-const std::vector<std::string> singularity_labels {"No Singularity", "Type 1 Singularity", "Type 2 Singularity"};      
-
-enum DynamicDecouplingType {
-    FULL_DYNAMIC_DECOUPLING = 0,	 // use the real Lambda matrix
-    IMPEDANCE,					 // use Identity for the mass matrix
-    BOUNDED_INERTIA_ESTIMATES,	 // use a Lambda computed from a saturated
-                                 // joint space mass matrix
-};            
+const std::vector<std::string> singularity_labels {"No Singularity", "Type 1 Singularity", "Type 2 Singularity"};               
 
 class SingularityHandler {
 public:
@@ -41,24 +36,16 @@ public:
      * @brief Construct a new Singularity Handler task
      * 
      * @param robot robot model from motion force task
+     * @param link_name control link of motion force task
+     * @param compliant_frame compliant frame of motion force task 
      * @param task_rank rank of the motion force task after partial task projection
-     * @param J_posture partial joint selection matrix of the controlled point from motion force task
-     * @param s_abs_tol tolerance to declare task completely singular if all singular values from the projected
-     * jacobian are under this value
-     * @param type_1_tol tolerance for the dot product between the first and last singular direction in the 
-     * singular direction buffer for which a type 1 singularity is classified
-     * @param type_2_torque_ratio percentage of the max joint torque to use for the type 2 singularity strategy
-     * @param queue_size size of the queue for storing past singular directions
      * @param verbose set to true to print singularity status every timestep 
      */
     SingularityHandler(std::shared_ptr<Sai2Model::Sai2Model> robot,
+                       const std::string& link_name,
+                       const Affine3d& compliant_frame,
                        const int& task_rank,
-                       const MatrixXd& J_posture,
-                       const double& s_abs_tol = 1e-3,
-                       const double& type_1_tol = 0.8,
-                       const double& type_2_torque_ratio = 0.01,
-                       const int& queue_size = 10,
-                       const bool& verbose = true);
+                       const bool& verbose = false);
 
     /**
      * @brief Updates the model quantities for the singularity handling task, and performs singularity classification
@@ -69,18 +56,9 @@ public:
     void updateTaskModel(const MatrixXd& projected_jacobian, const MatrixXd& N_prec);
 
     /**
-     * @brief Classifies the singularity based on the column of U (singular columns) from the smallest singular value. 
-     * U is obtained from the thin SVD decomposition of the projected jacobian. The singular column is placed in a queue,
-     * and type 1 is automatically classified. Type 2 is classified if all elements in the queue are Type 2.
-     * 
-     * @param singular_task_range Singular task range corresponding to the columns of U from SVD
-     */
-    void classifySingularity(const MatrixXd& singular_task_range);
-
-    /**
-     * @brief Computes the torques from the singularity handling. If the projected jacobian doesn't have
-     * a condition number below the _s_max value, then the torque is computed as usual with _projected_jacobian_ns.
-     * If the projected jacobian has a condition number below the _s_max value, then the torque is computed as
+     * @brief Computes the torques from the singularity handling. If the projected jacobian isn't classified singular, then
+     * the torque is computed as usual.
+     * If the projected jacobian is classified singular, then the torque is computed as
      * \tau = \tau_{ns} + (1 - \_alpha) * \tau_{joint strategy} + \alpha * \tau_{s} where \alpha is the linear blending ratio, 
      * \tau_{ns} is the torque computed from the non-singular terms, \tau_{s} is the torque computed from the singular 
      * terms, and \tau_{joint strategy} is the torque computed from the singularity strategy.
@@ -101,58 +79,19 @@ public:
     }
 
     /**
-     * @brief Get the nullspace of the singularity task
+     * @brief Get the nullspace 
      * 
      * @return MatrixXd nullspace 
      */
     MatrixXd getNullspace() { return _N; };
 
     /**
-     * @brief Get the vector of singular values for the projected jacobian
-     * 
-     * @return VectorXd singular values vector
-     */
-    VectorXd getSigmaValues() {
-        return _s_values;
-    }
-
-    /**
-     * @brief Get the non-singular op-space matrices
-     * 
-     * @return Sai2Model::OpSpaceMatrices non-singular op-space matrices
-     */
-    Sai2Model::OpSpaceMatrices getNonSingularOpSpaceMatrices() {
-        return Sai2Model::OpSpaceMatrices(_projected_jacobian_ns, _Lambda_ns, _Jbar_ns, _N_ns);
-    }
-
-    /**
-     * @brief Get the singular op-space matrices
-     * 
-     * @return Sai2Model::OpSpaceMatrices singular op-space matrices
-     */
-    Sai2Model::OpSpaceMatrices getSingularOpSpaceMatrices() {
-        return Sai2Model::OpSpaceMatrices(_projected_jacobian_s, _Lambda_s, _Jbar_s, _N_s);
-    }
-
-    MatrixXd getNonSingularTaskRange() {
-        return _task_range_ns;
-    }
-
-    MatrixXd getSingularTaskRange() {
-        return _task_range_s;
-    }
-
-    VectorXd getSingularTorques() {
-        return _tau_s;
-    }
-
-    /**
-     * @brief Set the singularity bounds for torque blending based on the condition number
+     * @brief Set the singularity bounds for torque blending based on the inverse of the condition number
      * The linear blending coefficient \alpha is computed as \alpha = (s - _s_min) / (_s_max - _s_min),
      * and is clamped between 0 and 1.
      * 
-     * @param s_min condition number value to only use singularity strategy torques
-     * @param s_max condition number value to start blending
+     * @param s_min lower bound
+     * @param s_max upper bound 
      */
     void setSingularityBounds(const double& s_min, const double& s_max) {
         _s_min = s_min;
@@ -162,98 +101,132 @@ public:
     /**
      * @brief Set the gains for the partial joint task for the singularity strategy
      * 
-     * @param kp position gain
-     * @param kv velocity gain
+     * @param kp_type_1 position gain for type 1 strategy
+     * @param kv_type_1 velocity damping gain for type 1 strategy
+     * @param kv_type_2 velocity damping gain for type 2 strategy
      */
-    void setGains(const double& kp, const double& kv) {
-        _kp = kp;
-        _kv = kv;
+    void setGains(const double& kp_type_1, const double& kv_type_1, const double& kv_type_2) {
+        _kp_type_1 = kp_type_1;
+        _kv_type_1 = kv_type_1;
+        _kv_type_2 = kv_type_2;
     }
 
     /**
-     * @brief Set the singularity type for the current timestep
+     * @brief Enforces type 1 handling behavior if set to true, otherwise handle 
+     *  type 1 or type 2 as usual
      * 
-     * @param type Singularity type (none, type 1, or type 2)
+     * @param flag  true to enforce type 1 handling behavior 
      */
-    void setSingularity(const SingularityType& type) {
-        _sing_type = type;
+    void handleAllSingularitiesAsType1(const bool flag) {
+        _enforce_type_1_strategy = flag;
     }
 
     /**
-     * @brief Set the torque ratio used for type 2 singularity strategy
+     * @brief Set the desired type 1 posture 
      * 
-     * @param ratio Ratio of the specific joint's max torque to use 
+     * @param q_des desired posture 
      */
-    void setTorqueRatio(const double& ratio) {
-        _type_2_torque_ratio = ratio;
+    void setType1Posture(const VectorXd& q_des) {
+        _q_prior = q_des;
+    }
+
+    /**
+     * @brief Enables or disables singularity handling. If disabled, then 
+     * task truncation is performed. 
+     * 
+     * @param flag true to enforce singularity handling 
+     */
+    void enableSingularityHandling(const bool flag) {
+        _enforce_handling_strategy = flag;
+    }
+
+    /**
+     * @brief Set the singularity handling parameters for classification
+     * 
+     * @param s_abs_tol if all singular values are below this value, then the task is
+    *                      fully singular 
+     * @param type_1_tol tolerance to classify type 1 singularity
+     * @param type_2_torque_ratio torque ratio of max torques to move joints for type 2 singularity
+     * @param type_2_angle_threshold reverses the torque direction if joint approaches within the 
+     *                                  angle threshold for type 2 singularity
+     * @param perturb_step_size step size to take for singularity classification
+     * @param buffer_size buffer size to store singularity classification history 
+     */
+    void setSingularityHandlingParams(const double& s_abs_tol,
+                                      const double& type_1_tol,
+                                      const double& type_2_torque_ratio,
+                                      const double& type_2_angle_threshold,
+                                      const double& perturb_step_size,
+                                      const int& buffer_size) {
+        _s_abs_tol = s_abs_tol;
+        _type_1_tol = type_1_tol; 
+        _type_2_torque_ratio = type_2_torque_ratio;
+        _type_2_angle_threshold = type_2_angle_threshold;
+        _perturb_step_size = perturb_step_size;
+        _buffer_size = buffer_size;
     }
 
 private:
+
+    /**
+     * @brief Classifies the singularity based on a joint perturbation in the singular joint space 
+     * 
+     * @param singular_task_range Singular task range corresponding to the columns of U from SVD
+     * @param singular_joint_task_range Singular task range corresponding to the columns of V from SVD
+     */
+    void classifySingularity(const MatrixXd& singular_task_range, 
+                             const MatrixXd& singular_joint_task_range);
+
     // singularity setup
     std::shared_ptr<Sai2Model::Sai2Model> _robot;
     DynamicDecouplingType _dynamic_decoupling_type;
+    std::string _link_name;
+    Affine3d _compliant_frame;
     int _task_rank;
-    MatrixXd _J_posture;
-    VectorXd _joint_midrange;
+    int _dof;
+    VectorXd _joint_midrange, _q_upper, _q_lower, _tau_upper, _tau_lower;
+    bool _enforce_type_1_strategy;
+    bool _enforce_handling_strategy;
     bool _verbose;
 
-    // singularity history 
-    SingularityType _sing_type;
-    int _queue_size;
-    std::queue<SingularityType> _sing_history;
-    std::queue<Eigen::Matrix<double, 6, 1>> _sing_direction_queue;
+    // singularity information
+    std::vector<SingularityType> _singularity_types;
+    double _perturb_step_size;
+    std::deque<SingularityType> _singularity_history;
+    int _type_1_counter, _type_2_counter;
+    int _buffer_size;
 
     // type 1 specifications
     VectorXd _q_prior, _dq_prior;
-    double _kp, _kv;
+    double _kp_type_1, _kv_type_1;
     double _type_1_tol;
 
-    // type 2 specifications 
+    // type 2 specifications
     double _type_2_torque_ratio;  // use X% of the max joint torque 
+    double _type_2_angle_threshold;
+    double _kv_type_2;
     VectorXd _type_2_torque_vector;
+    VectorXd _type_2_direction;
 
     // model quantities 
+    MatrixXd _svd_U, _svd_V;
+    VectorXd _svd_s;
     double _s_abs_tol;  
     double _s_min, _s_max;
     double _alpha;
     MatrixXd _N;
-    MatrixXd _task_range_ns, _task_range_s;
+    MatrixXd _task_range_ns, _task_range_s, _joint_task_range_s;
     MatrixXd _projected_jacobian_ns, _projected_jacobian_s;
-    MatrixXd _Lambda_ns, _N_ns, _Jbar_ns;
-    MatrixXd _Lambda_s, _N_s, _Jbar_s;
+    MatrixXd _Lambda_ns, _Jbar_ns, _N_ns;
+    MatrixXd _Lambda_s;
     MatrixXd _Lambda_ns_modified, _Lambda_s_modified;
-    VectorXd _tau_s;
+    MatrixXd _Lambda_joint_s, _Lambda_joint_s_modified;
 
     // joint task quantities 
-    MatrixXd _posture_projected_jacobian, _current_task_range, _M_partial;
-
-    // logging 
-    VectorXd _s_values;
-
-    /**
-     * @brief Checks if all elements in a queue are the same
-     */
-    template<typename T>
-    bool allElementsSame(const std::queue<T>& q) {
-        if (q.empty()) {
-            return true; // An empty queue has all elements the same (technically)
-        }
-
-        // Get the first element
-        T firstElement = q.front();
-
-        // Iterate through the queue
-        std::queue<T> tempQueue = q; // Create a copy of the original queue
-        while (!tempQueue.empty()) {
-            // If any element is different from the first element, return false
-            if (tempQueue.front() != firstElement) {
-                return false;
-            }
-            tempQueue.pop(); // Remove the front element
-        }
-
-        return true; // All elements are the same
-    }
+    MatrixXd _posture_projected_jacobian, _M_partial;
+    
+    VectorXd _singular_task_torques;
+    VectorXd _joint_strategy_torques;
 };
 
 }  // namespace

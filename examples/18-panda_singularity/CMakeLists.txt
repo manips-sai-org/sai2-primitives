@@ -1,5 +1,4 @@
-set(EXAMPLE_NAME 01-joint_control)
-
+set(EXAMPLE_NAME 18-panda_singularity)
 # create an executable
 ADD_EXECUTABLE (${EXAMPLE_NAME} ${EXAMPLE_NAME}.cpp)
 
