@@ -194,7 +194,7 @@ void MotionForceTask::initialSetup() {
 		      													_link_name,
 																_compliant_frame,
 																_pos_range + _ori_range);
-	setSingularityBounds(6e-3, 6e-2); 
+	setSingularityHandlingBounds(6e-3, 6e-2); 
 	setDynamicDecouplingType(BOUNDED_INERTIA_ESTIMATES);
 
 	reInitializeTask();	

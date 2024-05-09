@@ -691,12 +691,19 @@ public:
 	}
 
 	/**
-	 * @brief Enables or disables singularity handling in singularity handler  
+	 * @brief Enables singularity handling 
 	 * 
-	 * @param flag true to enable singularity handling, if false the behavior is just task truncation 
 	 */
-	void enableSingularityHandling(const bool flag) {
-		_singularity_handler->enableSingularityHandling(flag);
+	void enableSingularityHandling() {
+		_singularity_handler->enableSingularityHandling();
+	}
+
+	/**
+	 * @brief Disables singularity handling 
+	 * 
+	 */
+	void disableSingularityHandling() {
+		_singularity_handler->disableSingularityHandling();
 	}
 
     /**
@@ -707,8 +714,8 @@ public:
      * @param s_min lower bound
      * @param s_max upper bound 
      */
-	void setSingularityBounds(const double& s_min, const double& s_max) {
-		_singularity_handler->setSingularityBounds(s_min, s_max);
+	void setSingularityHandlingBounds(const double& s_min, const double& s_max) {
+		_singularity_handler->setSingularityHandlingBounds(s_min, s_max);
 	}
 
     /**
@@ -718,8 +725,8 @@ public:
      * @param kv_type_1 velocity damping gain for type 1 strategy
      * @param kv_type_2 velocity damping gain for type 2 strategy
      */
-	void setSingularityGains(const double& kp_type_1, const double& kv_type_1, const double& kv_type_2) {
-		_singularity_handler->setGains(kp_type_1, kv_type_1, kv_type_2);
+	void setSingularityHandlingGains(const double& kp_type_1, const double& kv_type_1, const double& kv_type_2) {
+		_singularity_handler->setSingularityHandlingGains(kp_type_1, kv_type_1, kv_type_2);
 	}
 
 	// -------- getters for model parameters --------

@@ -93,7 +93,7 @@ public:
      * @param s_min lower bound
      * @param s_max upper bound 
      */
-    void setSingularityBounds(const double& s_min, const double& s_max) {
+    void setSingularityHandlingBounds(const double& s_min, const double& s_max) {
         _s_min = s_min;
         _s_max = s_max;
     }
@@ -105,7 +105,7 @@ public:
      * @param kv_type_1 velocity damping gain for type 1 strategy
      * @param kv_type_2 velocity damping gain for type 2 strategy
      */
-    void setGains(const double& kp_type_1, const double& kv_type_1, const double& kv_type_2) {
+    void setSingularityHandlingGains(const double& kp_type_1, const double& kv_type_1, const double& kv_type_2) {
         _kp_type_1 = kp_type_1;
         _kv_type_1 = kv_type_1;
         _kv_type_2 = kv_type_2;
@@ -131,13 +131,19 @@ public:
     }
 
     /**
-     * @brief Enables or disables singularity handling. If disabled, then 
-     * task truncation is performed. 
+     * @brief Enables singularity handling
      * 
-     * @param flag true to enforce singularity handling 
      */
-    void enableSingularityHandling(const bool flag) {
-        _enforce_handling_strategy = flag;
+    void enableSingularityHandling() {
+        _enforce_handling_strategy = true;
+    }
+
+    /**
+     * @brief Disables singularity handling 
+     * 
+     */
+    void disableSingularityHandling() {
+        _enforce_handling_strategy = false;
     }
 
     /**
