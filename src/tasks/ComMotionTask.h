@@ -415,15 +415,6 @@ public:
 		_singularity_handler->setDynamicDecouplingType(type);
 	}
 
-	/**
-	 * @brief Get the Sigma Values object
-	 * 
-	 * @return VectorXd 
-	 */
-	VectorXd getSigmaValues() {
-		return _singularity_handler->getSigmaValues();
-	}
-
 	// -------- force control related methods --------
 
 	/**
@@ -574,32 +565,26 @@ public:
 	 * @param s_min		Upper bound to start blending  
 	 * @param s_max 	Lower bound to remove all singular task torque 
 	 */
-	void setSingularityBounds(const double& s_min, const double& s_max) {
-		_singularity_handler->setSingularityBounds(s_min, s_max);
+	void setSingularityHandlingBounds(const double& s_min, const double& s_max) {
+		_singularity_handler->setSingularityHandlingBounds(s_min, s_max);
 	}
+
+	// -------- getters for model parameters --------
 
 	VectorXd getUnitControlForces() {
 		return _unit_mass_force;
 	}
 
 	MatrixXd getProjectedJacobian() {
-		return _singularity_handler->getNonSingularOpSpaceMatrices().J;
+		return _singularity_handler->getProjectedJacobian();
 	}
 
 	MatrixXd getLambdaMatrix() {
-		return _singularity_handler->getNonSingularOpSpaceMatrices().Lambda;
+		return _singularity_handler->getLambda();
 	}
 
 	MatrixXd getNonSingularTaskRange() {
-		return _singularity_handler->getNonSingularTaskRange();
-	}
-
-	MatrixXd getSingularTaskRange() {
-		return _singularity_handler->getSingularTaskRange();
-	}
-
-	VectorXd getSingularTorque() {
-		return _singularity_handler->getSingularTorques();
+		return _singularity_handler->getTaskRange();
 	}
 
 private:

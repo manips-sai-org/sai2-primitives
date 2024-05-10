@@ -164,8 +164,11 @@ void ComMotionTask::initialSetup() {
 
 	// singularity handling
 	MatrixXd J_posture = getConstRobotModel()->linkDependency(_link_name);
-	_singularity_handler = std::make_unique<SingularityHandler>(getConstRobotModel(), _pos_range + _ori_range, J_posture);
-	setSingularityBounds(5e-3, 5e-2);  
+	_singularity_handler = std::make_unique<SingularityHandler>(getConstRobotModel(), 
+																_link_name, 
+																_compliant_frame, 
+																_pos_range + _ori_range);
+	setSingularityHandlingBounds(6e-3, 6e-2);  
 	setDynamicDecouplingType(BOUNDED_INERTIA_ESTIMATES);
 
 	reInitializeTask();	

@@ -172,6 +172,20 @@ public:
         _buffer_size = buffer_size;
     }
 
+    // ------- getters for model quantities -------- 
+
+    MatrixXd getProjectedJacobian() {
+        return _projected_jacobian_ns;
+    }
+
+    MatrixXd getTaskRange() {
+        return _task_range_ns;
+    }
+
+    MatrixXd getLambda() {
+        return _Lambda_ns;
+    }
+
 private:
 
     /**

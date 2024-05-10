@@ -739,27 +739,15 @@ public:
 	}
 
 	MatrixXd getProjectedJacobian() {
-		return _singularity_handler->getNonSingularOpSpaceMatrices().J;
+		return _singularity_handler->getProjectedJacobian();
 	}
 
 	MatrixXd getLambdaMatrix() {
-		return _singularity_handler->getNonSingularOpSpaceMatrices().Lambda;
+		return _singularity_handler->getLambda();
 	}
 
 	MatrixXd getNonSingularTaskRange() {
-		return _singularity_handler->getNonSingularTaskRange();
-	}
-
-	MatrixXd getSingularTaskRange() {
-		return _singularity_handler->getSingularTaskRange();
-	}
-
-	VectorXd getSingularTorque() {
-		return _singularity_handler->getSingularTorques();
-	}
-
-	std::shared_ptr<ForceSensor> getForceSensorModel() {
-		return _force_sensor;
+		return _singularity_handler->getTaskRange();
 	}
 
 private:
