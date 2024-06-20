@@ -78,6 +78,17 @@ public:
         _dynamic_decoupling_type = type;
     }
 
+	void setBoundedInertiaEstimateThreshold(const double& threshold) {
+		if(threshold < 0){
+			_bie_threshold = 0;
+		}
+		_bie_threshold = threshold;
+	}
+
+	double getBoundedInertiaEstimateThreshold() {
+		return _bie_threshold;
+	}
+
     /**
      * @brief Get the nullspace 
      * 
@@ -186,6 +197,7 @@ private:
     // singularity setup
     std::shared_ptr<Sai2Model::Sai2Model> _robot;
     DynamicDecouplingType _dynamic_decoupling_type;
+	double _bie_threshold;
     std::string _link_name;
     Affine3d _compliant_frame;
     int _task_rank;

@@ -49,6 +49,7 @@ void JointTask::initialSetup() {
 	const int robot_dof = getConstRobotModel()->dof();
 	_task_dof = _joint_selection.rows();
 	setDynamicDecouplingType(DefaultParameters::dynamic_decoupling_type);
+	setBoundedInertiaEstimateThreshold(DefaultParameters::bie_threshold);
 	_current_position = _joint_selection * getConstRobotModel()->q();
 
 	// default values for gains and velocity saturation
@@ -258,8 +259,8 @@ void JointTask::updateTaskModel(const MatrixXd& N_prec) {
 		case BOUNDED_INERTIA_ESTIMATES: {
 			MatrixXd M_BIE = getConstRobotModel()->M();
 			for (int i = 0; i < getConstRobotModel()->dof(); i++) {
-				if (M_BIE(i, i) < BIE_SATURATION_VALUE) {
-					M_BIE(i, i) = BIE_SATURATION_VALUE;
+				if (M_BIE(i, i) < _bie_threshold) {
+					M_BIE(i, i) = _bie_threshold;
 				}
 			}
 			if (_is_partial_joint_task) {

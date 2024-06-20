@@ -56,6 +56,7 @@ SingularityHandler::SingularityHandler(std::shared_ptr<Sai2Model::Sai2Model> rob
     _dq_prior = VectorXd::Zero(_dof);
     setSingularityHandlingGains(KP_TYPE_1, KV_TYPE_1, KV_TYPE_2);
     setDynamicDecouplingType(BOUNDED_INERTIA_ESTIMATES);
+	setBoundedInertiaEstimateThreshold(0.1);
     _type_1_counter = 0;
     _type_2_counter = 0;
     _type_2_direction = VectorXd::Ones(_dof);
@@ -174,8 +175,8 @@ void SingularityHandler::updateTaskModel(const MatrixXd& projected_jacobian, con
         case BOUNDED_INERTIA_ESTIMATES: {
             MatrixXd M_BIE = _robot->M();
             for (int i = 0; i < _robot->dof(); i++) {
-                if (M_BIE(i, i) < 0.1) {
-                    M_BIE(i, i) = 0.1;
+                if (M_BIE(i, i) < _bie_threshold) {
+                    M_BIE(i, i) = _bie_threshold;
                 }
             }
             MatrixXd M_inv_BIE = M_BIE.inverse();

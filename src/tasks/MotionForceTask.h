@@ -41,6 +41,7 @@ public:
 	struct DefaultParameters {
 		static constexpr DynamicDecouplingType dynamic_decoupling_type =
 			DynamicDecouplingType::BOUNDED_INERTIA_ESTIMATES;
+		static constexpr double bie_threshold = 0.1;
 		static constexpr double kp_pos = 100.0;
 		static constexpr double kv_pos = 20.0;
 		static constexpr double ki_pos = 0.0;
@@ -664,6 +665,24 @@ public:
 	 */
 	void setDynamicDecouplingType(const DynamicDecouplingType type) {
 		_singularity_handler->setDynamicDecouplingType(type);
+	}
+
+	/**
+	 * @brief Set the threshold for the bounded inertia estimate
+	 * 
+	 * @param threshold threshold value 
+	 */
+	void setBoundedInertiaEstimateThreshold(const double threshold) {
+		_singularity_handler->setBoundedInertiaEstimateThreshold(threshold);
+	}
+
+	/**
+	 * @brief Get the threshold for the bounded inertia estimate
+	 * 
+	 * @return double threshold value 
+	 */
+	double getBoundedInertiaEstimateThreshold() {
+		return _singularity_handler->getBoundedInertiaEstimateThreshold();
 	}
 
     /**
