@@ -332,6 +332,11 @@ public:
 
 	bool getHomed() const { return _device_homed; }
 
+	void setOutputGoal(const Vector3d& goal_position, const Matrix3d& goal_orientation) {
+		_latest_output.robot_goal_position = goal_position;
+		_latest_output.robot_goal_orientation = goal_orientation;
+	}
+
 	/**
 	 * @brief sets the space in which the force feedback is computed by the
 	 * proxy method instead of using direct force feedback (used in
