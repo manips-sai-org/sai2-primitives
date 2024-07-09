@@ -1,10 +1,10 @@
 /*
- * ComMotionTask.cpp
+ * RelMotionForceTask.cpp
  *
  *      Author: Mikael Jorda
  */
 
-#include "ComMotionTask.h"
+#include "RelMotionForceTask.h"
 
 #include <stdexcept>
 
