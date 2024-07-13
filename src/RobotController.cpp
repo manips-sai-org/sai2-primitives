@@ -3,25 +3,24 @@
 using namespace Eigen;
 using namespace std;
 
-namespace {
-const std::string REDUNDANCY_COMPLETION_TASK_NAME =
-	"redundancy_completion_task";
-}
 namespace Sai2Primitives {
 
 RobotController::RobotController(std::shared_ptr<Sai2Model::Sai2Model>& robot,
 								 vector<shared_ptr<TemplateTask>>& tasks)
-	: _robot(robot), _tasks(tasks), _enable_gravity_compensation(false) {
-	if (_tasks.size() == 0) {
+	: _robot(robot), _enable_gravity_compensation(false) {
+	if (tasks.size() == 0) {
 		throw std::invalid_argument(
 			"RobotController must have at least one task");
 	}
-	for (auto& task : _tasks) {
+
+	bool cannot_accept_new_tasks = false;
+
+	for (auto& task : tasks) {
 		if (task->getConstRobotModel() != _robot) {
 			throw std::invalid_argument(
 				"All tasks must have the same robot model in RobotController");
 		}
-		if (task->getLoopTimestep() != _tasks[0]->getLoopTimestep()) {
+		if (task->getLoopTimestep() != tasks[0]->getLoopTimestep()) {
 			throw std::invalid_argument(
 				"All tasks must have the same loop timestep in "
 				"RobotController");
@@ -32,12 +31,23 @@ RobotController::RobotController(std::shared_ptr<Sai2Model::Sai2Model>& robot,
 				"Tasks in RobotController must have unique names");
 		}
 		_task_names.push_back(task->getTaskName());
+		_tasks.push_back(task);
+
+		if (cannot_accept_new_tasks) {
+			throw std::invalid_argument(
+				"task [" + task->getTaskName() +
+				"] cannot be added to the controller because it is in the "
+				"nullspace of a full joint task");
+			break;
+		}
+
+		if (task->getTaskType() == TaskType::JOINT_TASK) {
+			auto joint_task = std::dynamic_pointer_cast<JointTask>(task);
+			if (joint_task->isFullJointTask()) {
+				cannot_accept_new_tasks = true;
+			}
+		}
 	}
-	_redundancy_completion_task = std::make_shared<JointTask>(
-		_robot, REDUNDANCY_COMPLETION_TASK_NAME, _tasks[0]->getLoopTimestep());
-	_redundancy_completion_task->disableInternalOtg();
-	_redundancy_completion_task->disableVelocitySaturation();
-	_task_names.push_back(REDUNDANCY_COMPLETION_TASK_NAME);
 }
 
 void RobotController::updateControllerTaskModels() {
@@ -47,7 +57,6 @@ void RobotController::updateControllerTaskModels() {
 		task->updateTaskModel(N_prec);
 		N_prec = task->getTaskAndPreviousNullspace();
 	}
-	_redundancy_completion_task->updateTaskModel(N_prec);
 }
 
 Eigen::VectorXd RobotController::computeControlTorques() {
@@ -58,13 +67,10 @@ Eigen::VectorXd RobotController::computeControlTorques() {
 		previous_tasks_disturbance = (MatrixXd::Identity(dof, dof) -
 									  task->getTaskNullspace().transpose()) *
 									 control_torques;
-		control_torques += task->computeTorques() - previous_tasks_disturbance;
+		control_torques += task->getPreviousTasksNullspace().transpose() *
+							   task->computeTorques() -
+						   previous_tasks_disturbance;
 	}
-	previous_tasks_disturbance =
-		_redundancy_completion_task->getPreviousTasksNullspace().transpose() *
-		control_torques;
-	control_torques += _redundancy_completion_task->computeTorques() -
-					   previous_tasks_disturbance;
 
 	if (_enable_gravity_compensation) {
 		control_torques += _robot->jointGravityVector();
@@ -76,14 +82,10 @@ void RobotController::reinitializeTasks() {
 	for (auto& task : _tasks) {
 		task->reInitializeTask();
 	}
-	_redundancy_completion_task->reInitializeTask();
 }
 
 std::shared_ptr<JointTask> RobotController::getJointTaskByName(
 	const std::string& task_name) {
-	if (task_name == REDUNDANCY_COMPLETION_TASK_NAME) {
-		return _redundancy_completion_task;
-	}
 	for (auto& task : _tasks) {
 		if (task->getTaskName() == task_name) {
 			if (task->getTaskType() != TaskType::JOINT_TASK) {

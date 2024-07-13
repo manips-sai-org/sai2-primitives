@@ -135,11 +135,14 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 	Matrix3d goal_orientation = initial_orientation;
 
 	// joint task to control the nullspace
+	auto joint_task = make_shared<Sai2Primitives::JointTask>(robot);
+
+	// controller
 	vector<shared_ptr<Sai2Primitives::TemplateTask>> task_list = {
-		motion_force_task};
+		motion_force_task, joint_task};
 	auto robot_controller =
 		make_unique<Sai2Primitives::RobotController>(robot, task_list);
-	robot_controller->getRedundancyCompletionTask()->setGains(100.0, 20.0);
+	joint_task->setGains(100.0, 20.0);
 
 	// create a loop timer
 	double control_freq = 1000;
@@ -184,8 +187,7 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 		if (timer.elapsedCycles() == 8000) {
 			VectorXd q_des = robot->q();
 			q_des(0) += 0.5;
-			robot_controller->getRedundancyCompletionTask()->setGoalPosition(
-				q_des);
+			joint_task->setGoalPosition(q_des);
 		}
 
 		motion_force_task->setGoalPosition(goal_position);

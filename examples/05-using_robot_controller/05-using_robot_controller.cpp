@@ -122,9 +122,12 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 		robot->positionInWorld(link_name, pos_in_link);
 	const VectorXd initial_q = robot->q();
 
+	// joint task in the nullspace of the motion-force task
+	auto joint_task = make_shared<Sai2Primitives::JointTask>(robot);
+
 	// robot controller to automatize the task update and control computation
 	vector<shared_ptr<Sai2Primitives::TemplateTask>> task_list = {
-		motion_force_task};
+		motion_force_task, joint_task};
 	auto robot_controller =
 		make_unique<Sai2Primitives::RobotController>(robot, task_list);
 
@@ -182,7 +185,7 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 		if (timer.elapsedCycles() == 5000) {
 			VectorXd goal_joint_pos = initial_q;
 			goal_joint_pos(0) += 1.5;
-			robot_controller->getRedundancyCompletionTask()->setGoalPosition(
+			joint_task->setGoalPosition(
 				goal_joint_pos);
 		}
 

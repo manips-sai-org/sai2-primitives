@@ -112,6 +112,7 @@ public:
 	const MatrixXd getJointSelectionMatrix() const { return _joint_selection; }
 
 	int getTaskDof() const { return _task_dof; }
+	bool isFullJointTask() const { return _task_dof == getConstRobotModel()->dof(); }
 
 	/**
 	 * @brief Get the Current Position
@@ -448,8 +449,6 @@ private:
 	MatrixXd _projected_jacobian;
 	MatrixXd _N;
 	MatrixXd _current_task_range;
-
-	bool _is_partial_joint_task;
 };
 
 } /* namespace Sai2Primitives */
