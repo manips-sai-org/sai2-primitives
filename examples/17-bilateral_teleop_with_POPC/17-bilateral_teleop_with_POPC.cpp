@@ -158,8 +158,9 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 	motion_force_task->setOriControlGains(200.0, 25.0);
 	Vector3d prev_sensed_force = Vector3d::Zero();
 
+	auto joint_task = make_shared<Sai2Primitives::JointTask>(robot);
 	vector<shared_ptr<Sai2Primitives::TemplateTask>> task_list = {
-		motion_force_task};
+		motion_force_task, joint_task};
 	auto robot_controller =
 		make_unique<Sai2Primitives::RobotController>(robot, task_list);
 

@@ -126,8 +126,11 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 	Vector3d goal_position = initial_position;
 
 	// joint task to control the nullspace
+	auto joint_task = make_shared<Sai2Primitives::JointTask>(robot);
+
+	// controller
 	vector<shared_ptr<Sai2Primitives::TemplateTask>> task_list = {
-		motion_force_task};
+		motion_force_task, joint_task};
 	auto robot_controller =
 		make_unique<Sai2Primitives::RobotController>(robot, task_list);
 
