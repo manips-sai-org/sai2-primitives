@@ -165,9 +165,9 @@ void SingularityHandler::updateTaskModel(const MatrixXd& projected_jacobian, con
         }
 
         case IMPEDANCE: {
-            _Lambda_ns_modified.setIdentity();
-            _Lambda_s_modified.setIdentity();
-            _Lambda_joint_s_modified.setIdentity();
+            _Lambda_ns_modified = MatrixXd::Identity(_task_range_ns.cols(), _task_range_ns.cols());
+            _Lambda_s_modified = MatrixXd::Identity(_task_range_s.cols(), _task_range_s.cols());
+            _Lambda_joint_s_modified = MatrixXd::Identity(_joint_task_range_s.cols(), _joint_task_range_s.cols());
             break;
         }
 
@@ -305,6 +305,9 @@ VectorXd SingularityHandler::computeTorques(const VectorXd& unit_mass_force, con
 
     if (_singularity_types.size() == 0) {
         return _projected_jacobian_ns.transpose() * (_Lambda_ns_modified * _task_range_ns.transpose() * unit_mass_force + \
+                    _task_range_ns.transpose() * force_related_terms);
+    } else if (_dynamic_decoupling_type == IMPEDANCE) {
+        return _projected_jacobian_ns.transpose() * (_task_range_ns.transpose() * unit_mass_force + \
                     _task_range_ns.transpose() * force_related_terms);
     } else {
         VectorXd tau_ns = VectorXd::Zero(_dof);
