@@ -3,6 +3,8 @@ cmake_minimum_required(VERSION 3.10)
 project(SAI2-PRIMITIVES)
 set(PROJECT_VERSION 0.1.0)
 
+option(BUILD_EXAMPLES "Build examples" ON)
+
 set(CMAKE_CXX_FLAGS "-std=c++17 -I/usr/include -I/usr/local/include -fPIC")
 if(${CMAKE_SYSTEM_NAME} MATCHES Darwin)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I/opt/homebrew/include")
@@ -16,6 +18,10 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
       CACHE STRING "Choose the type of build." FORCE)
   set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release"
                                                "MinSizeRel" "RelWithDebInfo")
+endif()
+
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2")
 endif()
 
 # include Eigen
@@ -37,6 +43,7 @@ set(CONTROLLERS_SOURCE
     ${PROJECT_SOURCE_DIR}/src/RobotController.cpp
     ${PROJECT_SOURCE_DIR}/src/tasks/MotionForceTask.cpp
     ${PROJECT_SOURCE_DIR}/src/tasks/JointTask.cpp
+    ${PROJECT_SOURCE_DIR}/src/tasks/SingularityHandler.cpp
     ${PROJECT_SOURCE_DIR}/src/HapticDeviceController.cpp
     ${PROJECT_SOURCE_DIR}/src/POPCBilateralTeleoperation.cpp)
 
@@ -45,7 +52,8 @@ set(HELPER_MODULES_SOURCE
     ${PROJECT_SOURCE_DIR}/src/helper_modules/POPCExplicitForceControl.cpp
     ${PROJECT_SOURCE_DIR}/src/helper_modules/OTG_joints.cpp
     ${PROJECT_SOURCE_DIR}/src/helper_modules/OTG_6dof_cartesian.cpp
-    ${PROJECT_SOURCE_DIR}/src/helper_modules/Sai2PrimitivesCommonDefinitions.cpp)
+    ${PROJECT_SOURCE_DIR}/src/helper_modules/Sai2PrimitivesCommonDefinitions.cpp
+)
 
 # add header files
 set(SAI2-PRIMITIVES_INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/src
@@ -90,4 +98,6 @@ write_basic_package_version_file(
   COMPATIBILITY SameMajorVersion)
 
 # add examples
-add_subdirectory(${PROJECT_SOURCE_DIR}/examples)
+if(BUILD_EXAMPLES)
+  add_subdirectory(${PROJECT_SOURCE_DIR}/examples)
+endif()

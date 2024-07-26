@@ -28,20 +28,13 @@ namespace Sai2Primitives {
 
 class JointTask : public TemplateTask {
 public:
-	enum DynamicDecouplingType {
-		FULL_DYNAMIC_DECOUPLING,	// use the real Mass matrix
-		BOUNDED_INERTIA_ESTIMATES,	// use a Mass matrix computed from
-									// saturating the minimal values of the Mass
-									// Matrix
-		IMPEDANCE,					// use Identity for the Mass matrix
-	};
-
 	struct DefaultParameters {
 		static constexpr double kp = 50.0;
 		static constexpr double kv = 14.0;
 		static constexpr double ki = 0.0;
 		static constexpr DynamicDecouplingType dynamic_decoupling_type =
-			BOUNDED_INERTIA_ESTIMATES;
+			DynamicDecouplingType::BOUNDED_INERTIA_ESTIMATES;
+		static constexpr double bie_threshold = 0.1;
 		static constexpr bool use_internal_otg = true;
 		static constexpr bool internal_otg_jerk_limited = false;
 		static constexpr double otg_max_velocity = M_PI / 3.0;
@@ -119,6 +112,7 @@ public:
 	const MatrixXd getJointSelectionMatrix() const { return _joint_selection; }
 
 	int getTaskDof() const { return _task_dof; }
+	bool isFullJointTask() const { return _task_dof == getConstRobotModel()->dof(); }
 
 	/**
 	 * @brief Get the Current Position
@@ -359,6 +353,40 @@ public:
 		_dynamic_decoupling_type = type;
 	}
 
+	/**
+	 * @brief Set the Bounded Inertia Estimate Threshold
+	 * 
+	 * @param threshold 
+	 */
+	void setBoundedInertiaEstimateThreshold(const double threshold) {
+		if(threshold < 0) {
+			_bie_threshold = 0;
+		} else {
+			_bie_threshold = threshold;
+		}
+	}
+
+	/**
+	 * @brief Get the Bounded Inertia Estimate Threshold value
+	 * 
+	 * @return double 
+	 */
+	double getBoundedInertiaEstimateThreshold() const {
+		return _bie_threshold;
+	}
+
+	/**
+	 * @brief	   Returns whether current position is within a tolerance to the goal
+	*/
+	bool goalPositionReached(const double& tol = 1e-2);
+
+	/**
+	 * @brief	Reset integrator error  
+	*/
+	void resetIntegrators() {
+		_integrated_position_error.setZero();
+	}
+
 	//-----------------------------------------------
 	//         Member variables
 	//-----------------------------------------------
@@ -413,14 +441,14 @@ private:
 	DynamicDecouplingType
 		_dynamic_decoupling_type;  // defaults to BOUNDED_INERTIA_ESTIMATES. See
 								   // the enum for more details
+	double _bie_threshold;		   // threshold for the bounded inertia estimate
+								   // decoupling type
 
 	MatrixXd _joint_selection;	// selection matrix for the joint task, defaults
 								// to Identity
 	MatrixXd _projected_jacobian;
 	MatrixXd _N;
 	MatrixXd _current_task_range;
-
-	bool _is_partial_joint_task;
 };
 
 } /* namespace Sai2Primitives */

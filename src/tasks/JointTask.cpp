@@ -17,8 +17,6 @@ JointTask::JointTask(std::shared_ptr<Sai2Model::Sai2Model>& robot,
 	// selection for full joint task
 	_joint_selection = MatrixXd::Identity(getConstRobotModel()->dof(),
 										  getConstRobotModel()->dof());
-	_is_partial_joint_task = false;
-
 	initialSetup();
 }
 
@@ -40,7 +38,6 @@ JointTask::JointTask(std::shared_ptr<Sai2Model::Sai2Model>& robot,
 			"constructor\n");
 	}
 	_joint_selection = joint_selection_matrix;
-	_is_partial_joint_task = true;
 
 	initialSetup();
 }
@@ -49,12 +46,14 @@ void JointTask::initialSetup() {
 	const int robot_dof = getConstRobotModel()->dof();
 	_task_dof = _joint_selection.rows();
 	setDynamicDecouplingType(DefaultParameters::dynamic_decoupling_type);
+	setBoundedInertiaEstimateThreshold(DefaultParameters::bie_threshold);
 	_current_position = _joint_selection * getConstRobotModel()->q();
 
 	// default values for gains and velocity saturation
-	setGains(DefaultParameters::kp, DefaultParameters::kv, DefaultParameters::ki);
+	setGains(DefaultParameters::kp, DefaultParameters::kv,
+			 DefaultParameters::ki);
 
-	if(DefaultParameters::use_velocity_saturation) {
+	if (DefaultParameters::use_velocity_saturation) {
 		enableVelocitySaturation(DefaultParameters::saturation_velocity);
 	} else {
 		disableVelocitySaturation();
@@ -71,14 +70,16 @@ void JointTask::initialSetup() {
 	// initialize internal otg
 	_otg = make_shared<OTG_joints>(_joint_selection * getConstRobotModel()->q(),
 								   getLoopTimestep());
-	if(DefaultParameters::use_internal_otg) {
-		if(DefaultParameters::internal_otg_jerk_limited) {
-			enableInternalOtgJerkLimited(DefaultParameters::otg_max_velocity,
-										 DefaultParameters::otg_max_acceleration,
-										 DefaultParameters::otg_max_jerk);
+	if (DefaultParameters::use_internal_otg) {
+		if (DefaultParameters::internal_otg_jerk_limited) {
+			enableInternalOtgJerkLimited(
+				DefaultParameters::otg_max_velocity,
+				DefaultParameters::otg_max_acceleration,
+				DefaultParameters::otg_max_jerk);
 		} else {
-			enableInternalOtgAccelerationLimited(DefaultParameters::otg_max_velocity,
-												 DefaultParameters::otg_max_acceleration);
+			enableInternalOtgAccelerationLimited(
+				DefaultParameters::otg_max_velocity,
+				DefaultParameters::otg_max_acceleration);
 		}
 	} else {
 		disableInternalOtg();
@@ -133,7 +134,7 @@ void JointTask::setGoalAcceleration(const VectorXd& goal_acceleration) {
 }
 
 void JointTask::setGainsUnsafe(const VectorXd& kp, const VectorXd& kv,
-						 const VectorXd& ki) {
+							   const VectorXd& ki) {
 	if (kp.size() == 1 && kv.size() == 1 && ki.size() == 1) {
 		_are_gains_isotropic = true;
 		_kp = kp(0) * MatrixXd::Identity(_task_dof, _task_dof);
@@ -237,16 +238,11 @@ void JointTask::updateTaskModel(const MatrixXd& N_prec) {
 		return;
 	}
 
-		Sai2Model::OpSpaceMatrices op_space_matrices =
-			getConstRobotModel()->operationalSpaceMatrices(
-				_current_task_range.transpose() * _projected_jacobian);
-		_M_partial = op_space_matrices.Lambda;
-		_N = op_space_matrices.N;
-	} else {
-		_current_task_range = MatrixXd::Identity(_task_dof, _task_dof);
-		_M_partial = getConstRobotModel()->M();
-		_N.setZero(robot_dof, robot_dof);
-	}
+	Sai2Model::OpSpaceMatrices op_space_matrices =
+		getConstRobotModel()->operationalSpaceMatrices(
+			_current_task_range.transpose() * _projected_jacobian);
+	_M_partial = op_space_matrices.Lambda;
+	_N = op_space_matrices.N;
 
 	switch (_dynamic_decoupling_type) {
 		case FULL_DYNAMIC_DECOUPLING: {
@@ -257,20 +253,16 @@ void JointTask::updateTaskModel(const MatrixXd& N_prec) {
 		case BOUNDED_INERTIA_ESTIMATES: {
 			MatrixXd M_BIE = getConstRobotModel()->M();
 			for (int i = 0; i < getConstRobotModel()->dof(); i++) {
-				if (M_BIE(i, i) < 0.1) {
-					M_BIE(i, i) = 0.1;
+				if (M_BIE(i, i) < _bie_threshold) {
+					M_BIE(i, i) = _bie_threshold;
 				}
 			}
-			if (_is_partial_joint_task) {
-				MatrixXd M_inv_BIE = M_BIE.inverse();
-				_M_partial_modified =
-					(_current_task_range.transpose() * _projected_jacobian *
-					 M_inv_BIE * _projected_jacobian.transpose() *
-					 _current_task_range)
-						.inverse();
-			} else {
-				_M_partial_modified = M_BIE;
-			}
+			MatrixXd M_inv_BIE = M_BIE.inverse();
+			_M_partial_modified =
+				(_current_task_range.transpose() * _projected_jacobian *
+				 M_inv_BIE * _projected_jacobian.transpose() *
+				 _current_task_range)
+					.inverse();
 			break;
 		}
 
@@ -345,8 +337,7 @@ VectorXd JointTask::computeTorques() {
 	}
 
 	VectorXd partial_joint_task_torques_in_range_space =
-		_M_partial * _current_task_range.transpose() *
-			_desired_acceleration +
+		_M_partial * _current_task_range.transpose() * _desired_acceleration +
 		_M_partial_modified * _current_task_range.transpose() *
 			partial_joint_task_torques;
 
@@ -430,6 +421,17 @@ void JointTask::enableVelocitySaturation(const VectorXd& saturation_velocity) {
 	}
 	_use_velocity_saturation_flag = true;
 	_saturation_velocity = saturation_velocity;
+}
+
+bool JointTask::goalPositionReached(const double& tol) {
+	double squared_error =
+		(_current_position - _goal_position).transpose() * _current_task_range *
+		_current_task_range.transpose() * (_current_position - _goal_position);
+	if (std::sqrt(squared_error) < tol) {
+		return true;
+	} else {
+		return false;
+	}
 }
 
 } /* namespace Sai2Primitives */

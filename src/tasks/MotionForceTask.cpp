@@ -90,7 +90,6 @@ MotionForceTask::MotionForceTask(
 }
 
 void MotionForceTask::initialSetup() {
-	setDynamicDecouplingType(BOUNDED_INERTIA_ESTIMATES);
 
 	int dof = getConstRobotModel()->dof();
 	_T_control_to_sensor = Affine3d::Identity();
@@ -189,7 +188,16 @@ void MotionForceTask::initialSetup() {
 		disableInternalOtg();
 	}
 
-	reInitializeTask();
+	// singularity handler
+	_singularity_handler = std::make_unique<SingularityHandler>(getConstRobotModel(), 
+		      													_link_name,
+																_compliant_frame,
+																_pos_range + _ori_range);
+	setSingularityHandlingBounds(6e-3, 6e-2); 
+	setDynamicDecouplingType(DefaultParameters::dynamic_decoupling_type);
+	setBoundedInertiaEstimateThreshold(DefaultParameters::bie_threshold);
+
+	reInitializeTask();	
 }
 
 void MotionForceTask::reInitializeTask() {
@@ -254,88 +262,9 @@ void MotionForceTask::updateTaskModel(const MatrixXd& N_prec) {
 					_link_name, _compliant_frame.translation());
 	_projected_jacobian = _jacobian * _N_prec;
 
-	MatrixXd range_pos =
-		Sai2Model::matrixRangeBasis(_projected_jacobian.topRows(3));
-	MatrixXd range_ori =
-		Sai2Model::matrixRangeBasis(_projected_jacobian.bottomRows(3));
+	_singularity_handler->updateTaskModel(_projected_jacobian, _N_prec);
+	_N = _singularity_handler->getNullspace();  
 
-	_pos_range = range_pos.norm() == 0 ? 0 : range_pos.cols();
-	_ori_range = range_ori.norm() == 0 ? 0 : range_ori.cols();
-
-	if (_pos_range + _ori_range == 0) {
-		// there is no controllable degree of freedom for the task, just return
-		// should maybe print a warning here
-		_N.setIdentity(robot_dof, robot_dof);
-		return;
-	}
-
-	_current_task_range.setZero(6, _pos_range + _ori_range);
-	if (_pos_range > 0) {
-		_current_task_range.block(0, 0, 3, _pos_range) = range_pos;
-	}
-	if (_ori_range > 0) {
-		_current_task_range.block(3, _pos_range, 3, _ori_range) = range_ori;
-	}
-
-	Sai2Model::OpSpaceMatrices op_space_matrices =
-		getConstRobotModel()->operationalSpaceMatrices(
-			_current_task_range.transpose() * _projected_jacobian);
-	_Lambda = op_space_matrices.Lambda;
-	_Jbar = op_space_matrices.Jbar;
-	_N = op_space_matrices.N;
-
-	switch (_dynamic_decoupling_type) {
-		case FULL_DYNAMIC_DECOUPLING: {
-			_Lambda_modified = _Lambda;
-			break;
-		}
-
-		case PARTIAL_DYNAMIC_DECOUPLING: {
-			_Lambda_modified = _Lambda;
-			if (_ori_range > 0) {
-				_Lambda_modified.block(_pos_range, _pos_range, _ori_range,
-									   _ori_range) =
-					MatrixXd::Identity(_ori_range, _ori_range);
-				if (_pos_range > 0) {
-					_Lambda_modified.block(0, _pos_range, _pos_range,
-										   _ori_range) =
-						MatrixXd::Zero(_pos_range, _ori_range);
-					_Lambda_modified.block(_pos_range, 0, _ori_range,
-										   _pos_range) =
-						MatrixXd::Zero(_ori_range, _pos_range);
-				}
-			}
-
-			break;
-		}
-
-		case IMPEDANCE: {
-			_Lambda_modified = MatrixXd::Identity(_pos_range + _ori_range,
-												  _pos_range + _ori_range);
-			break;
-		}
-
-		case BOUNDED_INERTIA_ESTIMATES: {
-			MatrixXd M_BIE = getConstRobotModel()->M();
-			for (int i = 0; i < getConstRobotModel()->dof(); i++) {
-				if (M_BIE(i, i) < 0.1) {
-					M_BIE(i, i) = 0.1;
-				}
-			}
-			MatrixXd M_inv_BIE = M_BIE.inverse();
-			MatrixXd Lambda_inv_BIE =
-				_current_task_range.transpose() * _projected_jacobian *
-				(M_inv_BIE * _projected_jacobian.transpose()) *
-				_current_task_range;
-			_Lambda_modified = Lambda_inv_BIE.inverse();
-			break;
-		}
-
-		default: {
-			_Lambda_modified = _Lambda;
-			break;
-		}
-	}
 }
 
 VectorXd MotionForceTask::computeTorques() {
@@ -554,14 +483,8 @@ VectorXd MotionForceTask::computeTorques() {
 		force_feedback_related_force + feedforward_force_moment.head(3);
 	_linear_motion_control = position_related_force;
 
-	_task_force = _Lambda_modified * _current_task_range.transpose() *
-					  (position_orientation_contribution) +
-				  _current_task_range.transpose() *
-					  (force_moment_contribution + feedforward_force_moment);
-
-	// compute task torques
-	task_joint_torques =
-		_projected_jacobian.transpose() * _current_task_range * _task_force;
+	// compute torque through singularity handler 
+	task_joint_torques = _singularity_handler->computeTorques(_unit_mass_force, force_moment_contribution + feedforward_force_moment);
 
 	return task_joint_torques;
 }

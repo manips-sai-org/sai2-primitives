@@ -144,8 +144,9 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 	motion_force_task->disableInternalOtg();
 	motion_force_task->enableVelocitySaturation(0.7, M_PI);
 
+	auto joint_task = make_shared<Sai2Primitives::JointTask>(robot);
 	vector<shared_ptr<Sai2Primitives::TemplateTask>> task_list = {
-		motion_force_task};
+		motion_force_task, joint_task};
 	auto robot_controller =
 		make_unique<Sai2Primitives::RobotController>(robot, task_list);
 
