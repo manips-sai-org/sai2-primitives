@@ -229,14 +229,13 @@ void JointTask::updateTaskModel(const MatrixXd& N_prec) {
 	_N_prec = N_prec;
 	_projected_jacobian = _joint_selection * _N_prec;
 
-	if (_is_partial_joint_task) {
-		_current_task_range = Sai2Model::matrixRangeBasis(_projected_jacobian);
-		if (_current_task_range.norm() == 0) {
-			// there is no controllable degree of freedom for the task, just
-			// return should maybe print a warning here
-			_N.setIdentity(robot_dof, robot_dof);
-			return;
-		}
+	_current_task_range = Sai2Model::matrixRangeBasis(_projected_jacobian);
+	if (_current_task_range.norm() == 0) {
+		// there is no controllable degree of freedom for the task, just
+		// return should maybe print a warning here
+		_N = Eigen::MatrixXd::Identity(robot_dof, robot_dof);
+		return;
+	}
 
 		Sai2Model::OpSpaceMatrices op_space_matrices =
 			getConstRobotModel()->operationalSpaceMatrices(
@@ -302,7 +301,7 @@ VectorXd JointTask::computeTorques() {
 	if (_current_task_range.norm() == 0) {
 		// there is no controllable degree of freedom for the task, just return
 		// zero torques. should maybe print a warning here
-		return partial_joint_task_torques;
+		return VectorXd::Zero(getConstRobotModel()->dof());
 	}
 
 	_desired_position = _goal_position;
@@ -358,7 +357,7 @@ VectorXd JointTask::computeTorques() {
 
 void JointTask::enableInternalOtgAccelerationLimited(
 	const VectorXd& max_velocity, const VectorXd& max_acceleration) {
-	if (max_velocity.size() == 1 && max_acceleration.size() == 1) {
+	if (max_velocity.size() == 1 && max_acceleration.size() == 1 && _task_dof != 1) {
 		enableInternalOtgAccelerationLimited(max_velocity(0),
 											 max_acceleration(0));
 		return;
@@ -383,7 +382,7 @@ void JointTask::enableInternalOtgJerkLimited(const VectorXd& max_velocity,
 											 const VectorXd& max_acceleration,
 											 const VectorXd& max_jerk) {
 	if (max_velocity.size() == 1 && max_acceleration.size() == 1 &&
-		max_jerk.size() == 1) {
+		max_jerk.size() == 1 && _task_dof != 1) {
 		enableInternalOtgJerkLimited(max_velocity(0), max_acceleration(0),
 									 max_jerk(0));
 		return;
