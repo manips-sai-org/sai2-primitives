@@ -72,6 +72,10 @@ public:
 		static constexpr bool internal_otg_jerk_limited = false;
 		static constexpr double otg_max_linear_jerk = 10.0;
 		static constexpr double otg_max_angular_jerk = 10.0 * M_PI;
+		static constexpr double force_zero_crossing_threshold = 0.05;
+		static constexpr double moment_zero_crossing_threshold = 0.05;
+		static constexpr double position_zero_crossing_threshold = 0.05;
+		static constexpr double orientation_zero_crossing_threshold = 0.05;
 	};
 
 	//------------------------------------------------
@@ -183,6 +187,8 @@ public:
 	const Vector3d& getSensedMomentSensor() const {
 		return _sensed_moment_sensor_frame;
 	}
+	
+	const Vector3d& getSensedForceCustomWorldFrame(const Vector3d& control_point);
 
 	/**
 	 * @brief Get the nullspace of this task associated with the constrained,
@@ -646,6 +652,8 @@ public:
 	 */
 	void resetIntegratorsAngular();
 
+	void resetIntegratorsAngularByIndex(const int ind);
+
 	Matrix3d posSelectionProjector() const {
 		return _partial_task_projection.block<3, 3>(0, 0);
 	}
@@ -722,6 +730,15 @@ public:
      */
 	void setSingularityHandlingGains(const double& kp_type_1, const double& kv_type_1, const double& kv_type_2) {
 		_singularity_handler->setSingularityHandlingGains(kp_type_1, kv_type_1, kv_type_2);
+	}
+
+	void setControlPoint(const Vector3d& control_point) {
+		std::cout << "Changing control point to " << control_point.transpose() << "\n";
+		// record delta difference in position command from control point move 
+		// _desired_position_offset_from_moving_control_point = \
+			// - getConstRobotModel()->positionInWorld(_link_name, _compliant_frame.translation()) + getConstRobotModel()->positionInWorld(_link_name, control_point);
+		_compliant_frame.translation() = control_point;
+		// reInitializeTask();
 	}
 
 private:
@@ -826,6 +843,8 @@ private:
 	double _kff_moment;
 	double _max_force_control_feedback_output;
 	double _max_moment_control_feedback_output;
+	double _force_zero_crossing_threshold;
+	double _moment_zero_crossing_threshold;
 
 	// POPC for closed loop force control
 	std::unique_ptr<POPCExplicitForceControl> _POPC_force;
@@ -857,6 +876,9 @@ private:
 
 	// singularity handler
 	std::unique_ptr<SingularityHandler> _singularity_handler;
+
+	// moving control point 
+	Vector3d _desired_position_offset_from_moving_control_point;
 };
 
 } /* namespace Sai2Primitives */

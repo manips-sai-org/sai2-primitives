@@ -417,10 +417,16 @@ void HapticDeviceController::motionMotionControlOrientation(
 	}
 
 	// Find proxy orientation and angular velocity
+	// AngleAxisd scaled_robot_orientation_from_center_aa =
+	// 	orientationDiffAngleAxis(_robot_center_pose.rotation(),
+	// 							 input.robot_orientation,
+	// 							 1.0 / _scaling_factor_ori);
+
 	AngleAxisd scaled_robot_orientation_from_center_aa =
 		orientationDiffAngleAxis(_robot_center_pose.rotation(),
 								 input.robot_orientation,
-								 1.0 / _scaling_factor_ori);
+								 _scaling_factor_ori);
+
 	Matrix3d proxy_orientation =
 		_R_world_device.transpose() *
 		scaled_robot_orientation_from_center_aa.toRotationMatrix() *

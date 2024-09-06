@@ -363,6 +363,18 @@ public:
 		_integrated_position_error.setZero();
 	}
 
+	void resetIntegratorsByIndex(const int ind) {
+		if (ind < 0 || ind > _task_dof - 1) {
+			std::cout << "Invalid index for joint task integrator reset\n";
+		} else {
+			_integrated_position_error(ind) = 0;
+		}
+	}
+
+	VectorXd getCurrentError() {
+		return _position_error;
+	}
+
 	//-----------------------------------------------
 	//         Member variables
 	//-----------------------------------------------
@@ -390,6 +402,7 @@ private:
 	VectorXd _current_velocity;
 
 	// state variables for the integrator
+	VectorXd _position_error;
 	VectorXd _integrated_position_error;
 
 	// controller gains

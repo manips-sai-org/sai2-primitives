@@ -196,6 +196,8 @@ void MotionForceTask::initialSetup() {
 	setSingularityHandlingBounds(6e-3, 6e-2); 
 	setDynamicDecouplingType(BOUNDED_INERTIA_ESTIMATES);
 
+	_desired_position_offset_from_moving_control_point = Vector3d::Zero();
+
 	reInitializeTask();	
 }
 
@@ -376,7 +378,7 @@ VectorXd MotionForceTask::computeTorques() {
 
 	// motion related terms
 	// compute next state from trajectory generation
-	_desired_position = _goal_position;
+	_desired_position = _goal_position + _desired_position_offset_from_moving_control_point;
 	_desired_orientation = _goal_orientation;
 	_desired_linear_velocity = _goal_linear_velocity;
 	_desired_angular_velocity = _goal_angular_velocity;
@@ -384,7 +386,7 @@ VectorXd MotionForceTask::computeTorques() {
 	_desired_angular_acceleration = _goal_angular_acceleration;
 
 	if (_use_internal_otg_flag) {
-		_otg->setGoalPositionAndLinearVelocity(_goal_position,
+		_otg->setGoalPositionAndLinearVelocity(_goal_position + _desired_position_offset_from_moving_control_point,
 											   _goal_linear_velocity);
 		_otg->setGoalOrientationAndAngularVelocity(_goal_orientation,
 												   _goal_angular_velocity);
@@ -963,6 +965,15 @@ void MotionForceTask::resetIntegratorsLinear() {
 void MotionForceTask::resetIntegratorsAngular() {
 	_integrated_orientation_error.setZero();
 	_integrated_moment_error.setZero();
+}
+
+void MotionForceTask::resetIntegratorsAngularByIndex(const int ind) {
+	if (ind < 0 || ind > 3) {
+		std::cout << "Invalid integrator index for motion force task\n";
+	} else {
+		_integrated_orientation_error(ind) = 0;
+		_integrated_moment_error(ind) = 0;
+	}
 }
 
 } /* namespace Sai2Primitives */

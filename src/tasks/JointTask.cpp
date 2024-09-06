@@ -319,6 +319,8 @@ VectorXd JointTask::computeTorques() {
 		_desired_acceleration = _otg->getNextAcceleration();
 	}
 
+	_position_error = _current_position - _desired_position;
+
 	// compute error for I term
 	_integrated_position_error +=
 		(_current_position - _desired_position) * getLoopTimestep();
