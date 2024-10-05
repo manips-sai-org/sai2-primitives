@@ -624,6 +624,35 @@ public:
 	 */
 	void setMomentDeadbandForceMotionController(const double force_deadband);
 
+	/**
+	 * @brief Get the Haptic Center Position object
+	 * 
+	 * @return Vector3d 
+	 */
+	Vector3d getHapticCenterPosition() {
+		return _device_home_pose.translation();
+	}
+
+	/**
+	 * @brief Get the Robot Center Position object
+	 * 
+	 * @return Vector3d 
+	 */
+	Vector3d getRobotCenterPosition() {
+		return _robot_center_pose.translation();
+	}
+
+	/**
+	 * @brief Set the Output Goal object
+	 * 
+	 * @param goal_position 
+	 * @param goal_orientation 
+	 */
+	void setOutputGoal(const Vector3d& goal_position, const Matrix3d& goal_orientation) {
+       _latest_output.robot_goal_position = goal_position;
+       _latest_output.robot_goal_orientation = goal_orientation;
+    }
+
 private:
 	// controller states
 	bool _orientation_teleop_enabled;
