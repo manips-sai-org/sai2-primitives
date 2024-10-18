@@ -165,7 +165,7 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 	haptic_controller->disableOrientationTeleop();
 
 	Sai2Primitives::HapticControllerInput haptic_input;
-	Sai2Primitives::HapticControllerOtuput haptic_output;
+	Sai2Primitives::HapticControllerOutput haptic_output;
 
 	// setup redis communication
 	redis_client.addToSendGroup(createRedisKey(COMMANDED_FORCE_KEY_SUFFIX, 0),

@@ -28,13 +28,13 @@ enum HapticControlType {
 	FORCE_MOTION,
 };
 
-struct HapticControllerOtuput {
+struct HapticControllerOutput {
 	Vector3d robot_goal_position;	  // world frame
 	Matrix3d robot_goal_orientation;  // world frame
 	Vector3d device_command_force;	  // device base frame
 	Vector3d device_command_moment;	  // device base frame
 
-	HapticControllerOtuput()
+	HapticControllerOutput()
 		: robot_goal_position(Vector3d::Zero()),
 		  robot_goal_orientation(Matrix3d::Identity()),
 		  device_command_force(Vector3d::Zero()),
@@ -94,8 +94,8 @@ public:
 
 	struct DefaultParameters {
 		static constexpr HapticControlType haptic_control_type = CLUTCH;
-		static constexpr bool scaling_factor_pos = 1.0;
-		static constexpr bool scaling_factor_ori = 1.0;
+		static constexpr double scaling_factor_pos = 1.0;
+		static constexpr double scaling_factor_ori = 1.0;
 		static constexpr double homing_max_linvel = 0.15;
 		static constexpr double homing_max_angvel = M_PI;
 		static constexpr double reduction_factor_force = 1.0;
@@ -166,9 +166,9 @@ public:
 	 * robot sensed force and moments
 	 * @param verbose whether to print a message is the output was saturated by
 	 * the validateOutput function
-	 * @return HapticControllerOtuput: robot goal pose and device command force
+	 * @return HapticControllerOutput: robot goal pose and device command force
 	 */
-	HapticControllerOtuput computeHapticControl(
+	HapticControllerOutput computeHapticControl(
 		const HapticControllerInput& input, const bool verbose = false);
 
 private:
@@ -180,42 +180,42 @@ private:
 	 * @param verbose if true, a warning message will be printed when saturation
 	 * occurs
 	 */
-	void validateOutput(HapticControllerOtuput& output, const bool verbose);
+	void validateOutput(HapticControllerOutput& output, const bool verbose);
 
 	/**
 	 * @brief Computes the control for the clutch control mode
 	 *
 	 * @param input
-	 * @return HapticControllerOtuput
+	 * @return HapticControllerOutput
 	 */
-	HapticControllerOtuput computeClutchControl(
+	HapticControllerOutput computeClutchControl(
 		const HapticControllerInput& input);
 
 	/**
 	 * @brief Computes the control for the homing control mode
 	 *
 	 * @param input
-	 * @return HapticControllerOtuput
+	 * @return HapticControllerOutput
 	 */
-	HapticControllerOtuput computeHomingControl(
+	HapticControllerOutput computeHomingControl(
 		const HapticControllerInput& input);
 
 	/**
 	 * @brief Computes the control for the motion-motion control mode
 	 *
 	 * @param input
-	 * @return HapticControllerOtuput
+	 * @return HapticControllerOutput
 	 */
-	HapticControllerOtuput computeMotionMotionControl(
+	HapticControllerOutput computeMotionMotionControl(
 		const HapticControllerInput& input);
 
 	/**
 	 * @brief Computes the control for the force-motion control mode
 	 *
 	 * @param input
-	 * @return HapticControllerOtuput
+	 * @return HapticControllerOutput
 	 */
-	HapticControllerOtuput computeForceMotionControl(
+	HapticControllerOutput computeForceMotionControl(
 		const HapticControllerInput& input);
 
 	/**
@@ -226,7 +226,7 @@ private:
 	 * @param output
 	 */
 	void motionMotionControlPosition(const HapticControllerInput& input,
-									 HapticControllerOtuput& output);
+									 HapticControllerOutput& output);
 
 	/**
 	 * @brief Computes the orientation part of the motion-motion control and
@@ -236,7 +236,7 @@ private:
 	 * @param output
 	 */
 	void motionMotionControlOrientation(const HapticControllerInput& input,
-										HapticControllerOtuput& output);
+										HapticControllerOutput& output);
 
 	/**
 	 * @brief Apply the guidance force in case plane guidance is enabled
@@ -270,7 +270,7 @@ private:
 	 * @param output the hapticControlOutput to modify
 	 */
 	void applyWorkspaceVirtualLimitsForceMoment(
-		const HapticControllerInput& input, HapticControllerOtuput& output);
+		const HapticControllerInput& input, HapticControllerOutput& output);
 
 	/**
 	 * @brief Compute the kv for variable damping in position
@@ -299,9 +299,9 @@ public:
 	 * @brief Return the latest computed output by the computeHapticControl
 	 * function
 	 *
-	 * @return const HapticControllerOtuput&
+	 * @return const HapticControllerOutput&
 	 */
-	const HapticControllerOtuput& getLatestOutput() const {
+	const HapticControllerOutput& getLatestOutput() const {
 		return _latest_output;
 	}
 
@@ -683,7 +683,7 @@ private:
 	double _moment_deadband;
 
 	// previous output
-	HapticControllerOtuput _latest_output;
+	HapticControllerOutput _latest_output;
 
 	// latest input
 	HapticControllerInput _latest_input;

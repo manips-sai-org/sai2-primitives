@@ -178,7 +178,7 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 	Vector3i directions_of_proxy_feedback = Vector3i::Zero();
 
 	Sai2Primitives::HapticControllerInput haptic_input;
-	Sai2Primitives::HapticControllerOtuput haptic_output;
+	Sai2Primitives::HapticControllerOutput haptic_output;
 	bool haptic_button_was_pressed = false;
 	int haptic_button_is_pressed = 0;
 	redis_client.setInt(createRedisKey(SWITCH_PRESSED_KEY_SUFFIX, 0),

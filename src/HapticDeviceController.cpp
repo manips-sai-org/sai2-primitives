@@ -21,9 +21,9 @@ namespace {
 AngleAxisd orientationDiffAngleAxis(const Matrix3d& goal_orientation,
 									const Matrix3d& current_orientation,
 									const double scaling_factor = 1.0) {
-	if (scaling_factor < 0 || scaling_factor > 1) {
+	if (scaling_factor <= 0) {
 		throw std::runtime_error(
-			"Scaling factor must be between 0 and 1 in "
+			"Scaling factor must be between positive in "
 			"scaledOrientationErrorFromAngleAxis");
 	}
 
@@ -91,9 +91,9 @@ HapticDeviceController::HapticDeviceController(
 	_device_homed = false;
 	_haptic_control_type = DefaultParameters::haptic_control_type;
 
-	// Initialize scaling factors (can be set through setScalingFactors())
-	_scaling_factor_pos = DefaultParameters::scaling_factor_pos;
-	_scaling_factor_ori = DefaultParameters::scaling_factor_ori;
+	// Initialize scaling factors
+	setScalingFactors(DefaultParameters::scaling_factor_pos,
+					  DefaultParameters::scaling_factor_ori);
 
 	// Initialize position controller parameters
 	_kp_haptic_pos = 0.5 * _device_limits.max_linear_stiffness;
@@ -150,9 +150,9 @@ HapticDeviceController::HapticDeviceController(
 // Haptic controllers for all the sypported controler types
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-HapticControllerOtuput HapticDeviceController::computeHapticControl(
+HapticControllerOutput HapticDeviceController::computeHapticControl(
 	const HapticControllerInput& input, const bool verbose) {
-	HapticControllerOtuput output;
+	HapticControllerOutput output;
 	_latest_input = input;
 	switch (_haptic_control_type) {
 		case HapticControlType::CLUTCH:
@@ -176,7 +176,7 @@ HapticControllerOtuput HapticDeviceController::computeHapticControl(
 	return output;
 }
 
-void HapticDeviceController::validateOutput(HapticControllerOtuput& output,
+void HapticDeviceController::validateOutput(HapticControllerOutput& output,
 											const bool verbose) {
 	if (output.device_command_force.norm() > _device_limits.max_force) {
 		if (verbose) {
@@ -198,9 +198,9 @@ void HapticDeviceController::validateOutput(HapticControllerOtuput& output,
 	}
 }
 
-HapticControllerOtuput HapticDeviceController::computeClutchControl(
+HapticControllerOutput HapticDeviceController::computeClutchControl(
 	const HapticControllerInput& input) {
-	HapticControllerOtuput output;
+	HapticControllerOutput output;
 	output.robot_goal_position = _latest_output.robot_goal_position;
 	output.robot_goal_orientation = _latest_output.robot_goal_orientation;
 
@@ -211,10 +211,10 @@ HapticControllerOtuput HapticDeviceController::computeClutchControl(
 	return output;
 }
 
-HapticControllerOtuput HapticDeviceController::computeHomingControl(
+HapticControllerOutput HapticDeviceController::computeHomingControl(
 	const HapticControllerInput& input) {
 	_device_homed = false;
-	HapticControllerOtuput output;
+	HapticControllerOutput output;
 	output.robot_goal_position = _latest_output.robot_goal_position;
 	output.robot_goal_orientation = _latest_output.robot_goal_orientation;
 
@@ -255,9 +255,9 @@ HapticControllerOtuput HapticDeviceController::computeHomingControl(
 	return output;
 }
 
-HapticControllerOtuput HapticDeviceController::computeMotionMotionControl(
+HapticControllerOutput HapticDeviceController::computeMotionMotionControl(
 	const HapticControllerInput& input) {
-	HapticControllerOtuput output;
+	HapticControllerOutput output;
 	output.robot_goal_position = _latest_output.robot_goal_position;
 	output.robot_goal_orientation = _latest_output.robot_goal_orientation;
 
@@ -278,7 +278,7 @@ HapticControllerOtuput HapticDeviceController::computeMotionMotionControl(
 }
 
 void HapticDeviceController::motionMotionControlPosition(
-	const HapticControllerInput& input, HapticControllerOtuput& output) {
+	const HapticControllerInput& input, HapticControllerOutput& output) {
 	// Compute robot goal position
 	Vector3d device_home_to_current_position =
 		input.device_position -
@@ -368,7 +368,7 @@ void HapticDeviceController::motionMotionControlPosition(
 }
 
 void HapticDeviceController::motionMotionControlOrientation(
-	const HapticControllerInput& input, HapticControllerOtuput& output) {
+	const HapticControllerInput& input, HapticControllerOutput& output) {
 	if (!_orientation_teleop_enabled) {
 		return;
 	}
@@ -446,9 +446,9 @@ void HapticDeviceController::motionMotionControlOrientation(
 		_sigma_proxy_moment_feedback * haptic_moments_proxy;
 }
 
-HapticControllerOtuput HapticDeviceController::computeForceMotionControl(
+HapticControllerOutput HapticDeviceController::computeForceMotionControl(
 	const HapticControllerInput& input) {
-	HapticControllerOtuput output;
+	HapticControllerOutput output;
 	output.robot_goal_position = _latest_output.robot_goal_position;
 	output.robot_goal_orientation = _latest_output.robot_goal_orientation;
 
@@ -573,7 +573,7 @@ void HapticDeviceController::applyLineGuidanceForce(
 }
 
 void HapticDeviceController::applyWorkspaceVirtualLimitsForceMoment(
-	const HapticControllerInput& input, HapticControllerOtuput& output) {
+	const HapticControllerInput& input, HapticControllerOutput& output) {
 	if (!_device_workspace_virtual_limits_enabled) {
 		return;
 	}
