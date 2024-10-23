@@ -35,6 +35,10 @@ OTG_6dof_cartesian::OTG_6dof_cartesian(const Vector3d& initial_position,
 	_output = OutputParameter<6, EigenVector>();
 	_input.synchronization = Synchronization::Phase;
 
+	// initialize output position to zero such that the getNextOrientation
+	// returns a coherent value
+	_output.new_position.setZero();
+
 	_reference_frame = initial_orientation;
 	reInitialize(initial_position, initial_orientation);
 }
