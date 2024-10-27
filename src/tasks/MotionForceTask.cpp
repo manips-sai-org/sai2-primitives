@@ -90,7 +90,6 @@ MotionForceTask::MotionForceTask(
 }
 
 void MotionForceTask::initialSetup() {
-
 	int dof = getConstRobotModel()->dof();
 	_T_control_to_sensor = Affine3d::Identity();
 
@@ -115,9 +114,10 @@ void MotionForceTask::initialSetup() {
 						  DefaultParameters::kv_moment,
 						  DefaultParameters::ki_moment);
 
-	if(DefaultParameters::use_velocity_saturation) {
-		enableVelocitySaturation(DefaultParameters::linear_saturation_velocity,
-								 DefaultParameters::angular_saturation_velocity);
+	if (DefaultParameters::use_velocity_saturation) {
+		enableVelocitySaturation(
+			DefaultParameters::linear_saturation_velocity,
+			DefaultParameters::angular_saturation_velocity);
 	} else {
 		disableVelocitySaturation();
 	}
@@ -170,34 +170,35 @@ void MotionForceTask::initialSetup() {
 	// trajectory generation
 	_otg = make_unique<OTG_6dof_cartesian>(
 		_current_position, _current_orientation, getLoopTimestep());
-	if(DefaultParameters::use_internal_otg) {
-		if(DefaultParameters::internal_otg_jerk_limited) {
-			enableInternalOtgJerkLimited(DefaultParameters::otg_max_linear_velocity,
-										 DefaultParameters::otg_max_linear_acceleration,
-										 DefaultParameters::otg_max_linear_jerk,
-										 DefaultParameters::otg_max_angular_velocity,
-										 DefaultParameters::otg_max_angular_acceleration,
-										 DefaultParameters::otg_max_angular_jerk);
+	if (DefaultParameters::use_internal_otg) {
+		if (DefaultParameters::internal_otg_jerk_limited) {
+			enableInternalOtgJerkLimited(
+				DefaultParameters::otg_max_linear_velocity,
+				DefaultParameters::otg_max_linear_acceleration,
+				DefaultParameters::otg_max_linear_jerk,
+				DefaultParameters::otg_max_angular_velocity,
+				DefaultParameters::otg_max_angular_acceleration,
+				DefaultParameters::otg_max_angular_jerk);
 		} else {
-			enableInternalOtgAccelerationLimited(DefaultParameters::otg_max_linear_velocity,
-												 DefaultParameters::otg_max_linear_acceleration,
-												 DefaultParameters::otg_max_angular_velocity,
-												 DefaultParameters::otg_max_angular_acceleration);
+			enableInternalOtgAccelerationLimited(
+				DefaultParameters::otg_max_linear_velocity,
+				DefaultParameters::otg_max_linear_acceleration,
+				DefaultParameters::otg_max_angular_velocity,
+				DefaultParameters::otg_max_angular_acceleration);
 		}
 	} else {
 		disableInternalOtg();
 	}
 
 	// singularity handler
-	_singularity_handler = std::make_unique<SingularityHandler>(getConstRobotModel(), 
-		      													_link_name,
-																_compliant_frame,
-																_pos_range + _ori_range);
-	setSingularityHandlingBounds(6e-3, 6e-2); 
+	_singularity_handler = std::make_unique<SingularityHandler>(
+		getConstRobotModel(), _link_name, _compliant_frame,
+		_pos_range + _ori_range);
+	setSingularityHandlingBounds(6e-3, 6e-2);
 	setDynamicDecouplingType(DefaultParameters::dynamic_decoupling_type);
 	setBoundedInertiaEstimateThreshold(DefaultParameters::bie_threshold);
 
-	reInitializeTask();	
+	reInitializeTask();
 }
 
 void MotionForceTask::reInitializeTask() {
@@ -263,8 +264,7 @@ void MotionForceTask::updateTaskModel(const MatrixXd& N_prec) {
 	_projected_jacobian = _jacobian * _N_prec;
 
 	_singularity_handler->updateTaskModel(_projected_jacobian, _N_prec);
-	_N = _singularity_handler->getNullspace();  
-
+	_N = _singularity_handler->getNullspace();
 }
 
 VectorXd MotionForceTask::computeTorques() {
@@ -328,8 +328,8 @@ VectorXd MotionForceTask::computeTorques() {
 			(-_kp_force * (_sensed_force_control_world_frame - goal_force) -
 			 _ki_force * _integrated_force_error);
 		if (force_feedback_term.norm() > _max_force_control_feedback_output) {
-			force_feedback_term *= _max_force_control_feedback_output /
-								   force_feedback_term.norm();
+			force_feedback_term *=
+				_max_force_control_feedback_output / force_feedback_term.norm();
 		}
 
 		// compute the final contribution
@@ -359,8 +359,7 @@ VectorXd MotionForceTask::computeTorques() {
 			 _ki_moment * _integrated_moment_error);
 
 		// saturate the feedback term
-		if (moment_feedback_term.norm() >
-			_max_moment_control_feedback_output) {
+		if (moment_feedback_term.norm() > _max_moment_control_feedback_output) {
 			moment_feedback_term *= _max_moment_control_feedback_output /
 									moment_feedback_term.norm();
 		}
@@ -483,8 +482,9 @@ VectorXd MotionForceTask::computeTorques() {
 		force_feedback_related_force + feedforward_force_moment.head(3);
 	_linear_motion_control = position_related_force;
 
-	// compute torque through singularity handler 
-	task_joint_torques = _singularity_handler->computeTorques(_unit_mass_force, force_moment_contribution + feedforward_force_moment);
+	// compute torque through singularity handler
+	task_joint_torques = _singularity_handler->computeTorques(
+		_unit_mass_force, force_moment_contribution + feedforward_force_moment);
 
 	return task_joint_torques;
 }
@@ -609,8 +609,8 @@ void MotionForceTask::setPosControlGains(const VectorXd& kp_pos,
 }
 
 void MotionForceTask::setPosControlGainsUnsafe(const VectorXd& kp_pos,
-										 const VectorXd& kv_pos,
-										 const VectorXd& ki_pos) {
+											   const VectorXd& kv_pos,
+											   const VectorXd& ki_pos) {
 	if (kp_pos.size() == 1 && kv_pos.size() == 1 && ki_pos.size() == 1) {
 		_are_pos_gains_isotropic = true;
 		_kp_pos = kp_pos(0) * Matrix3d::Identity();
@@ -618,7 +618,7 @@ void MotionForceTask::setPosControlGainsUnsafe(const VectorXd& kp_pos,
 		_ki_pos = ki_pos(0) * Matrix3d::Identity();
 		return;
 	}
-	if(kp_pos.size() != 3 || kv_pos.size() != 3 || ki_pos.size() != 3) {
+	if (kp_pos.size() != 3 || kv_pos.size() != 3 || ki_pos.size() != 3) {
 		throw invalid_argument(
 			"kp_pos, kv_pos and ki_pos should be of size 1 or 3 in "
 			"MotionForceTask::setPosControlGainsUnsafe\n");
@@ -626,7 +626,7 @@ void MotionForceTask::setPosControlGainsUnsafe(const VectorXd& kp_pos,
 	_are_pos_gains_isotropic = false;
 	_kp_pos = kp_pos.asDiagonal();
 	_kv_pos = kv_pos.asDiagonal();
-	_ki_pos = ki_pos.asDiagonal();	
+	_ki_pos = ki_pos.asDiagonal();
 }
 
 vector<PIDGains> MotionForceTask::getPosControlGains() const {
@@ -696,8 +696,8 @@ void MotionForceTask::setOriControlGains(const VectorXd& kp_ori,
 }
 
 void MotionForceTask::setOriControlGainsUnsafe(const VectorXd& kp_ori,
-										 const VectorXd& kv_ori,
-										 const VectorXd& ki_ori) {
+											   const VectorXd& kv_ori,
+											   const VectorXd& ki_ori) {
 	if (kp_ori.size() == 1 && kv_ori.size() == 1 && ki_ori.size() == 1) {
 		_are_ori_gains_isotropic = true;
 		_kp_ori = kp_ori(0) * Matrix3d::Identity();
@@ -949,6 +949,21 @@ Matrix3d MotionForceTask::sigmaMoment() const {
 Matrix3d MotionForceTask::sigmaOrientation() const {
 	return oriSelectionProjector() * (Matrix3d::Identity() - sigmaMoment()) *
 		   oriSelectionProjector().transpose();
+}
+
+void MotionForceTask::setClosedLoopForceControl(
+	const bool closed_loop_force_control) {
+	if (_closed_loop_force_control != closed_loop_force_control) {
+		_closed_loop_force_control = closed_loop_force_control;
+		resetIntegratorsLinear();
+	}
+}
+void MotionForceTask::setClosedLoopMomentControl(
+	const bool closed_loop_moment_control) {
+	if (_closed_loop_moment_control != closed_loop_moment_control) {
+		_closed_loop_moment_control = closed_loop_moment_control;
+		resetIntegratorsAngular();
+	}
 }
 
 void MotionForceTask::resetIntegrators() {

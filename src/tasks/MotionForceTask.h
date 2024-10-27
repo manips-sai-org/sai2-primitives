@@ -27,8 +27,8 @@
 #include <string>
 
 #include "Sai2Model.h"
-#include "TemplateTask.h"
 #include "SingularityHandler.h"
+#include "TemplateTask.h"
 
 using namespace Eigen;
 using namespace std;
@@ -37,7 +37,6 @@ namespace Sai2Primitives {
 
 class MotionForceTask : public TemplateTask {
 public:
-
 	struct DefaultParameters {
 		static constexpr DynamicDecouplingType dynamic_decoupling_type =
 			DynamicDecouplingType::BOUNDED_INERTIA_ESTIMATES;
@@ -608,16 +607,9 @@ public:
 	 * the force controlled directions in the linear/angular parts of the
 	 *             controller
 	 */
-	void setClosedLoopForceControl(
-		const bool closed_loop_force_control = true) {
-		_closed_loop_force_control = closed_loop_force_control;
-		resetIntegratorsLinear();
-	}
+	void setClosedLoopForceControl(const bool closed_loop_force_control = true);
 	void setClosedLoopMomentControl(
-		const bool closed_loop_moment_control = true) {
-		_closed_loop_moment_control = closed_loop_moment_control;
-		resetIntegratorsAngular();
-	}
+		const bool closed_loop_moment_control = true);
 
 	/**
 	 * @brief      Enables or disables the passivity based stability for the
@@ -661,7 +653,7 @@ public:
 	 * @brief 	Set the Dynamic Decoupling Type. See the definition of the
 	 * DynamicDecouplingType enum for more details
 	 *
-	 * @param type Dynamic decoupling type 
+	 * @param type Dynamic decoupling type
 	 */
 	void setDynamicDecouplingType(const DynamicDecouplingType type) {
 		_singularity_handler->setDynamicDecouplingType(type);
@@ -669,8 +661,8 @@ public:
 
 	/**
 	 * @brief Set the threshold for the bounded inertia estimate
-	 * 
-	 * @param threshold threshold value 
+	 *
+	 * @param threshold threshold value
 	 */
 	void setBoundedInertiaEstimateThreshold(const double threshold) {
 		_singularity_handler->setBoundedInertiaEstimateThreshold(threshold);
@@ -678,69 +670,75 @@ public:
 
 	/**
 	 * @brief Get the threshold for the bounded inertia estimate
-	 * 
-	 * @return double threshold value 
+	 *
+	 * @return double threshold value
 	 */
 	double getBoundedInertiaEstimateThreshold() {
 		return _singularity_handler->getBoundedInertiaEstimateThreshold();
 	}
 
-    /**
-     * @brief Enforces type 1 handling behavior if set to true, otherwise handle 
-     * type 1 or type 2 as usual
-     * 
-     * @param flag true to enforce type 1 handling behavior 
-     */
+	/**
+	 * @brief Enforces type 1 handling behavior if set to true, otherwise handle
+	 * type 1 or type 2 as usual
+	 *
+	 * @param flag true to enforce type 1 handling behavior
+	 */
 	void handleAllSingularitiesAsType1(const bool flag) {
 		_singularity_handler->handleAllSingularitiesAsType1(flag);
 	}
-	
+
 	/**
-	 * @brief Set the desired posture for type 1 singularity handling  
-	 * 
-	 * @param q_des desired posture 
+	 * @brief Set the desired posture for type 1 singularity handling
+	 *
+	 * @param q_des desired posture
 	 */
 	void setType1Posture(const VectorXd& q_des) {
 		_singularity_handler->setType1Posture(q_des);
 	}
 
 	/**
-	 * @brief Enables singularity handling 
-	 * 
+	 * @brief Enables singularity handling
+	 *
 	 */
 	void enableSingularityHandling() {
 		_singularity_handler->enableSingularityHandling();
 	}
 
 	/**
-	 * @brief Disables singularity handling 
-	 * 
+	 * @brief Disables singularity handling
+	 *
 	 */
 	void disableSingularityHandling() {
 		_singularity_handler->disableSingularityHandling();
 	}
 
-    /**
-     * @brief Set the singularity bounds for torque blending based on the inverse of the condition number
-     * The linear blending coefficient \alpha is computed as \alpha = (s - _s_min) / (_s_max - _s_min),
-     * and is clamped between 0 and 1.
-     * 
-     * @param s_min lower bound
-     * @param s_max upper bound 
-     */
-	void setSingularityHandlingBounds(const double& s_min, const double& s_max) {
+	/**
+	 * @brief Set the singularity bounds for torque blending based on the
+	 * inverse of the condition number The linear blending coefficient \alpha is
+	 * computed as \alpha = (s - _s_min) / (_s_max - _s_min), and is clamped
+	 * between 0 and 1.
+	 *
+	 * @param s_min lower bound
+	 * @param s_max upper bound
+	 */
+	void setSingularityHandlingBounds(const double& s_min,
+									  const double& s_max) {
 		_singularity_handler->setSingularityHandlingBounds(s_min, s_max);
 	}
 
-    /**
-     * @brief Set the gains for the partial joint task for the singularity strategy
-     * 
-     * @param kp_type_1 position gain for type 1 strategy
-     * @param kv_type_1 velocity damping gain for type 1 strategy
-     * @param kv_type_2 velocity damping gain for type 2 strategy
-     */
-	void setSingularityHandlingGains(const double& kp_type_1, const double& kv_type_1, const double& kv_type_2) {
-		_singularity_handler->setSingularityHandlingGains(kp_type_1, kv_type_1, kv_type_2);
+	/**
+	 * @brief Set the gains for the partial joint task for the singularity
+	 * strategy
+	 *
+	 * @param kp_type_1 position gain for type 1 strategy
+	 * @param kv_type_1 velocity damping gain for type 1 strategy
+	 * @param kv_type_2 velocity damping gain for type 2 strategy
+	 */
+	void setSingularityHandlingGains(const double& kp_type_1,
+									 const double& kv_type_1,
+									 const double& kv_type_2) {
+		_singularity_handler->setSingularityHandlingGains(kp_type_1, kv_type_1,
+														  kv_type_2);
 	}
 
 private:
