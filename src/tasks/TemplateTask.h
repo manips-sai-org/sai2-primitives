@@ -49,6 +49,15 @@ public:
 	virtual Eigen::VectorXd computeTorques() = 0;
 
 	/**
+	 * @brief Computes the joint torques associated with this control task, and
+	 * feedforward compensates the disturbances due to the previous tasks.
+	 *
+	 * @param tau_prec the control torques from the frevious tasks in the hierarchy
+	 * @return Eigen::VectorXd the joint task torques
+	 */
+	virtual Eigen::VectorXd computeTorques(const Eigen::VectorXd& tau_prec) = 0;
+
+	/**
 	 * @brief Re initializes the task by setting the desired state to the
 	 * current state.
 	 *

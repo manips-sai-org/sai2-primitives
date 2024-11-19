@@ -153,11 +153,20 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 
 		// motion force task
 		double time = timer.elapsedSimTime();
+		double w = 2.0 * M_PI * 0.3;
 		Vector3d goal_position =
-			initial_position + 0.1 * Vector3d(sin(2.0 * M_PI * 0.3 * time), 0.0,
-											  1 - cos(2.0 * M_PI * 0.3 * time));
-		goal_position(1) = partial_joint_task->getCurrentPosition()(0);
+			initial_position + 0.1 * Vector3d(sin(w * time), 0.0,
+											  1 - cos(w * time));
+		goal_position(1) = partial_joint_task->getDesiredPosition()(0);
+		Vector3d goal_velocity = 0.1 * Vector3d(w * cos(w * time), 0.0,
+											  w * sin(w * time));
+		goal_velocity(1) = partial_joint_task->getDesiredVelocity()(0);
+		Vector3d goal_acceleration = 0.1 * Vector3d(- w * w * sin(w * time), 0.0,
+											  w * w * cos(w * time));	
+		goal_acceleration(1) = partial_joint_task->getDesiredAcceleration()(0);	
 		motion_force_task->setGoalPosition(goal_position);
+		motion_force_task->setGoalLinearVelocity(goal_velocity);
+		motion_force_task->setGoalLinearAcceleration(goal_acceleration);
 
 		//------ compute the final torques
 		{

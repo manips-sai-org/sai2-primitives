@@ -90,10 +90,18 @@ public:
 	 *             update and updated values for the robot joint
 	 *             positions/velocities
 	 *
-	 * @param      task_joint_torques  the vector to be filled with the new
-	 *                                 joint torques to apply for the task
+	 * @return Eigen::VectorXd the joint task torques
 	 */
 	VectorXd computeTorques() override;
+
+	/**
+	 * @brief Computes the joint torques associated with this control task, and
+	 * feedforward compensates the disturbances due to the previous tasks.
+	 *
+	 * @param tau_prec the control torques from the frevious tasks in the hierarchy
+	 * @return Eigen::VectorXd the joint task torques
+	 */
+	VectorXd computeTorques(const Eigen::VectorXd& tau_prec) override;
 
 	/**
 	 * @brief      reinitializes the desired and goal states to the current

@@ -64,12 +64,7 @@ Eigen::VectorXd RobotController::computeControlTorques() {
 	VectorXd control_torques = VectorXd::Zero(dof);
 	VectorXd previous_tasks_disturbance = VectorXd::Zero(dof);
 	for (auto& task : _tasks) {
-		previous_tasks_disturbance = (MatrixXd::Identity(dof, dof) -
-									  task->getTaskNullspace().transpose()) *
-									 control_torques;
-		control_torques += task->getPreviousTasksNullspace().transpose() *
-							   task->computeTorques() -
-						   previous_tasks_disturbance;
+		control_torques += task->computeTorques(control_torques);
 	}
 
 	if (_enable_gravity_compensation) {

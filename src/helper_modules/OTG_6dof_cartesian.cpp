@@ -20,7 +20,7 @@ bool isValidRotation(const Matrix3d mat) {
 	if ((mat.transpose() * mat - Matrix3d::Identity()).norm() > 1e-3) {
 		return false;
 	}
-	if (abs(mat.determinant() - 1) > 1e-6) {
+	if (abs(mat.determinant() - 1) > 1e-3) {
 		return false;
 	}
 	return true;

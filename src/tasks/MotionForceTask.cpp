@@ -267,6 +267,14 @@ void MotionForceTask::updateTaskModel(const MatrixXd& N_prec) {
 	_N = _singularity_handler->getNullspace();
 }
 
+VectorXd MotionForceTask::computeTorques(const Eigen::VectorXd& tau_prec) {
+	VectorXd task_torques = computeTorques();
+	VectorXd disturbance_compensation = _projected_jacobian.transpose() *
+										_Lambda * _jacobian *
+										getConstRobotModel()->MInv() * tau_prec;
+	return task_torques - disturbance_compensation;
+}
+
 VectorXd MotionForceTask::computeTorques() {
 	VectorXd task_joint_torques = VectorXd::Zero(getConstRobotModel()->dof());
 	_jacobian = _partial_task_projection *
@@ -283,10 +291,10 @@ VectorXd MotionForceTask::computeTorques() {
 	_orientation_error =
 		Sai2Model::orientationError(_goal_orientation, _current_orientation);
 	_current_linear_velocity =
-		_projected_jacobian.block(0, 0, 3, getConstRobotModel()->dof()) *
+		_jacobian.block(0, 0, 3, getConstRobotModel()->dof()) *
 		getConstRobotModel()->dq();
 	_current_angular_velocity =
-		_projected_jacobian.block(3, 0, 3, getConstRobotModel()->dof()) *
+		_jacobian.block(3, 0, 3, getConstRobotModel()->dof()) *
 		getConstRobotModel()->dq();
 
 	if (_pos_range + _ori_range == 0) {
@@ -481,6 +489,17 @@ VectorXd MotionForceTask::computeTorques() {
 	_linear_force_control =
 		force_feedback_related_force + feedforward_force_moment.head(3);
 	_linear_motion_control = position_related_force;
+
+	// cout << "unit mass force :\n" << _unit_mass_force.transpose() << endl;
+	// cout << "position_related_force :\n" <<
+	// position_related_force.transpose() << endl; cout << "desired position
+	// :\n" << _desired_position.transpose() << endl; cout << "current position
+	// :\n" << _current_position.transpose() << endl; cout << "goal position
+	// :\n" << _goal_position.transpose() << endl; cout << "sigma_position :\n"
+	// << sigma_position << endl; cout << "force_moment_contribution :\n" <<
+	// force_moment_contribution.transpose() << endl; cout <<
+	// "feedforward_force_moment :\n" << feedforward_force_moment.transpose() <<
+	// endl;
 
 	// compute torque through singularity handler
 	task_joint_torques = _singularity_handler->computeTorques(
