@@ -1,6 +1,6 @@
 #include "POPCExplicitForceControl.h"
 
-namespace Sai2Primitives {
+namespace SaiPrimitives {
 
 POPCExplicitForceControl::POPCExplicitForceControl(const double loop_timestep)
 	: _loop_timestep(loop_timestep), _is_enabled(false) {
@@ -95,4 +95,4 @@ Vector3d POPCExplicitForceControl::computePassivitySaturatedForce(
 	return _Rc * vcl - kv_force * vr;
 }
 
-}  // namespace Sai2Primitives
+}  // namespace SaiPrimitives

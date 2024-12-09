@@ -2,14 +2,14 @@
  * POPCBilateralTeleoperation.h
  *
  *      Implements time domain passivity approach for a bilateral teleoperation
- * scheme where the robot is controlled using a MotionForceTask from Sai2 and
- * the haptic device is controlled using a HapticDeviceController from Sai2.
+ * scheme where the robot is controlled using a MotionForceTask from Sai and
+ * the haptic device is controlled using a HapticDeviceController from Sai.
  *
  *      Author: Mikael Jorda
  */
 
-#ifndef SAI2_PRIMITIVES_POPC_BILATERAL_TELEOPERATION_H_
-#define SAI2_PRIMITIVES_POPC_BILATERAL_TELEOPERATION_H_
+#ifndef SAI_PRIMITIVES_POPC_BILATERAL_TELEOPERATION_H_
+#define SAI_PRIMITIVES_POPC_BILATERAL_TELEOPERATION_H_
 
 #include <Eigen/Dense>
 #include <queue>
@@ -17,7 +17,7 @@
 #include "HapticDeviceController.h"
 #include "tasks/MotionForceTask.h"
 
-namespace Sai2Primitives {
+namespace SaiPrimitives {
 
 class POPCBilateralTeleoperation {
 public:
@@ -100,7 +100,7 @@ private:
 	HapticControlType _latest_haptic_controller_type;
 };
 
-} /* namespace Sai2Primitives */
+} /* namespace SaiPrimitives */
 
-/* SAI2_PRIMITIVES_POPC_BILATERAL_TELEOPERATION_H_ */
+/* SAI_PRIMITIVES_POPC_BILATERAL_TELEOPERATION_H_ */
 #endif

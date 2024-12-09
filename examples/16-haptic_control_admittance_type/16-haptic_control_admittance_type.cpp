@@ -4,9 +4,9 @@
 #include <mutex>
 #include <string>
 
-#include "Sai2Graphics.h"
-#include "Sai2Primitives.h"
-#include "Sai2Simulation.h"
+#include "SaiGraphics.h"
+#include "SaiPrimitives.h"
+#include "SaiSimulation.h"
 #include "redis/RedisClient.h"
 #include "redis/keys/chai_haptic_devices_driver.h"
 #include "timer/LoopTimer.h"
@@ -15,7 +15,7 @@ void sighandler(int) { fSimulationRunning = false; }
 
 using namespace std;
 using namespace Eigen;
-using namespace Sai2Common::ChaiHapticDriverKeys;
+using namespace SaiCommon::ChaiHapticDriverKeys;
 
 namespace {
 const string world_file = "${EXAMPLE_16_FOLDER}/world.urdf";
@@ -37,8 +37,8 @@ map<int, bool> key_was_pressed = key_pressed;
 }  // namespace
 
 // Create simulation and control function
-void runSim(shared_ptr<Sai2Simulation::Sai2Simulation> sim);
-void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim);
+void runSim(shared_ptr<SaiSimulation::SaiSimulation> sim);
+void runControl(shared_ptr<SaiSimulation::SaiSimulation> sim);
 
 //// Robot global variables /////
 // sensed task force from robot interaction
@@ -48,7 +48,7 @@ Vector3d sensed_moment = Vector3d::Zero();
 VectorXd robot_control_torques = Eigen::VectorXd::Zero(7);
 
 int main() {
-	Sai2Model::URDF_FOLDERS["EXAMPLE_16_FOLDER"] =
+	SaiModel::URDF_FOLDERS["EXAMPLE_16_FOLDER"] =
 		string(EXAMPLES_FOLDER) + "/16-haptic_control_admittance_type";
 	// set up signal handler
 	signal(SIGABRT, &sighandler);
@@ -56,17 +56,17 @@ int main() {
 	signal(SIGINT, &sighandler);
 
 	// load simulation world
-	auto sim = make_shared<Sai2Simulation::Sai2Simulation>(world_file);
+	auto sim = make_shared<SaiSimulation::SaiSimulation>(world_file);
 
 	// load graphics scene
-	auto graphics = make_shared<Sai2Graphics::Sai2Graphics>(world_file);
+	auto graphics = make_shared<SaiGraphics::SaiGraphics>(world_file);
 
 	// Run simulation and control threads
 	thread sim_thread(runSim, sim);
 	thread control_thread(runControl, sim);
 
 	// graphics timer
-	Sai2Common::LoopTimer graphicsTimer(30.0, 1e6);
+	SaiCommon::LoopTimer graphicsTimer(30.0, 1e6);
 
 	while (graphics->isWindowOpen()) {
 		graphicsTimer.waitForNextLoop();
@@ -91,9 +91,9 @@ int main() {
 //------------------------------------------------------------------------------
 ////// Simulation thread //////
 //------------------------------------------------------------------------------
-void runSim(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
+void runSim(shared_ptr<SaiSimulation::SaiSimulation> sim) {
 	// create a timer
-	Sai2Common::LoopTimer simTimer(1.0 / sim->timestep(), 1e6);
+	SaiCommon::LoopTimer simTimer(1.0 / sim->timestep(), 1e6);
 
 	fSimulationRunning = true;
 
@@ -113,14 +113,14 @@ void runSim(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 //------------------------------------------------------------------------------
 ////// Control thread //////
 //------------------------------------------------------------------------------
-void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
+void runControl(shared_ptr<SaiSimulation::SaiSimulation> sim) {
 	// redis client
-	auto redis_client = Sai2Common::RedisClient();
+	auto redis_client = SaiCommon::RedisClient();
 	redis_client.connect();
 
 	// load robot
 	const Affine3d T_world_robot = sim->getRobotBaseTransform(robot_name);
-	auto robot = make_shared<Sai2Model::Sai2Model>(robot_file);
+	auto robot = make_shared<SaiModel::SaiModel>(robot_file);
 	robot->setTRobotBase(T_world_robot);
 	robot->setQ(sim->getJointPositions(robot_name));
 	robot->setDq(sim->getJointVelocities(robot_name));
@@ -139,33 +139,33 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 
 	// create robot controller
 	Affine3d compliant_frame = Affine3d::Identity();
-	auto motion_force_task = make_shared<Sai2Primitives::MotionForceTask>(
+	auto motion_force_task = make_shared<SaiPrimitives::MotionForceTask>(
 		robot, link_name, compliant_frame);
 	motion_force_task->disableInternalOtg();
 	motion_force_task->enableVelocitySaturation(0.7, M_PI);
 
-	auto joint_task = make_shared<Sai2Primitives::JointTask>(robot);
-	vector<shared_ptr<Sai2Primitives::TemplateTask>> task_list = {
+	auto joint_task = make_shared<SaiPrimitives::JointTask>(robot);
+	vector<shared_ptr<SaiPrimitives::TemplateTask>> task_list = {
 		motion_force_task, joint_task};
 	auto robot_controller =
-		make_unique<Sai2Primitives::RobotController>(robot, task_list);
+		make_unique<SaiPrimitives::RobotController>(robot, task_list);
 
 	// create haptic controller
-	Sai2Primitives::HapticDeviceController::DeviceLimits device_limits(
+	SaiPrimitives::HapticDeviceController::DeviceLimits device_limits(
 		redis_client.getEigen(createRedisKey(MAX_STIFFNESS_KEY_SUFFIX, 0)),
 		redis_client.getEigen(createRedisKey(MAX_DAMPING_KEY_SUFFIX, 0)),
 		redis_client.getEigen(createRedisKey(MAX_FORCE_KEY_SUFFIX, 0)));
 	Affine3d device_home_pose = Affine3d(Translation3d(0, 0, 0));
 	auto haptic_controller =
-		make_shared<Sai2Primitives::HapticDeviceController>(
+		make_shared<SaiPrimitives::HapticDeviceController>(
 			device_limits, robot->transformInWorld(link_name),
 			device_home_pose);
 	haptic_controller->setHapticControlType(
-		Sai2Primitives::HapticControlType::HOMING);
+		SaiPrimitives::HapticControlType::HOMING);
 	haptic_controller->disableOrientationTeleop();
 
-	Sai2Primitives::HapticControllerInput haptic_input;
-	Sai2Primitives::HapticControllerOutput haptic_output;
+	SaiPrimitives::HapticControllerInput haptic_input;
+	SaiPrimitives::HapticControllerOutput haptic_output;
 
 	// setup redis communication
 	redis_client.addToSendGroup(createRedisKey(COMMANDED_FORCE_KEY_SUFFIX, 0),
@@ -185,7 +185,7 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 		haptic_input.device_angular_velocity);
 
 	// create a timer
-	Sai2Common::LoopTimer controlTimer(1000.0, 1e6);
+	SaiCommon::LoopTimer controlTimer(1000.0, 1e6);
 
 	while (fSimulationRunning) {
 		// wait for next scheduled loop
@@ -225,10 +225,10 @@ void runControl(shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
 
 		// state machine for button presses
 		if (haptic_controller->getHapticControlType() ==
-				Sai2Primitives::HapticControlType::HOMING &&
+				SaiPrimitives::HapticControlType::HOMING &&
 			haptic_controller->getHomed()) {
 			haptic_controller->setHapticControlType(
-				Sai2Primitives::HapticControlType::FORCE_MOTION);
+				SaiPrimitives::HapticControlType::FORCE_MOTION);
 			haptic_controller->setDeviceControlGains(350.0, 15.0);
 		}
 

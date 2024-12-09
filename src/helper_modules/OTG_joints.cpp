@@ -12,7 +12,7 @@
 using namespace Eigen;
 using namespace ruckig;
 
-namespace Sai2Primitives {
+namespace SaiPrimitives {
 
 OTG_joints::OTG_joints(const VectorXd& initial_position,
 					   const double loop_time) {
@@ -149,4 +149,4 @@ void OTG_joints::update() {
 	_input.current_acceleration.setZero();
 }
 
-} /* namespace Sai2Primitives */
+} /* namespace SaiPrimitives */

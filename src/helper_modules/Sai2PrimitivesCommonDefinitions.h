@@ -1,10 +1,10 @@
-#ifndef SAI2_PRIMITIVES_COMMON_DEFINITIONS_H_
-#define SAI2_PRIMITIVES_COMMON_DEFINITIONS_H_
+#ifndef SAI_PRIMITIVES_COMMON_DEFINITIONS_H_
+#define SAI_PRIMITIVES_COMMON_DEFINITIONS_H_
 
 #include <Eigen/Dense>
 #include <vector>
 
-namespace Sai2Primitives {
+namespace SaiPrimitives {
 
 enum DynamicDecouplingType {
 	FULL_DYNAMIC_DECOUPLING,	// use the real Mass matrix
@@ -26,6 +26,6 @@ Eigen::VectorXd extractKpFromGainVector(const std::vector<PIDGains>& gains);
 Eigen::VectorXd extractKvFromGainVector(const std::vector<PIDGains>& gains);
 Eigen::VectorXd extractKiFromGainVector(const std::vector<PIDGains>& gains);
 
-}  // namespace Sai2Primitives
+}  // namespace SaiPrimitives
 
-#endif	// SAI2_PRIMITIVES_COMMON_DEFINITIONS_H_
+#endif	// SAI_PRIMITIVES_COMMON_DEFINITIONS_H_

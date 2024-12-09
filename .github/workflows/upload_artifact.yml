@@ -17,17 +17,17 @@ jobs:
       - name: build-repo
         uses: ./.github/actions/build-repo
         with:
-          token: ${{ secrets.SAI2_TOKEN }}
+          token: ${{ secrets.SAI_TOKEN }}
 
       - name: Copy Libraries to Archive
         run: |
-          cp build/libsai2-primitives.a ./libsai2-primitives.a
+          cp build/libsai-primitives.a ./libsai-primitives.a
           cp ruckig/build/libruckig.so ./libruckig.so
 
-      - name: Archive Sai2-primitives Artifact
+      - name: Archive Sai-primitives Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: sai2-primitives-artifact
+          name: sai-primitives-artifact
           path: |
-            libsai2-primitives.a
+            libsai-primitives.a
             libruckig.so

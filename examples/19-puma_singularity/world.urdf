@@ -4,7 +4,7 @@
 <!-- <world name="demo_world" gravity="0.0 0.0 -9.81"> -->
 
 	<robot name="PUMA">
-		<model dir="${SAI2_MODEL_URDF_FOLDER}/puma" path="puma.urdf" name="Puma" />
+		<model dir="${SAI_MODEL_URDF_FOLDER}/puma" path="puma.urdf" name="Puma" />
 		<origin xyz="0.0 0.0 0.0" rpy="0 0 0" />
 	</robot>
 

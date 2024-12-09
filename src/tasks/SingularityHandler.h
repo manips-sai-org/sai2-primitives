@@ -10,17 +10,17 @@
  *      Author: William Chong 
  */
 
-#ifndef SAI2_PRIMITIVES_SINGULARITY_HANDLER_
-#define SAI2_PRIMITIVES_SINGULARITY_HANDLER_
+#ifndef SAI_PRIMITIVES_SINGULARITY_HANDLER_
+#define SAI_PRIMITIVES_SINGULARITY_HANDLER_
 
-#include <helper_modules/Sai2PrimitivesCommonDefinitions.h>
-#include "Sai2Model.h"
+#include <helper_modules/SaiPrimitivesCommonDefinitions.h>
+#include "SaiModel.h"
 #include <Eigen/Dense>
 #include <queue>
 #include <memory>
 
 using namespace Eigen;
-namespace Sai2Primitives {
+namespace SaiPrimitives {
 
 enum SingularityType {
     NO_SINGULARITY = 0,
@@ -41,7 +41,7 @@ public:
      * @param task_rank rank of the motion force task after partial task projection
      * @param verbose set to true to print singularity status every timestep 
      */
-    SingularityHandler(std::shared_ptr<Sai2Model::Sai2Model> robot,
+    SingularityHandler(std::shared_ptr<SaiModel::SaiModel> robot,
                        const std::string& link_name,
                        const Affine3d& compliant_frame,
                        const int& task_rank,
@@ -195,7 +195,7 @@ private:
                              const MatrixXd& singular_joint_task_range);
 
     // singularity setup
-    std::shared_ptr<Sai2Model::Sai2Model> _robot;
+    std::shared_ptr<SaiModel::SaiModel> _robot;
     DynamicDecouplingType _dynamic_decoupling_type;
 	double _bie_threshold;
     std::string _link_name;

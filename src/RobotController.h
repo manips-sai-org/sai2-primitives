@@ -8,8 +8,8 @@
  * Created: September 2023
  */
 
-#ifndef SAI2_PRIMITIVES_ROBOT_CONTROLLER_H_
-#define SAI2_PRIMITIVES_ROBOT_CONTROLLER_H_
+#ifndef SAI_PRIMITIVES_ROBOT_CONTROLLER_H_
+#define SAI_PRIMITIVES_ROBOT_CONTROLLER_H_
 
 #include <memory>
 #include <vector>
@@ -18,11 +18,11 @@
 #include "tasks/JointTask.h"
 #include "tasks/MotionForceTask.h"
 
-namespace Sai2Primitives {
+namespace SaiPrimitives {
 
 class RobotController {
 public:
-	RobotController(std::shared_ptr<Sai2Model::Sai2Model>& robot, std::vector<std::shared_ptr<TemplateTask>>& tasks);
+	RobotController(std::shared_ptr<SaiModel::SaiModel>& robot, std::vector<std::shared_ptr<TemplateTask>>& tasks);
 
 	void updateControllerTaskModels();
 
@@ -42,12 +42,12 @@ public:
 	}
 
 private:
-    std::shared_ptr<Sai2Model::Sai2Model> _robot;
+    std::shared_ptr<SaiModel::SaiModel> _robot;
 	std::vector<std::shared_ptr<TemplateTask>> _tasks;
 	std::vector<std::string> _task_names;
 	bool _enable_gravity_compensation;
 };
 
-} /* namespace Sai2Primitives */
+} /* namespace SaiPrimitives */
 
-#endif /* SAI2_PRIMITIVES_ROBOT_CONTROLLER_H_ */
+#endif /* SAI_PRIMITIVES_ROBOT_CONTROLLER_H_ */

@@ -9,7 +9,7 @@
 using namespace std;
 using namespace Eigen;
 
-namespace Sai2Primitives {
+namespace SaiPrimitives {
 
 namespace {
 
@@ -253,4 +253,4 @@ Vector3d POPCBilateralTeleoperation::computePOPCTorque() {
 	return damping_moment;
 }
 
-} /* namespace Sai2Primitives */
+} /* namespace SaiPrimitives */

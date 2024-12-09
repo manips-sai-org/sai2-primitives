@@ -1,20 +1,20 @@
 /*
  * TemplateTask.h
  *
- *      Template task for Sai2 tasks
+ *      Template task for Sai tasks
  *
  *      Author: Mikael Jorda
  */
 
-#ifndef SAI2_PRIMITIVES_TEMPLATE_TASK_H_
-#define SAI2_PRIMITIVES_TEMPLATE_TASK_H_
+#ifndef SAI_PRIMITIVES_TEMPLATE_TASK_H_
+#define SAI_PRIMITIVES_TEMPLATE_TASK_H_
 
-#include <Sai2Model.h>
+#include <SaiModel.h>
 
 #include <Eigen/Dense>
 #include <memory>
 
-namespace Sai2Primitives {
+namespace SaiPrimitives {
 
 enum TaskType {
 	UNDEFINED,
@@ -24,7 +24,7 @@ enum TaskType {
 
 class TemplateTask {
 public:
-	TemplateTask(std::shared_ptr<Sai2Model::Sai2Model>& robot,
+	TemplateTask(std::shared_ptr<SaiModel::SaiModel>& robot,
 				 const std::string& task_name, const TaskType task_type,
 				 const double loop_timestep)
 		: _robot(robot),
@@ -90,9 +90,9 @@ public:
 	/**
 	 * @brief gets a const reference to the internal robot model
 	 *
-	 * @return const std::shared_ptr<Sai2Model::Sai2Model>
+	 * @return const std::shared_ptr<SaiModel::SaiModel>
 	 */
-	const std::shared_ptr<Sai2Model::Sai2Model>& getConstRobotModel() const {
+	const std::shared_ptr<SaiModel::SaiModel>& getConstRobotModel() const {
 		return _robot;
 	}
 
@@ -115,14 +115,14 @@ public:
 	const std::string& getTaskName() const { return _task_name; }
 
 private:
-	std::shared_ptr<Sai2Model::Sai2Model> _robot;
+	std::shared_ptr<SaiModel::SaiModel> _robot;
 	double _loop_timestep;
 
 	TaskType _task_type;
 	std::string _task_name;
 };
 
-} /* namespace Sai2Primitives */
+} /* namespace SaiPrimitives */
 
-/* SAI2_PRIMITIVES_TEMPLATE_TASK_H_ */
+/* SAI_PRIMITIVES_TEMPLATE_TASK_H_ */
 #endif

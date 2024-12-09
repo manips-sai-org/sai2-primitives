@@ -3,7 +3,7 @@
 <world name="demo_world" gravity="0.0 0.0 0.0">
 
 	<robot name="PUMA">
-		<model dir="${SAI2_MODEL_URDF_FOLDER}/puma" path="puma.urdf" name="Puma" />
+		<model dir="${SAI_MODEL_URDF_FOLDER}/puma" path="puma.urdf" name="Puma" />
 	</robot>
 
 	<static_object name="Floor">

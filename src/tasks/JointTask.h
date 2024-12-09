@@ -3,14 +3,14 @@
  *
  *      This class creates a joint controller for a robotic manipulator using
  * dynamic decoupling and an underlying PID compensator. It requires a robot
- * model parsed from a urdf file to a Sai2Model object. It does not support
+ * model parsed from a urdf file to a SaiModel object. It does not support
  * spherical joints
  *
  *      Author: Mikael Jorda
  */
 
-#ifndef SAI2_PRIMITIVES_JOINT_TASK_H_
-#define SAI2_PRIMITIVES_JOINT_TASK_H_
+#ifndef SAI_PRIMITIVES_JOINT_TASK_H_
+#define SAI_PRIMITIVES_JOINT_TASK_H_
 
 #include <helper_modules/OTG_joints.h>
 
@@ -19,12 +19,12 @@
 #include <memory>
 #include <string>
 
-#include "Sai2Model.h"
+#include "SaiModel.h"
 #include "TemplateTask.h"
-#include "helper_modules/Sai2PrimitivesCommonDefinitions.h"
+#include "helper_modules/SaiPrimitivesCommonDefinitions.h"
 
 using namespace Eigen;
-namespace Sai2Primitives {
+namespace SaiPrimitives {
 
 class JointTask : public TemplateTask {
 public:
@@ -47,13 +47,13 @@ public:
 	/**
 	 * @brief      Constructor for a full joint task
 	 *
-	 * @param      robot      A pointer to a Sai2Model object for the robot that
+	 * @param      robot      A pointer to a SaiModel object for the robot that
 	 *                        is to be controlled
 	 * @param[in]  task_name  The task name
 	 * @param[in]  loop_timestep  time taken by a control loop. Used only in
 	 * trajectory generation
 	 */
-	JointTask(std::shared_ptr<Sai2Model::Sai2Model>& robot,
+	JointTask(std::shared_ptr<SaiModel::SaiModel>& robot,
 			  const std::string& task_name = "joint_task",
 			  const double loop_timestep = 0.001);
 
@@ -69,7 +69,7 @@ public:
 	 * @param task_name
 	 * @param loop_timestep
 	 */
-	JointTask(std::shared_ptr<Sai2Model::Sai2Model>& robot,
+	JointTask(std::shared_ptr<SaiModel::SaiModel>& robot,
 			  const MatrixXd& joint_selection_matrix,
 			  const std::string& task_name = "partial_joint_task",
 			  const double loop_timestep = 0.001);
@@ -459,7 +459,7 @@ private:
 	MatrixXd _current_task_range;
 };
 
-} /* namespace Sai2Primitives */
+} /* namespace SaiPrimitives */
 
-/* SAI2_PRIMITIVES_JOINT_TASK_H_ */
+/* SAI_PRIMITIVES_JOINT_TASK_H_ */
 #endif

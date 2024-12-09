@@ -7,7 +7,7 @@
  * sensor is attached to the same link as the control frame and the force sensed
  * values are given in sensor frame. Besides, the force sensed and moment sensed
  * are assumed to be the force and moment that the robot applies to the
- * environment. It requires a robot model parsed from a urdf file to a Sai2Model
+ * environment. It requires a robot model parsed from a urdf file to a SaiModel
  * object, as well as the definition of a control frame as a link at which the
  * frame is attached, and an affine transform that determines the position and
  * orientation of the control frame in this link
@@ -15,25 +15,25 @@
  *      Author: Mikael Jorda
  */
 
-#ifndef SAI2_PRIMITIVES_MOTIONFORCETASK_TASK_H_
-#define SAI2_PRIMITIVES_MOTIONFORCETASK_TASK_H_
+#ifndef SAI_PRIMITIVES_MOTIONFORCETASK_TASK_H_
+#define SAI_PRIMITIVES_MOTIONFORCETASK_TASK_H_
 
 #include <helper_modules/OTG_6dof_cartesian.h>
 #include <helper_modules/POPCExplicitForceControl.h>
-#include <helper_modules/Sai2PrimitivesCommonDefinitions.h>
+#include <helper_modules/SaiPrimitivesCommonDefinitions.h>
 
 #include <Eigen/Dense>
 #include <memory>
 #include <string>
 
-#include "Sai2Model.h"
+#include "SaiModel.h"
 #include "SingularityHandler.h"
 #include "TemplateTask.h"
 
 using namespace Eigen;
 using namespace std;
 
-namespace Sai2Primitives {
+namespace SaiPrimitives {
 
 class MotionForceTask : public TemplateTask {
 public:
@@ -81,7 +81,7 @@ public:
 	/**
 	 * @brief Construct a new Motion Force Task
 	 *
-	 * @param robot A pointer to a Sai2Model object for the robot that is to be
+	 * @param robot A pointer to a SaiModel object for the robot that is to be
 	 * controlled
 	 * @param link_name The name of the link in the robot at which to attach the
 	 * compliant frame
@@ -94,14 +94,14 @@ public:
 	 * generation and integral control.
 	 */
 	MotionForceTask(
-		std::shared_ptr<Sai2Model::Sai2Model>& robot, const string& link_name,
+		std::shared_ptr<SaiModel::SaiModel>& robot, const string& link_name,
 		const Affine3d& compliant_frame = Affine3d::Identity(),
 		const std::string& task_name = "motion_force_task",
 		const bool is_force_motion_parametrization_in_compliant_frame = false,
 		const double loop_timestep = 0.001);
 
 	MotionForceTask(
-		std::shared_ptr<Sai2Model::Sai2Model>& robot, const string& link_name,
+		std::shared_ptr<SaiModel::SaiModel>& robot, const string& link_name,
 		std::vector<Vector3d> controlled_directions_translation,
 		std::vector<Vector3d> controlled_directions_rotation,
 		const Affine3d& compliant_frame = Affine3d::Identity(),
@@ -887,7 +887,7 @@ private:
 	std::unique_ptr<SingularityHandler> _singularity_handler;
 };
 
-} /* namespace Sai2Primitives */
+} /* namespace SaiPrimitives */
 
-/* SAI2_PRIMITIVES_MOTIONFORCETASK_TASK_H_ */
+/* SAI_PRIMITIVES_MOTIONFORCETASK_TASK_H_ */
 #endif

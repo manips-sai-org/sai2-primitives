@@ -11,10 +11,10 @@
 using namespace std;
 using namespace Eigen;
 
-namespace Sai2Primitives {
+namespace SaiPrimitives {
 
 MotionForceTask::MotionForceTask(
-	std::shared_ptr<Sai2Model::Sai2Model>& robot, const string& link_name,
+	std::shared_ptr<SaiModel::SaiModel>& robot, const string& link_name,
 	const Affine3d& compliant_frame, const std::string& task_name,
 	const bool is_force_motion_parametrization_in_compliant_frame,
 	const double loop_timestep)
@@ -31,7 +31,7 @@ MotionForceTask::MotionForceTask(
 }
 
 MotionForceTask::MotionForceTask(
-	std::shared_ptr<Sai2Model::Sai2Model>& robot, const string& link_name,
+	std::shared_ptr<SaiModel::SaiModel>& robot, const string& link_name,
 	std::vector<Vector3d> controlled_directions_translation,
 	std::vector<Vector3d> controlled_directions_rotation,
 	const Affine3d& compliant_frame, const std::string& task_name,
@@ -63,7 +63,7 @@ MotionForceTask::MotionForceTask(
 				controlled_directions_translation[i];
 		}
 		controlled_translation_range_basis =
-			Sai2Model::matrixRangeBasis(controlled_translation_vectors);
+			SaiModel::matrixRangeBasis(controlled_translation_vectors);
 	}
 
 	if (controlled_directions_rotation.size() != 0) {
@@ -75,7 +75,7 @@ MotionForceTask::MotionForceTask(
 		}
 
 		controlled_rotation_range_basis =
-			Sai2Model::matrixRangeBasis(controlled_rotation_vectors);
+			SaiModel::matrixRangeBasis(controlled_rotation_vectors);
 	}
 
 	_partial_task_projection.setZero();
@@ -144,9 +144,9 @@ void MotionForceTask::initialSetup() {
 	_N_prec = MatrixXd::Identity(dof, dof);
 
 	MatrixXd range_pos =
-		Sai2Model::matrixRangeBasis(_partial_task_projection.block<3, 3>(0, 0));
+		SaiModel::matrixRangeBasis(_partial_task_projection.block<3, 3>(0, 0));
 	MatrixXd range_ori =
-		Sai2Model::matrixRangeBasis(_partial_task_projection.block<3, 3>(3, 3));
+		SaiModel::matrixRangeBasis(_partial_task_projection.block<3, 3>(3, 3));
 
 	_pos_range = range_pos.norm() == 0 ? 0 : range_pos.cols();
 	_ori_range = range_ori.norm() == 0 ? 0 : range_ori.cols();
@@ -289,7 +289,7 @@ VectorXd MotionForceTask::computeTorques() {
 		_link_name, _compliant_frame.rotation());
 
 	_orientation_error =
-		Sai2Model::orientationError(_goal_orientation, _current_orientation);
+		SaiModel::orientationError(_goal_orientation, _current_orientation);
 	_current_linear_velocity =
 		_jacobian.block(0, 0, 3, getConstRobotModel()->dof()) *
 		getConstRobotModel()->dq();
@@ -414,7 +414,7 @@ VectorXd MotionForceTask::computeTorques() {
 
 	// final contribution
 	if (_use_velocity_saturation_flag) {
-		const Matrix3d kv_pos_inv = Sai2Model::computePseudoInverse(_kv_pos);
+		const Matrix3d kv_pos_inv = SaiModel::computePseudoInverse(_kv_pos);
 		_desired_linear_velocity =
 			-_kp_pos * kv_pos_inv * sigma_position *
 				(_current_position - _desired_position) -
@@ -440,14 +440,14 @@ VectorXd MotionForceTask::computeTorques() {
 	// orientation error
 	Vector3d step_orientation_error =
 		sigma_orientation *
-		Sai2Model::orientationError(_desired_orientation, _current_orientation);
+		SaiModel::orientationError(_desired_orientation, _current_orientation);
 
 	// update integrated error for I term
 	_integrated_orientation_error += step_orientation_error * getLoopTimestep();
 
 	// final contribution
 	if (_use_velocity_saturation_flag) {
-		const Matrix3d kv_ori_inv = Sai2Model::computePseudoInverse(_kv_ori);
+		const Matrix3d kv_ori_inv = SaiModel::computePseudoInverse(_kv_ori);
 		_desired_angular_velocity =
 			-_kp_ori * kv_ori_inv * step_orientation_error -
 			_ki_ori * kv_ori_inv * _integrated_orientation_error;
@@ -1000,4 +1000,4 @@ void MotionForceTask::resetIntegratorsAngular() {
 	_integrated_moment_error.setZero();
 }
 
-} /* namespace Sai2Primitives */
+} /* namespace SaiPrimitives */

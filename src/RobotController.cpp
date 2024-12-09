@@ -3,9 +3,9 @@
 using namespace Eigen;
 using namespace std;
 
-namespace Sai2Primitives {
+namespace SaiPrimitives {
 
-RobotController::RobotController(std::shared_ptr<Sai2Model::Sai2Model>& robot,
+RobotController::RobotController(std::shared_ptr<SaiModel::SaiModel>& robot,
 								 vector<shared_ptr<TemplateTask>>& tasks)
 	: _robot(robot), _enable_gravity_compensation(false) {
 	if (tasks.size() == 0) {
@@ -113,4 +113,4 @@ std::shared_ptr<MotionForceTask> RobotController::getMotionForceTaskByName(
 								" not found in RobotController::GetTaskByName");
 }
 
-} /* namespace Sai2Primitives */
+} /* namespace SaiPrimitives */

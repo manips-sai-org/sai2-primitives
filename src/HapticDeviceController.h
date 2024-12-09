@@ -10,16 +10,16 @@
  *      Authors: Margot Vulliez & Mikael Jorda
  */
 
-#ifndef SAI2_HAPTIC_DEVICE_CONTROLLER_H_
-#define SAI2_HAPTIC_DEVICE_CONTROLLER_H_
+#ifndef SAI_HAPTIC_DEVICE_CONTROLLER_H_
+#define SAI_HAPTIC_DEVICE_CONTROLLER_H_
 
 #include <Eigen/Dense>
 #include <memory>
 #include <string>
 
-#include "Sai2Model.h"
+#include "SaiModel.h"
 
-namespace Sai2Primitives {
+namespace SaiPrimitives {
 
 enum HapticControlType {
 	HOMING,
@@ -707,6 +707,6 @@ private:
 	double _device_workspace_angle_limit;
 };
 
-} /* namespace Sai2Primitives */
+} /* namespace SaiPrimitives */
 
-#endif /* SAI2_HAPTIC_DEVICE_CONTROLLER_H_ */
+#endif /* SAI_HAPTIC_DEVICE_CONTROLLER_H_ */

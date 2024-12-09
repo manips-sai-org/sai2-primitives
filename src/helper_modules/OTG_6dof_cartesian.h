@@ -8,8 +8,8 @@
  * Created: August 2023
  */
 
-#ifndef SAI2_PRIMITIVES_OTG_6DOF_CARTESIAN_H
-#define SAI2_PRIMITIVES_OTG_6DOF_CARTESIAN_H
+#ifndef SAI_PRIMITIVES_OTG_6DOF_CARTESIAN_H
+#define SAI_PRIMITIVES_OTG_6DOF_CARTESIAN_H
 
 #include <Eigen/Dense>
 #include <memory>
@@ -17,7 +17,7 @@
 
 using namespace Eigen;
 using namespace ruckig;
-namespace Sai2Primitives {
+namespace SaiPrimitives {
 
 typedef Matrix<double, 6, 1> Vector6d;
 
@@ -255,6 +255,6 @@ public:
 	OutputParameter<6, EigenVector> _output;
 };
 
-} /* namespace Sai2Primitives */
+} /* namespace SaiPrimitives */
 
-#endif	// SAI2_PRIMITIVES_OTG_6DOF_CARTESIAN_H
+#endif	// SAI_PRIMITIVES_OTG_6DOF_CARTESIAN_H

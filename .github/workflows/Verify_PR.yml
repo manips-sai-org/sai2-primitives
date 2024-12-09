@@ -14,4 +14,4 @@ jobs:
       - name: build-repo
         uses: ./.github/actions/build-repo
         with: 
-          token: ${{ secrets.SAI2_TOKEN }}
+          token: ${{ secrets.SAI_TOKEN }}
