@@ -19,9 +19,9 @@ namespace {
     double KV_TYPE_2 = 5;
 }
 
-namespace Sai2Primitives {
+namespace SaiPrimitives {
 
-SingularityHandler::SingularityHandler(std::shared_ptr<Sai2Model::Sai2Model> robot,
+SingularityHandler::SingularityHandler(std::shared_ptr<SaiModel::SaiModel> robot,
                                        const std::string& link_name,
                                        const Affine3d& compliant_frame,
                                        const int& task_rank,
@@ -107,7 +107,7 @@ void SingularityHandler::updateTaskModel(const MatrixXd& projected_jacobian, con
                 // non-singular task
                 _task_range_ns = _svd_U.leftCols(i);
                 _projected_jacobian_ns = _task_range_ns.transpose() * projected_jacobian;
-                Sai2Model::OpSpaceMatrices ns_matrices =
+                SaiModel::OpSpaceMatrices ns_matrices =
                     _robot->operationalSpaceMatrices(_projected_jacobian_ns);
                 _Lambda_ns = ns_matrices.Lambda;
                 _Jbar_ns = ns_matrices.Jbar;
@@ -127,7 +127,7 @@ void SingularityHandler::updateTaskModel(const MatrixXd& projected_jacobian, con
                 // non-singular task
                 _task_range_ns = _svd_U.leftCols(_task_rank); 
                 _projected_jacobian_ns = _task_range_ns.transpose() * projected_jacobian;
-                Sai2Model::OpSpaceMatrices ns_matrices =
+                SaiModel::OpSpaceMatrices ns_matrices =
                     _robot->operationalSpaceMatrices(_projected_jacobian_ns);
                 _Lambda_ns = ns_matrices.Lambda;
                 _Jbar_ns = ns_matrices.Jbar;
@@ -151,7 +151,7 @@ void SingularityHandler::updateTaskModel(const MatrixXd& projected_jacobian, con
         _Lambda_joint_s = MatrixXd::Zero(1, 1);  // placeholder
     } else {
         _posture_projected_jacobian = _joint_task_range_s.transpose() * _N_ns * N_prec;
-        Sai2Model::OpSpaceMatrices op_space_matrices =
+        SaiModel::OpSpaceMatrices op_space_matrices =
             _robot->operationalSpaceMatrices(_posture_projected_jacobian);
         _Lambda_joint_s = op_space_matrices.Lambda;
         _N = op_space_matrices.N * _N_ns; 
@@ -257,7 +257,7 @@ void SingularityHandler::classifySingularity(const MatrixXd& singular_task_range
 
         // compute classification based on motion along singular direction from perturbation 
         Vector3d pos_delta = _robot->position(_link_name, _compliant_frame.translation()) - curr_pos;
-        Vector3d ori_delta = Sai2Model::orientationError(_robot->rotation(_link_name, _compliant_frame.linear()), curr_ori);
+        Vector3d ori_delta = SaiModel::orientationError(_robot->rotation(_link_name, _compliant_frame.linear()), curr_ori);
         VectorXd delta_vector(6);
         delta_vector.head(3) = pos_delta;
         delta_vector.tail(3) = ori_delta;

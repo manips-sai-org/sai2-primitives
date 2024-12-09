@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 
-project(SAI2-PRIMITIVES)
+project(SAI-PRIMITIVES)
 set(PROJECT_VERSION 0.1.0)
 
 option(BUILD_EXAMPLES "Build examples" ON)
@@ -27,8 +27,8 @@ endif()
 # include Eigen
 find_package(Eigen3 REQUIRED)
 
-# include sai2-model
-find_package(SAI2-MODEL REQUIRED)
+# include sai-model
+find_package(SAI-MODEL REQUIRED)
 
 # include ruckig for OTG
 set(RUCKIG_LOCAL_DIR ${PROJECT_SOURCE_DIR}/ruckig)
@@ -52,48 +52,48 @@ set(HELPER_MODULES_SOURCE
     ${PROJECT_SOURCE_DIR}/src/helper_modules/POPCExplicitForceControl.cpp
     ${PROJECT_SOURCE_DIR}/src/helper_modules/OTG_joints.cpp
     ${PROJECT_SOURCE_DIR}/src/helper_modules/OTG_6dof_cartesian.cpp
-    ${PROJECT_SOURCE_DIR}/src/helper_modules/Sai2PrimitivesCommonDefinitions.cpp
+    ${PROJECT_SOURCE_DIR}/src/helper_modules/SaiPrimitivesCommonDefinitions.cpp
 )
 
 # add header files
-set(SAI2-PRIMITIVES_INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/src
+set(SAI-PRIMITIVES_INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/src
                                  ${RUCKIG_LOCAL_DIR}/include/)
 
 # Add the include directory to the include paths
 include_directories(
-	${SAI2-PRIMITIVES_INCLUDE_DIRS}
+	${SAI-PRIMITIVES_INCLUDE_DIRS}
 	${EIGEN3_INCLUDE_DIR}
-	${SAI2-MODEL_INCLUDE_DIRS}
+	${SAI-MODEL_INCLUDE_DIRS}
 	${RUCKIG_INCLUDE_DIR})
 
 # Create the library
-add_library(sai2-primitives STATIC ${CONTROLLERS_SOURCE}
+add_library(sai-primitives STATIC ${CONTROLLERS_SOURCE}
                                    ${HELPER_MODULES_SOURCE})
 
-set(SAI2-PRIMITIVES_LIBRARIES sai2-primitives ${RUCKIG_LIBRARIES})
+set(SAI-PRIMITIVES_LIBRARIES sai-primitives ${RUCKIG_LIBRARIES})
 
-set(SAI2-PRIMITIVES_DEFINITIONS ${PROJECT_DEFINITIONS})
+set(SAI-PRIMITIVES_DEFINITIONS ${PROJECT_DEFINITIONS})
 
 #
 # export package
 #
 
 # export package for use from the build tree
-export(TARGETS sai2-primitives
-       FILE ${PROJECT_BINARY_DIR}/SAI2-PRIMITIVESTargets.cmake)
-export(PACKAGE SAI2-PRIMITIVES)
+export(TARGETS sai-primitives
+       FILE ${PROJECT_BINARY_DIR}/SAI-PRIMITIVESTargets.cmake)
+export(PACKAGE SAI-PRIMITIVES)
 
 # configure package
-set(CONF_INCLUDE_DIRS ${SAI2-PRIMITIVES_INCLUDE_DIRS})
-set(CONF_LIBRARIES ${SAI2-PRIMITIVES_LIBRARIES})
-set(CONF_DEFINITIONS ${SAI2-PRIMITIVES_DEFINITIONS})
+set(CONF_INCLUDE_DIRS ${SAI-PRIMITIVES_INCLUDE_DIRS})
+set(CONF_LIBRARIES ${SAI-PRIMITIVES_LIBRARIES})
+set(CONF_DEFINITIONS ${SAI-PRIMITIVES_DEFINITIONS})
 
 # create package configuration and version files
-configure_file(SAI2-PRIMITIVESConfig.cmake.in
-               "${PROJECT_BINARY_DIR}/SAI2-PRIMITIVESConfig.cmake" @ONLY)
+configure_file(SAI-PRIMITIVESConfig.cmake.in
+               "${PROJECT_BINARY_DIR}/SAI-PRIMITIVESConfig.cmake" @ONLY)
 include(CMakePackageConfigHelpers)
 write_basic_package_version_file(
-  "${CMAKE_CURRENT_BINARY_DIR}/SAI2-PRIMITIVESConfigVersion.cmake"
+  "${CMAKE_CURRENT_BINARY_DIR}/SAI-PRIMITIVESConfigVersion.cmake"
   VERSION ${PROJECT_VERSION}
   COMPATIBILITY SameMajorVersion)
 

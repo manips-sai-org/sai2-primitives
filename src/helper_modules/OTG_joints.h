@@ -7,8 +7,8 @@
  * Created: August 2023
  */
 
-#ifndef SAI2_PRIMITIVES_OTG_JOINTS_H
-#define SAI2_PRIMITIVES_OTG_JOINTS_H
+#ifndef SAI_PRIMITIVES_OTG_JOINTS_H
+#define SAI_PRIMITIVES_OTG_JOINTS_H
 
 #include <Eigen/Dense>
 #include <ruckig/ruckig.hpp>
@@ -18,7 +18,7 @@
 using namespace Eigen;
 using namespace ruckig;
 
-namespace Sai2Primitives {
+namespace SaiPrimitives {
 
 class OTG_joints {
 public:
@@ -177,6 +177,6 @@ private:
 	OutputParameter<DynamicDOFs, EigenVector> _output {0};
 };
 
-} /* namespace Sai2Primitives */
+} /* namespace SaiPrimitives */
 
-#endif	// SAI2_PRIMITIVES_OTG_JOINTS_H
+#endif	// SAI_PRIMITIVES_OTG_JOINTS_H

@@ -67,7 +67,7 @@ double computeInterpolationCoeff(const double x, const double x0,
 
 }  // namespace
 
-namespace Sai2Primitives {
+namespace SaiPrimitives {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //// Constructor, Destructor and Initialization of the haptic controllers
@@ -1199,4 +1199,4 @@ void HapticDeviceController::setMomentDeadbandForceMotionController(
 	_moment_deadband = moment_deadband;
 }
 
-} /* namespace Sai2Primitives */
+} /* namespace SaiPrimitives */

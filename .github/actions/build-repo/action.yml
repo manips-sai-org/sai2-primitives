@@ -9,44 +9,44 @@ runs:
   using: "composite"
   steps:
     - name: Install dependencies
-      uses: manips-sai-org/sai2-common/custom_github_actions/dependencies@master
+      uses: manips-sai-org/sai-common/custom_github_actions/dependencies@master
 
-    - name: Setup Sai2-urdfreader
-      uses: manips-sai-org/sai2-common/custom_github_actions/sai2-repositories@master
+    - name: Setup Sai-urdfreader
+      uses: manips-sai-org/sai-common/custom_github_actions/sai-repositories@master
       with:
         token: ${{ inputs.token }}
-        repo-name: sai2-urdfreader
+        repo-name: sai-urdfreader
         
-    - name: Setup Sai2-model
-      uses: manips-sai-org/sai2-common/custom_github_actions/sai2-model@master
+    - name: Setup Sai-model
+      uses: manips-sai-org/sai-common/custom_github_actions/sai-model@master
       with:
         token: ${{ inputs.token }}
 
     - name: Setup chai3d
-      uses: manips-sai-org/sai2-common/custom_github_actions/sai2-repositories@master
+      uses: manips-sai-org/sai-common/custom_github_actions/sai-repositories@master
       with:
         token: ${{ inputs.token }}
         repo-name: chai3d
 
-    - name: Setup Sai2-Graphics
-      uses: manips-sai-org/sai2-common/custom_github_actions/sai2-repositories@master
+    - name: Setup Sai-Graphics
+      uses: manips-sai-org/sai-common/custom_github_actions/sai-repositories@master
       with:
         token: ${{ inputs.token }}
-        repo-name: sai2-graphics
+        repo-name: sai-graphics
 
-    - name: Setup Sai2-Common
-      uses: manips-sai-org/sai2-common/custom_github_actions/sai2-repositories@master
+    - name: Setup Sai-Common
+      uses: manips-sai-org/sai-common/custom_github_actions/sai-repositories@master
       with:
         token: ${{ inputs.token }}
-        repo-name: sai2-common
+        repo-name: sai-common
 
-    - name: Setup Sai2-Simulation
-      uses: manips-sai-org/sai2-common/custom_github_actions/sai2-repositories@master
+    - name: Setup Sai-Simulation
+      uses: manips-sai-org/sai-common/custom_github_actions/sai-repositories@master
       with:
         token: ${{ inputs.token }}
-        repo-name: sai2-simulation
+        repo-name: sai-simulation
 
-    - name: Build Sai2-primitives
+    - name: Build Sai-primitives
       shell: bash
       run: |
         export CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:dep/*

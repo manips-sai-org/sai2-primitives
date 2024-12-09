@@ -14,9 +14,9 @@
 #include <thread>
 
 #include "RobotController.h"
-#include "Sai2Graphics.h"
-#include "Sai2Model.h"
-#include "Sai2Simulation.h"
+#include "SaiGraphics.h"
+#include "SaiModel.h"
+#include "SaiSimulation.h"
 #include "tasks/JointTask.h"
 #include "tasks/MotionForceTask.h"
 #include "timer/LoopTimer.h"
@@ -27,7 +27,7 @@ using namespace std;
 using namespace Eigen;
 
 const string world_file = "${EXAMPLE_07_FOLDER}/world.urdf";
-const string robot_file = "${SAI2_MODEL_URDF_FOLDER}/panda//panda_arm_box.urdf";
+const string robot_file = "${SAI_MODEL_URDF_FOLDER}/panda//panda_arm_box.urdf";
 const string robot_name = "PANDA";
 // need a second robot model for the plate
 const string plate_file = "${EXAMPLE_07_FOLDER}/plate.urdf";
@@ -50,18 +50,18 @@ const Vector3d sensor_pos_in_link = Vector3d(0.0, 0.0, 0.0);
 #define CONTACT_CONTROL 1
 
 // simulation and control loop
-void control(shared_ptr<Sai2Model::Sai2Model> robot,
-			 shared_ptr<Sai2Simulation::Sai2Simulation> sim);
-void simulation(shared_ptr<Sai2Model::Sai2Model> robot,
-				shared_ptr<Sai2Model::Sai2Model> plate,
-				shared_ptr<Sai2Simulation::Sai2Simulation> sim);
+void control(shared_ptr<SaiModel::SaiModel> robot,
+			 shared_ptr<SaiSimulation::SaiSimulation> sim);
+void simulation(shared_ptr<SaiModel::SaiModel> robot,
+				shared_ptr<SaiModel::SaiModel> plate,
+				shared_ptr<SaiSimulation::SaiSimulation> sim);
 
 //------------ main function
 int main(int argc, char** argv) {
-	Sai2Model::URDF_FOLDERS["EXAMPLE_07_FOLDER"] =
+	SaiModel::URDF_FOLDERS["EXAMPLE_07_FOLDER"] =
 		string(EXAMPLES_FOLDER) + "/07-surface_surface_contact";
 	cout << "Loading URDF world model file: "
-		 << Sai2Model::ReplaceUrdfPathPrefix(world_file) << endl;
+		 << SaiModel::ReplaceUrdfPathPrefix(world_file) << endl;
 
 	// set up signal handler
 	signal(SIGABRT, &sighandler);
@@ -69,21 +69,21 @@ int main(int argc, char** argv) {
 	signal(SIGINT, &sighandler);
 
 	// load graphics scene
-	auto graphics = make_shared<Sai2Graphics::Sai2Graphics>(world_file);
+	auto graphics = make_shared<SaiGraphics::SaiGraphics>(world_file);
 	graphics->addUIForceInteraction(robot_name);
 
 	// load simulation world
-	auto sim = make_shared<Sai2Simulation::Sai2Simulation>(world_file);
+	auto sim = make_shared<SaiSimulation::SaiSimulation>(world_file);
 	sim->setCoeffFrictionStatic(0.3);
 	sim->setCollisionRestitution(0);
 
 	// load robot and plate
-	auto robot = make_shared<Sai2Model::Sai2Model>(robot_file);
+	auto robot = make_shared<SaiModel::SaiModel>(robot_file);
 	robot->setQ(sim->getJointPositions(robot_name));
 	robot->updateModel();
 
 	// load plate
-	auto plate = make_shared<Sai2Model::Sai2Model>(plate_file);
+	auto plate = make_shared<SaiModel::SaiModel>(plate_file);
 
 	// create simulated force sensor
 	Affine3d T_sensor = Affine3d::Identity();
@@ -122,8 +122,8 @@ int main(int argc, char** argv) {
 }
 
 //------------------------------------------------------------------------------
-void control(shared_ptr<Sai2Model::Sai2Model> robot,
-			 shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
+void control(shared_ptr<SaiModel::SaiModel> robot,
+			 shared_ptr<SaiSimulation::SaiSimulation> sim) {
 	// prepare state machine
 	int state = GO_TO_CONTACT;
 
@@ -132,7 +132,7 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 	int dof = robot->dof();
 
 	// Position plus orientation task
-	auto motion_force_task = make_shared<Sai2Primitives::MotionForceTask>(
+	auto motion_force_task = make_shared<SaiPrimitives::MotionForceTask>(
 		robot, link_name, Affine3d(Translation3d(pos_in_link)),
 		"surface_alignment_task", true);
 	motion_force_task->enablePassivity();
@@ -148,14 +148,14 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 	VectorXd initial_q = robot->q();
 
 	// robot controller
-	vector<shared_ptr<Sai2Primitives::TemplateTask>> task_list = {
+	vector<shared_ptr<SaiPrimitives::TemplateTask>> task_list = {
 		motion_force_task};
 	auto robot_controller =
-		make_unique<Sai2Primitives::RobotController>(robot, task_list);
+		make_unique<SaiPrimitives::RobotController>(robot, task_list);
 
 	// create a loop timer
 	double control_freq = 1000;
-	Sai2Common::LoopTimer timer(control_freq, 1e6);
+	SaiCommon::LoopTimer timer(control_freq, 1e6);
 
 	while (fSimulationRunning) {  // automatically set to false when simulation
 								  // is quit
@@ -233,9 +233,9 @@ void control(shared_ptr<Sai2Model::Sai2Model> robot,
 }
 
 //------------------------------------------------------------------------------
-void simulation(shared_ptr<Sai2Model::Sai2Model> robot,
-				shared_ptr<Sai2Model::Sai2Model> plate,
-				shared_ptr<Sai2Simulation::Sai2Simulation> sim) {
+void simulation(shared_ptr<SaiModel::SaiModel> robot,
+				shared_ptr<SaiModel::SaiModel> plate,
+				shared_ptr<SaiSimulation::SaiSimulation> sim) {
 	fSimulationRunning = true;
 
 	// plate controller
@@ -244,7 +244,7 @@ void simulation(shared_ptr<Sai2Model::Sai2Model> robot,
 
 	// create a timer
 	double sim_freq = 2000;
-	Sai2Common::LoopTimer timer(sim_freq);
+	SaiCommon::LoopTimer timer(sim_freq);
 
 	sim->setTimestep(1.0 / sim_freq);
 

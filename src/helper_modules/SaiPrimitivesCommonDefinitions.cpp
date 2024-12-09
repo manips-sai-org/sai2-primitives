@@ -1,8 +1,8 @@
-#include "Sai2PrimitivesCommonDefinitions.h"
+#include "SaiPrimitivesCommonDefinitions.h"
 
 using namespace Eigen;
 
-namespace Sai2Primitives {
+namespace SaiPrimitives {
 
 VectorXd extractKpFromGainVector(const std::vector<PIDGains>& gains) {
 	VectorXd kp(gains.size());
@@ -28,4 +28,4 @@ VectorXd extractKiFromGainVector(const std::vector<PIDGains>& gains) {
 	return ki;
 }
 
-}  // namespace Sai2Primitives
+}  // namespace SaiPrimitives

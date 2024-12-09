@@ -1,4 +1,4 @@
-# sai2-primitives
+# sai-primitives
 This is a control library that provides an implementation of basic tasks and controllers for a torque controlled robot.
 It uses the Operatinal Space framework.
 It offers the possibility to be used with the [Ruckig](https://ruckig.com/) for trajectory generation (community version).
@@ -16,9 +16,9 @@ Robot controllers can be defined using different tasks:
 The robot controller then takes a list of tasks and implements a hierarchical controller using all the tasks to compute the robot control torques
 
 ## Dependencies
-sai2-primitives depends on sai2-model, Eigen3 and Ruckig.
+sai-primitives depends on sai-model, Eigen3 and Ruckig.
 
-The examples depend on additional libraries : sai2-simulation, sai2-graphics, sai2-common.
+The examples depend on additional libraries : sai-simulation, sai-graphics, sai-common.
 
 ## Build instructions
 First build ruckig:
@@ -28,7 +28,7 @@ mkdir build && cd build
 cmake .. && make -j4
 cd ../..
 ```
-Next, build sai2-primitives
+Next, build sai-primitives
 ```
 mkdir build
 cd build
@@ -36,7 +36,7 @@ cmake .. && make -j4
 ```
 
 ## Run the examples
-Remember that you need sai2-simulation, sai2-graphics and sai2-common in order to compile and run the examples.
+Remember that you need sai-simulation, sai-graphics and sai-common in order to compile and run the examples.
 Go to build/examples/desired_example and run the example. For example 1 :
 ```
 cd build/examples/01-joint_control

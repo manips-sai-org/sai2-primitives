@@ -1,5 +1,5 @@
-#ifndef SAI2_PRIMITIVES_POPCEXPLICITFORCECONTROL_TASK_H_
-#define SAI2_PRIMITIVES_POPCEXPLICITFORCECONTROL_TASK_H_
+#ifndef SAI_PRIMITIVES_POPCEXPLICITFORCECONTROL_TASK_H_
+#define SAI_PRIMITIVES_POPCEXPLICITFORCECONTROL_TASK_H_
 
 #include <Eigen/Dense>
 #include <queue>
@@ -7,7 +7,7 @@
 using namespace Eigen;
 using namespace std;
 
-namespace Sai2Primitives {
+namespace SaiPrimitives {
 
 class POPCExplicitForceControl {
 public:
@@ -50,6 +50,6 @@ private:
 	double _Rc;
 };
 
-}  // namespace Sai2Primitives
+}  // namespace SaiPrimitives
 
-#endif	// SAI2_PRIMITIVES_POPCEXPLICITFORCECONTROL_TASK_H_
+#endif	// SAI_PRIMITIVES_POPCEXPLICITFORCECONTROL_TASK_H_

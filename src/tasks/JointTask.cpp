@@ -9,9 +9,9 @@
 #include <stdexcept>
 
 using namespace Eigen;
-namespace Sai2Primitives {
+namespace SaiPrimitives {
 
-JointTask::JointTask(std::shared_ptr<Sai2Model::Sai2Model>& robot,
+JointTask::JointTask(std::shared_ptr<SaiModel::SaiModel>& robot,
 					 const std::string& task_name, const double loop_timestep)
 	: TemplateTask(robot, task_name, TaskType::JOINT_TASK, loop_timestep) {
 	// selection for full joint task
@@ -20,7 +20,7 @@ JointTask::JointTask(std::shared_ptr<Sai2Model::Sai2Model>& robot,
 	initialSetup();
 }
 
-JointTask::JointTask(std::shared_ptr<Sai2Model::Sai2Model>& robot,
+JointTask::JointTask(std::shared_ptr<SaiModel::SaiModel>& robot,
 					 const MatrixXd& joint_selection_matrix,
 					 const std::string& task_name, const double loop_timestep)
 	: TemplateTask(robot, task_name, TaskType::JOINT_TASK, loop_timestep) {
@@ -230,7 +230,7 @@ void JointTask::updateTaskModel(const MatrixXd& N_prec) {
 	_N_prec = N_prec;
 	_projected_jacobian = _joint_selection * _N_prec;
 
-	_current_task_range = Sai2Model::matrixRangeBasis(_projected_jacobian);
+	_current_task_range = SaiModel::matrixRangeBasis(_projected_jacobian);
 	if (_current_task_range.norm() == 0) {
 		// there is no controllable degree of freedom for the task, just
 		// return should maybe print a warning here
@@ -238,7 +238,7 @@ void JointTask::updateTaskModel(const MatrixXd& N_prec) {
 		return;
 	}
 
-	Sai2Model::OpSpaceMatrices op_space_matrices =
+	SaiModel::OpSpaceMatrices op_space_matrices =
 		getConstRobotModel()->operationalSpaceMatrices(
 			_current_task_range.transpose() * _projected_jacobian);
 	_M_partial = op_space_matrices.Lambda;
@@ -325,7 +325,7 @@ VectorXd JointTask::computeTorques() {
 
 	// compute task force (with velocity saturation if asked)
 	if (_use_velocity_saturation_flag) {
-		const MatrixXd kv_inverse = Sai2Model::computePseudoInverse(_kv);
+		const MatrixXd kv_inverse = SaiModel::computePseudoInverse(_kv);
 		_desired_velocity =
 			-_kp * kv_inverse * (_current_position - _desired_position) -
 			_ki * kv_inverse * _integrated_position_error;
@@ -445,4 +445,4 @@ bool JointTask::goalPositionReached(const double& tol) {
 	}
 }
 
-} /* namespace Sai2Primitives */
+} /* namespace SaiPrimitives */
