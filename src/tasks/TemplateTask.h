@@ -18,6 +18,7 @@ namespace SaiPrimitives {
 
 enum TaskType {
 	UNDEFINED,
+	JOINT_LIMIT_AVOIDANCE_TASK,
 	JOINT_TASK,
 	MOTION_FORCE_TASK,
 };
@@ -124,5 +125,4 @@ private:
 
 } /* namespace SaiPrimitives */
 
-/* SAI_PRIMITIVES_TEMPLATE_TASK_H_ */
-#endif
+#endif /* SAI_PRIMITIVES_TEMPLATE_TASK_H_ */

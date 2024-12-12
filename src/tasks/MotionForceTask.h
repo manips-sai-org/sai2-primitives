@@ -477,7 +477,7 @@ public:
 	 *             positions/velocities
 	 *
 	 * @return Eigen::VectorXd the joint task torques
-	 * 
+	 *
 	 */
 	VectorXd computeTorques() override;
 
@@ -485,7 +485,8 @@ public:
 	 * @brief Computes the joint torques associated with this control task, and
 	 * feedforward compensates the disturbances due to the previous tasks.
 	 *
-	 * @param tau_prec the control torques from the frevious tasks in the hierarchy
+	 * @param tau_prec the control torques from the frevious tasks in the
+	 * hierarchy
 	 * @return Eigen::VectorXd the joint task torques
 	 */
 	VectorXd computeTorques(const Eigen::VectorXd& tau_prec) override;
@@ -889,5 +890,4 @@ private:
 
 } /* namespace SaiPrimitives */
 
-/* SAI_PRIMITIVES_MOTIONFORCETASK_TASK_H_ */
-#endif
+#endif /* SAI_PRIMITIVES_MOTIONFORCETASK_TASK_H_ */
