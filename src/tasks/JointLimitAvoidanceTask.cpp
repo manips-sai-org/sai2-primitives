@@ -176,29 +176,9 @@ void JointLimitAvoidanceTask::updateLimitStatus() {
 				_limit_value[index] = joint_limit.position_upper;
 				_torque_limit_value[index] = joint_limit.effort;
 				_limit_status[index] = LimitStatus::POS_Z1;
-				cout << "JointLimitAvoidanceTask: joint "
-					 << joint_limit.joint_name
-					 << " is at positive position limit Z1" << endl;
-				cout << "joint value: " << q
-					 << " limit value: " << _limit_value[index]
-					 << " z1 boundary: "
-					 << joint_limit.position_upper - _position_z1_to_limit
-					 << " z2 boundary: "
-					 << joint_limit.position_upper - _position_z2_to_limit
-					 << endl
-					 << endl;
 			}
 			if (q > joint_limit.position_upper - _position_z2_to_limit) {
 				_limit_status[index] = LimitStatus::POS_Z2;
-				cout << "JointLimitAvoidanceTask: joint "
-					 << joint_limit.joint_name
-					 << " is at positive position limit Z2" << endl;
-				cout << "joint value: " << q
-					 << " limit value: " << _limit_value[index]
-					 << " z2 boundary: "
-					 << joint_limit.position_upper - _position_z2_to_limit
-					 << endl
-					 << endl;
 			}
 		}
 		if (pos_limit_valid &&
@@ -208,29 +188,9 @@ void JointLimitAvoidanceTask::updateLimitStatus() {
 				_limit_value[index] = joint_limit.position_lower;
 				_torque_limit_value[index] = joint_limit.effort;
 				_limit_status[index] = LimitStatus::POS_Z1;
-				cout << "JointLimitAvoidanceTask: joint "
-					 << joint_limit.joint_name
-					 << " is at negative position limit Z1" << endl;
-				cout << "joint value: " << q
-					 << " limit value: " << _limit_value[index]
-					 << " z1 boundary: "
-					 << joint_limit.position_lower + _position_z1_to_limit
-					 << " z2 boundary: "
-					 << joint_limit.position_lower + _position_z2_to_limit
-					 << endl
-					 << endl;
 			}
 			if (q < joint_limit.position_lower + _position_z2_to_limit) {
 				_limit_status[index] = LimitStatus::POS_Z2;
-				cout << "JointLimitAvoidanceTask: joint "
-					 << joint_limit.joint_name
-					 << " is at negative position limit Z2" << endl;
-				cout << "joint value: " << q
-					 << " limit value: " << _limit_value[index]
-					 << " z2 boundary: "
-					 << joint_limit.position_lower + _position_z2_to_limit
-					 << endl
-					 << endl;
 			}
 		}
 		if (vel_limit_valid &&
@@ -241,27 +201,9 @@ void JointLimitAvoidanceTask::updateLimitStatus() {
 				_limit_value[index] = joint_limit.velocity;
 				_torque_limit_value[index] = joint_limit.effort;
 				_limit_status[index] = LimitStatus::VEL_Z1;
-				cout << "JointLimitAvoidanceTask: joint "
-					 << joint_limit.joint_name
-					 << " is at positive velocity limit Z1" << endl;
-				cout << "joint value: " << dq
-					 << " limit value: " << _limit_value[index]
-					 << " z1 boundary: "
-					 << joint_limit.velocity - _velocity_z1_to_limit
-					 << " z2 boundary: "
-					 << joint_limit.velocity - _velocity_z2_to_limit << endl
-					 << endl;
 			}
 			if (dq > joint_limit.velocity - _velocity_z2_to_limit) {
 				_limit_status[index] = LimitStatus::VEL_Z2;
-				cout << "JointLimitAvoidanceTask: joint "
-					 << joint_limit.joint_name
-					 << " is at positive velocity limit Z2" << endl;
-				cout << "joint value: " << dq
-					 << " limit value: " << _limit_value[index]
-					 << " z2 boundary: "
-					 << joint_limit.velocity - _velocity_z2_to_limit << endl
-					 << endl;
 			}
 		}
 		if (vel_limit_valid &&
@@ -272,27 +214,9 @@ void JointLimitAvoidanceTask::updateLimitStatus() {
 				_limit_value[index] = -joint_limit.velocity;
 				_torque_limit_value[index] = joint_limit.effort;
 				_limit_status[index] = LimitStatus::VEL_Z1;
-				cout << "JointLimitAvoidanceTask: joint "
-					 << joint_limit.joint_name
-					 << " is at negative velocity limit Z1" << endl;
-				cout << "joint value: " << dq
-					 << " limit value: " << _limit_value[index]
-					 << " z1 boundary: "
-					 << -joint_limit.velocity + _velocity_z1_to_limit
-					 << " z2 boundary: "
-					 << -joint_limit.velocity + _velocity_z2_to_limit << endl
-					 << endl;
 			}
 			if (dq < -joint_limit.velocity + _velocity_z2_to_limit) {
 				_limit_status[index] = LimitStatus::VEL_Z2;
-				cout << "JointLimitAvoidanceTask: joint "
-					 << joint_limit.joint_name
-					 << " is at negative velocity limit Z2" << endl;
-				cout << "joint value: " << dq
-					 << " limit value: " << _limit_value[index]
-					 << " z2 boundary: "
-					 << -joint_limit.velocity + _velocity_z2_to_limit << endl
-					 << endl;
 			}
 		}
 	}
@@ -478,16 +402,7 @@ VectorXd JointLimitAvoidanceTask::computeTorques(
 			constraint_number++;
 		}
 
-		if (_limit_status[i] != LimitStatus::OFF) {
-			cout << "joint: " << i << " alpha: " << alpha
-				 << " tau_tasks: " << tau_tasks(i)
-				 << " tau_constraint_z1: " << tau_constraint_z1
-				 << " tau_constraint_z2: " << tau_constraint_z2 << endl;
-		}
 	}
-
-	cout << "limit avoidance torques: " << limit_avoidance_torques.transpose()
-		 << endl;
 
 	// return projected task torques
 	return _projected_jacobian.transpose() * _current_task_range *
