@@ -174,8 +174,12 @@ void runControl(shared_ptr<SaiSimulation::SaiSimulation> sim) {
 			device_limits, robot->transformInWorld(link_name));
 	haptic_controller->setScalingFactors(3.5);
 	haptic_controller->setReductionFactorForce(0.7);
-	haptic_controller->setVariableDampingGainsPos(vector<double>{0.25, 0.35},
-												  vector<double>{0, 20});
+	VectorXd variable_damping_thresholds(2);
+	variable_damping_thresholds << 0.25, 0.35;
+	VectorXd variable_damping_gains(2);
+	variable_damping_gains << 0, 20;
+	haptic_controller->setVariableDampingGainsPos(variable_damping_thresholds,
+												  variable_damping_gains);
 	haptic_controller->setHapticControlType(
 		SaiPrimitives::HapticControlType::HOMING);
 	haptic_controller->disableOrientationTeleop();
