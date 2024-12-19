@@ -144,6 +144,11 @@ HapticDeviceController::HapticDeviceController(
 		DefaultParameters::device_workspace_radius_limit;
 	_device_workspace_angle_limit =
 		DefaultParameters::device_workspace_angle_limit;
+
+	_variable_damping_linvel_thresholds = VectorXd::Zero(0);
+	_variable_damping_angvel_thresholds = VectorXd::Zero(0);
+	_variable_damping_gains_pos = VectorXd::Zero(0);
+	_variable_damping_gains_ori = VectorXd::Zero(0);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -616,52 +621,52 @@ void HapticDeviceController::applyWorkspaceVirtualLimitsForceMoment(
 
 double HapticDeviceController::computeKvPosVariableDamping(
 	const double device_velocity) const {
-	if (_variable_damping_linvel_thresholds.empty()) {
+	if (_variable_damping_linvel_thresholds.size() == 0) {
 		return 0;
 	}
 
-	if (device_velocity < _variable_damping_linvel_thresholds.at(0)) {
+	if (device_velocity < _variable_damping_linvel_thresholds(0)) {
 		double interpolation_coeff = computeInterpolationCoeff(
-			device_velocity, 0, _variable_damping_linvel_thresholds.at(0));
-		return interpolation_coeff * _variable_damping_gains_pos.at(0);
+			device_velocity, 0, _variable_damping_linvel_thresholds(0));
+		return interpolation_coeff * _variable_damping_gains_pos(0);
 	}
 
 	for (int i = 1; i < _variable_damping_linvel_thresholds.size(); ++i) {
-		if (device_velocity < _variable_damping_linvel_thresholds.at(i)) {
+		if (device_velocity < _variable_damping_linvel_thresholds(i)) {
 			double interpolation_coeff = computeInterpolationCoeff(
-				device_velocity, _variable_damping_linvel_thresholds.at(i - 1),
-				_variable_damping_linvel_thresholds.at(i));
-			return interpolation_coeff * _variable_damping_gains_pos.at(i) +
+				device_velocity, _variable_damping_linvel_thresholds(i - 1),
+				_variable_damping_linvel_thresholds(i));
+			return interpolation_coeff * _variable_damping_gains_pos(i) +
 				   (1 - interpolation_coeff) *
-					   _variable_damping_gains_pos.at(i - 1);
+					   _variable_damping_gains_pos(i - 1);
 		}
 	}
-	return _variable_damping_gains_pos.back();
+	return _variable_damping_gains_pos.tail(1)(0);
 }
 
 double HapticDeviceController::computeKvOriVariableDamping(
 	const double device_velocity) const {
-	if (_variable_damping_angvel_thresholds.empty()) {
+	if (_variable_damping_angvel_thresholds.size() == 0) {
 		return 0;
 	}
 
-	if (device_velocity < _variable_damping_angvel_thresholds.at(0)) {
+	if (device_velocity < _variable_damping_angvel_thresholds(0)) {
 		double interpolation_coeff = computeInterpolationCoeff(
-			device_velocity, 0, _variable_damping_angvel_thresholds.at(0));
-		return interpolation_coeff * _variable_damping_gains_ori.at(0);
+			device_velocity, 0, _variable_damping_angvel_thresholds(0));
+		return interpolation_coeff * _variable_damping_gains_ori(0);
 	}
 
 	for (int i = 1; i < _variable_damping_angvel_thresholds.size(); ++i) {
-		if (device_velocity < _variable_damping_angvel_thresholds.at(i)) {
+		if (device_velocity < _variable_damping_angvel_thresholds(i)) {
 			double interpolation_coeff = computeInterpolationCoeff(
-				device_velocity, _variable_damping_angvel_thresholds.at(i - 1),
-				_variable_damping_angvel_thresholds.at(i));
-			return interpolation_coeff * _variable_damping_gains_ori.at(i) +
+				device_velocity, _variable_damping_angvel_thresholds(i - 1),
+				_variable_damping_angvel_thresholds(i));
+			return interpolation_coeff * _variable_damping_gains_ori(i) +
 				   (1 - interpolation_coeff) *
-					   _variable_damping_gains_ori.at(i - 1);
+					   _variable_damping_gains_ori(i - 1);
 		}
 	}
-	return _variable_damping_gains_ori.back();
+	return _variable_damping_gains_ori.tail(1)(0);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////
@@ -1070,8 +1075,8 @@ void HapticDeviceController::enableHapticWorkspaceVirtualLimits(
 }
 
 void HapticDeviceController::setVariableDampingGainsPos(
-	const vector<double>& velocity_thresholds,
-	const vector<double>& variable_damping_gains) {
+	const VectorXd& velocity_thresholds,
+	const VectorXd& variable_damping_gains) {
 	if (velocity_thresholds.size() != variable_damping_gains.size()) {
 		cout << "Warning: velocity thresholds and variable damping gains must "
 				"have the same size in "
@@ -1080,21 +1085,21 @@ void HapticDeviceController::setVariableDampingGainsPos(
 			 << endl;
 	}
 	for (int i = 0; i < velocity_thresholds.size(); ++i) {
-		if (velocity_thresholds[i] < 0) {
+		if (velocity_thresholds(i) < 0) {
 			cout << "Warning: velocity thresholds must be positive in "
 					"HapticDeviceController::setVariableDampingGainsPos. "
 					"Ignoring setting of the variable damping gains."
 				 << endl;
 			return;
 		}
-		if (variable_damping_gains[i] < 0) {
+		if (variable_damping_gains(i) < 0) {
 			cout << "Warning: variable damping gains must be positive in "
 					"HapticDeviceController::setVariableDampingGainsPos. "
 					"Ignoring setting of the variable damping gains."
 				 << endl;
 			return;
 		}
-		if (variable_damping_gains[i] > _device_limits.max_linear_damping) {
+		if (variable_damping_gains(i) > _device_limits.max_linear_damping) {
 			cout << "Warning: variable damping gains must be lower than the "
 					"device max linear damping in "
 					"HapticDeviceController::setVariableDampingGainsPos. "
@@ -1102,7 +1107,7 @@ void HapticDeviceController::setVariableDampingGainsPos(
 				 << endl;
 			return;
 		}
-		if (i > 0 && velocity_thresholds[i] <= velocity_thresholds[i - 1]) {
+		if (i > 0 && velocity_thresholds(i) <= velocity_thresholds[i - 1]) {
 			cout << "Warning: velocity thresholds must be in strictly "
 					"increasing order in "
 					"HapticDeviceController::setVariableDampingGainsPos. "
@@ -1116,8 +1121,8 @@ void HapticDeviceController::setVariableDampingGainsPos(
 }
 
 void HapticDeviceController::setVariableDampingGainsOri(
-	const vector<double>& velocity_thresholds,
-	const vector<double>& variable_damping_gains) {
+	const VectorXd& velocity_thresholds,
+	const VectorXd& variable_damping_gains) {
 	if (velocity_thresholds.size() != variable_damping_gains.size()) {
 		cout << "Warning: velocity thresholds and variable damping gains must "
 				"have the same size in "
@@ -1126,21 +1131,21 @@ void HapticDeviceController::setVariableDampingGainsOri(
 			 << endl;
 	}
 	for (int i = 0; i < velocity_thresholds.size(); ++i) {
-		if (velocity_thresholds[i] < 0) {
+		if (velocity_thresholds(i) < 0) {
 			cout << "Warning: velocity thresholds must be positive in "
 					"HapticDeviceController::setVariableDampingGainsOri. "
 					"Ignoring setting of the variable damping gains."
 				 << endl;
 			return;
 		}
-		if (variable_damping_gains[i] < 0) {
+		if (variable_damping_gains(i) < 0) {
 			cout << "Warning: variable damping gains must be positive in "
 					"HapticDeviceController::setVariableDampingGainsOri. "
 					"Ignoring setting of the variable damping gains."
 				 << endl;
 			return;
 		}
-		if (i > 0 && velocity_thresholds[i] <= velocity_thresholds[i - 1]) {
+		if (i > 0 && velocity_thresholds(i) <= velocity_thresholds[i - 1]) {
 			cout << "Warning: velocity thresholds must be in strictly "
 					"increasing order in "
 					"HapticDeviceController::setVariableDampingGainsOri. "
