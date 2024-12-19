@@ -12,6 +12,7 @@
 #include <Eigen/Dense>
 #include <string>
 #include <vector>
+#include <map>
 
 #include "SaiModel.h"
 #include "TemplateTask.h"
@@ -111,6 +112,9 @@ private:
 	void computeJointSelectionMatrix();
 	void updateLimitStatus();
 
+	void verifyValidityPerJoint();
+
+
 	VectorXd _torque_limit;
 	VectorXd _position_limit;
 	VectorXd _velocity_limit;
@@ -127,6 +131,8 @@ private:
 	double _velocity_z2_to_limit;
 	double _max_torque_ratio_pos_limit;
 	double _max_torque_ratio_vel_limit;
+	std::map<std::string, bool> _joint_pos_limit_valid;
+	std::map<std::string, bool> _joint_vel_limit_valid;
 
 	// model related variables
 	int _active_constraints;

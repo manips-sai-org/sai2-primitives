@@ -78,6 +78,9 @@ void JointLimitAvoidanceTask::initialSetup() {
 			"needs to be bigger than z2\n");
 	}
 
+	// verify validity per joint
+	verifyValidityPerJoint();
+
 	// initialize matrices sizes
 	_N_prec = MatrixXd::Identity(robot_dof, robot_dof);
 	_M_partial = MatrixXd::Identity(_active_constraints, _active_constraints);
@@ -87,6 +90,31 @@ void JointLimitAvoidanceTask::initialSetup() {
 		MatrixXd::Identity(_active_constraints, _active_constraints);
 
 	reInitializeTask();
+}
+
+void JointLimitAvoidanceTask::verifyValidityPerJoint() {
+	for (const auto& joint_limit : getConstRobotModel()->jointLimits()) {
+		bool pos_limit_valid =
+			joint_limit.position_upper - joint_limit.position_lower >
+			2 * _position_z1_to_limit;
+		bool vel_limit_valid = joint_limit.velocity > 2 * _velocity_z1_to_limit;
+		if (!pos_limit_valid) {
+			std::cout << "JointLimitAvoidanceTask: joint "
+					  << joint_limit.joint_name
+					  << " has position limits to close to each other "
+						 "considering the desired buffer zones. ignoring this "
+						 "joint for position limits\n";
+		}
+		if (!vel_limit_valid) {
+			std::cout << "JointLimitAvoidanceTask: joint "
+					  << joint_limit.joint_name
+					  << " has velocity limits too low considering the desired "
+						 "buffer zones. ignoring this joint for velocity "
+						 "limits\n";
+		}
+		_joint_pos_limit_valid[joint_limit.joint_name] = pos_limit_valid;
+		_joint_vel_limit_valid[joint_limit.joint_name] = vel_limit_valid;
+	}
 }
 
 void JointLimitAvoidanceTask::reInitializeTask() {
@@ -116,8 +144,8 @@ void JointLimitAvoidanceTask::updateTaskModel(const MatrixXd& N_prec) {
 	computeJointSelectionMatrix();
 	_projected_jacobian = _joint_selection * _N_prec;
 
-	MatrixXd unconstrained_jacobian_task_range = SaiModel::matrixRangeBasis(
-		_joint_selection);
+	MatrixXd unconstrained_jacobian_task_range =
+		SaiModel::matrixRangeBasis(_joint_selection);
 	if (unconstrained_jacobian_task_range.norm() == 0) {
 		_N_unconstrained = MatrixXd::Identity(robot_dof, robot_dof);
 	} else {
@@ -150,24 +178,8 @@ void JointLimitAvoidanceTask::updateLimitStatus() {
 		double q = getConstRobotModel()->q()(index);
 		double dq = getConstRobotModel()->dq()(index);
 
-		bool pos_limit_valid =
-			joint_limit.position_upper - joint_limit.position_lower >
-			2 * _position_z1_to_limit;
-		bool vel_limit_valid = joint_limit.velocity > 2 * _velocity_z1_to_limit;
-		if (!pos_limit_valid) {
-			std::cout << "JointLimitAvoidanceTask: joint "
-					  << joint_limit.joint_name
-					  << " has position limits to close to each other "
-						 "considering the desired buffer zones. ignoring this "
-						 "joint for position limits\n";
-		}
-		if (!vel_limit_valid) {
-			std::cout << "JointLimitAvoidanceTask: joint "
-					  << joint_limit.joint_name
-					  << " has velocity limits too low considering the desired "
-						 "buffer zones. ignoring this joint for velocity "
-						 "limits\n";
-		}
+		bool pos_limit_valid = _joint_pos_limit_valid[joint_limit.joint_name];
+		bool vel_limit_valid = _joint_vel_limit_valid[joint_limit.joint_name];
 
 		if (pos_limit_valid &&
 			joint_limit.position_upper != std::numeric_limits<double>::max()) {
@@ -401,7 +413,6 @@ VectorXd JointLimitAvoidanceTask::computeTorques(
 		if (_limit_status[i] != LimitStatus::OFF) {
 			constraint_number++;
 		}
-
 	}
 
 	// return projected task torques
