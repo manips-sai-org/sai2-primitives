@@ -13,6 +13,15 @@ RobotController::RobotController(std::shared_ptr<SaiModel::SaiModel>& robot,
 			"RobotController must have at least one task");
 	}
 
+	_enable_gravity_compensation =
+		DefaultParameters::enable_gravity_compensation;
+	_enable_joint_limit_avoidance =
+		DefaultParameters::enable_joint_limit_avoidance;
+	_enable_torque_saturation = DefaultParameters::enable_torque_saturation;
+
+	_joint_limit_avoidance_task = make_unique<JointLimitAvoidanceTask>(robot);
+	_N_constraints = MatrixXd::Identity(robot->dof(), robot->dof());
+
 	bool cannot_accept_new_tasks = false;
 
 	for (auto& task : tasks) {
@@ -48,11 +57,19 @@ RobotController::RobotController(std::shared_ptr<SaiModel::SaiModel>& robot,
 			}
 		}
 	}
+
+	_torque_limits =
+		std::numeric_limits<double>::max() * VectorXd::Ones(robot->dof());
+	for (const auto& limit : robot->jointLimits()) {
+		_torque_limits[limit.joint_index] = limit.effort;
+	}
 }
 
 void RobotController::updateControllerTaskModels() {
 	const int dof = _robot->dof();
 	MatrixXd N_prec = MatrixXd::Identity(dof, dof);
+	_joint_limit_avoidance_task->updateTaskModel(N_prec);
+	_N_constraints = _joint_limit_avoidance_task->getTaskAndPreviousNullspace();
 	for (auto& task : _tasks) {
 		task->updateTaskModel(N_prec);
 		N_prec = task->getTaskAndPreviousNullspace();
@@ -62,9 +79,36 @@ void RobotController::updateControllerTaskModels() {
 Eigen::VectorXd RobotController::computeControlTorques() {
 	const int dof = _robot->dof();
 	VectorXd control_torques = VectorXd::Zero(dof);
-	VectorXd previous_tasks_disturbance = VectorXd::Zero(dof);
 	for (auto& task : _tasks) {
 		control_torques += task->computeTorques(control_torques);
+	}
+
+	if (_enable_torque_saturation) {
+		for (int i = 0; i < dof; i++) {
+			if (control_torques[i] > _torque_limits[i]) {
+				control_torques[i] = _torque_limits[i];
+			} else if (control_torques[i] < -_torque_limits[i]) {
+				control_torques[i] = -_torque_limits[i];
+			}
+		}
+	}
+
+	if (_enable_joint_limit_avoidance) {
+		VectorXd joint_limit_avoidance_torques =
+			_joint_limit_avoidance_task->computeTorques(control_torques);
+
+		control_torques = joint_limit_avoidance_torques +
+						  _N_constraints.transpose() * control_torques;
+
+		if (_enable_torque_saturation) {
+			for (int i = 0; i < dof; i++) {
+				if (control_torques[i] > _torque_limits[i]) {
+					control_torques[i] = _torque_limits[i];
+				} else if (control_torques[i] < -_torque_limits[i]) {
+					control_torques[i] = -_torque_limits[i];
+				}
+			}
+		}
 	}
 
 	if (_enable_gravity_compensation) {
@@ -74,6 +118,7 @@ Eigen::VectorXd RobotController::computeControlTorques() {
 }
 
 void RobotController::reinitializeTasks() {
+	_joint_limit_avoidance_task->reInitializeTask();
 	for (auto& task : _tasks) {
 		task->reInitializeTask();
 	}

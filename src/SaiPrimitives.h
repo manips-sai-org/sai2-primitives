@@ -1,4 +1,5 @@
 #include "tasks/JointTask.h"
+#include "tasks/JointLimitAvoidanceTask.h"
 #include "tasks/MotionForceTask.h"
 #include "tasks/TemplateTask.h"
 

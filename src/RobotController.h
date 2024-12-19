@@ -17,11 +17,19 @@
 #include "tasks/TemplateTask.h"
 #include "tasks/JointTask.h"
 #include "tasks/MotionForceTask.h"
+#include "tasks/JointLimitAvoidanceTask.h"
 
 namespace SaiPrimitives {
 
 class RobotController {
 public:
+	struct DefaultParameters {
+		static constexpr bool enable_gravity_compensation = false;
+		static constexpr bool enable_joint_limit_avoidance = false;
+		static constexpr bool enable_torque_saturation = false;
+	};
+
+
 	RobotController(std::shared_ptr<SaiModel::SaiModel>& robot, std::vector<std::shared_ptr<TemplateTask>>& tasks);
 
 	void updateControllerTaskModels();
@@ -30,6 +38,14 @@ public:
 
 	void enableGravityCompensation(const bool enable_gravity_compensation) {
 		_enable_gravity_compensation = enable_gravity_compensation;
+	}
+
+	void enableJointLimitAvoidance(const bool enable_joint_limit_avoidance) {
+		_enable_joint_limit_avoidance = enable_joint_limit_avoidance;
+	}
+
+	void enableTorqueSaturation(const bool enable_torque_saturation) {
+		_enable_torque_saturation = enable_torque_saturation;
 	}
 
 	void reinitializeTasks();
@@ -46,6 +62,11 @@ private:
 	std::vector<std::shared_ptr<TemplateTask>> _tasks;
 	std::vector<std::string> _task_names;
 	bool _enable_gravity_compensation;
+	std::unique_ptr<JointLimitAvoidanceTask> _joint_limit_avoidance_task;
+	MatrixXd _N_constraints;
+	VectorXd _torque_limits;
+	bool _enable_joint_limit_avoidance;
+	bool _enable_torque_saturation;
 };
 
 } /* namespace SaiPrimitives */

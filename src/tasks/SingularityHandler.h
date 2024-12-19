@@ -249,4 +249,4 @@ private:
 
 }  // namespace
 
-#endif
+#endif /* SAI_PRIMITIVES_SINGULARITY_HANDLER_ */

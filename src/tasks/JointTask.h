@@ -98,7 +98,8 @@ public:
 	 * @brief Computes the joint torques associated with this control task, and
 	 * feedforward compensates the disturbances due to the previous tasks.
 	 *
-	 * @param tau_prec the control torques from the frevious tasks in the hierarchy
+	 * @param tau_prec the control torques from the frevious tasks in the
+	 * hierarchy
 	 * @return Eigen::VectorXd the joint task torques
 	 */
 	VectorXd computeTorques(const Eigen::VectorXd& tau_prec) override;
@@ -120,7 +121,9 @@ public:
 	const MatrixXd getJointSelectionMatrix() const { return _joint_selection; }
 
 	int getTaskDof() const { return _task_dof; }
-	bool isFullJointTask() const { return _task_dof == getConstRobotModel()->dof(); }
+	bool isFullJointTask() const {
+		return _task_dof == getConstRobotModel()->dof();
+	}
 
 	/**
 	 * @brief Get the Current Position
@@ -363,11 +366,11 @@ public:
 
 	/**
 	 * @brief Set the Bounded Inertia Estimate Threshold
-	 * 
-	 * @param threshold 
+	 *
+	 * @param threshold
 	 */
 	void setBoundedInertiaEstimateThreshold(const double threshold) {
-		if(threshold < 0) {
+		if (threshold < 0) {
 			_bie_threshold = 0;
 		} else {
 			_bie_threshold = threshold;
@@ -376,24 +379,21 @@ public:
 
 	/**
 	 * @brief Get the Bounded Inertia Estimate Threshold value
-	 * 
-	 * @return double 
+	 *
+	 * @return double
 	 */
-	double getBoundedInertiaEstimateThreshold() const {
-		return _bie_threshold;
-	}
+	double getBoundedInertiaEstimateThreshold() const { return _bie_threshold; }
 
 	/**
-	 * @brief	   Returns whether current position is within a tolerance to the goal
-	*/
+	 * @brief	   Returns whether current position is within a tolerance to the
+	 * goal
+	 */
 	bool goalPositionReached(const double& tol = 1e-2);
 
 	/**
-	 * @brief	Reset integrator error  
-	*/
-	void resetIntegrators() {
-		_integrated_position_error.setZero();
-	}
+	 * @brief	Reset integrator error
+	 */
+	void resetIntegrators() { _integrated_position_error.setZero(); }
 
 	//-----------------------------------------------
 	//         Member variables
@@ -461,5 +461,4 @@ private:
 
 } /* namespace SaiPrimitives */
 
-/* SAI_PRIMITIVES_JOINT_TASK_H_ */
-#endif
+#endif /* SAI_PRIMITIVES_JOINT_TASK_H_ */
